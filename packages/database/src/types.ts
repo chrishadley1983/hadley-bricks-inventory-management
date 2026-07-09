@@ -1894,7 +1894,7 @@ export type Database = {
         }
         Relationships: []
       }
-      bricklink_part_price_cache: {
+      bricklink_part_price_cache_deprecated: {
         Row: {
           colour_id: number
           colour_name: string | null
@@ -13976,6 +13976,7 @@ export type Database = {
           assessment: Json | null
           avg_value_per_lot: number | null
           blended_margin_pct: number | null
+          buyable_fresh_lots: number | null
           buyable_lots: number | null
           buyable_net_gbp: number | null
           buyable_outlay_gbp: number | null
@@ -14008,6 +14009,7 @@ export type Database = {
           assessment?: Json | null
           avg_value_per_lot?: number | null
           blended_margin_pct?: number | null
+          buyable_fresh_lots?: number | null
           buyable_lots?: number | null
           buyable_net_gbp?: number | null
           buyable_outlay_gbp?: number | null
@@ -14040,6 +14042,7 @@ export type Database = {
           assessment?: Json | null
           avg_value_per_lot?: number | null
           blended_margin_pct?: number | null
+          buyable_fresh_lots?: number | null
           buyable_lots?: number | null
           buyable_net_gbp?: number | null
           buyable_outlay_gbp?: number | null
