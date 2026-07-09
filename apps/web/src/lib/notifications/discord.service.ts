@@ -273,34 +273,26 @@ export interface SendDailySummaryParams {
 }
 
 export class DiscordService {
-  private readonly webhooks: Record<DiscordChannel, string | undefined>;
-  private readonly appUrl: string;
   private readonly timeout = 5000; // 5 second timeout
 
-  constructor() {
-    this.webhooks = {
+  // Read webhook config lazily on each access rather than caching it in the constructor.
+  // The exported singleton is instantiated at module-import time — which, in tsx scripts,
+  // runs BEFORE the script calls dotenv.config() to load .env.local. Caching the webhooks
+  // in the constructor captured an empty env and made every channel silently "not
+  // configured", so local alerts never posted. A getter re-reads process.env after env
+  // has loaded (no effect on Next.js/Vercel, where env is present before any read).
+  private get webhooks(): Record<DiscordChannel, string | undefined> {
+    return {
       alerts: process.env.DISCORD_WEBHOOK_ALERTS,
       opportunities: process.env.DISCORD_WEBHOOK_OPPORTUNITIES,
       'sync-status': process.env.DISCORD_WEBHOOK_SYNC_STATUS,
       'daily-summary': process.env.DISCORD_WEBHOOK_DAILY_SUMMARY,
       'peter-chat': process.env.DISCORD_WEBHOOK_PETER_CHAT,
     };
-    this.appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  }
 
-    // Log configuration status on instantiation
-    const configuredChannels = Object.entries(this.webhooks)
-      .filter(([, url]) => !!url)
-      .map(([channel]) => channel);
-    const missingChannels = Object.entries(this.webhooks)
-      .filter(([, url]) => !url)
-      .map(([channel]) => channel);
-
-    if (configuredChannels.length > 0) {
-      console.log(`[DiscordService] Configured channels: ${configuredChannels.join(', ')}`);
-    }
-    if (missingChannels.length > 0) {
-      console.log(`[DiscordService] Missing channels: ${missingChannels.join(', ')}`);
-    }
+  private get appUrl(): string {
+    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   }
 
   /**

@@ -1,6 +1,6 @@
-# register-pg-tasks.ps1 — one-time: register the four PG Market Intelligence Windows
+# register-pg-tasks.ps1 — one-time: register the five PG Market Intelligence Windows
 # Scheduled Tasks (nightly lane D refresh, daily canary, monthly rank recompute, weekly
-# digest).
+# digest, daily refresh heartbeat/dead-man switch).
 #
 # Prefer running from an ELEVATED PowerShell for S4U (run-while-logged-out); unelevated
 # falls back to interactive-only per task, matching register-ebay-pricing-task.ps1 /
@@ -86,10 +86,18 @@ Register-PgTask -TaskName 'HadleyBricks-PG-Digest' -ScriptFile 'pg-digest.ps1' `
     -Trigger $digestTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 30) `
     -Description 'Weekly PG market digest (screens + own-store audit + coverage health -> markdown + Discord). Local-only, no CDP needed.'
 
+# 08:00: after the refresh window (00:05 + 7h30m = 07:35) and the canary (07:30) so an
+# in-progress run can't false-alarm. Dead-man's switch — reads telemetry, alerts if stale.
+$heartbeatTrigger = New-ScheduledTaskTrigger -Daily -At '08:00'
+Register-PgTask -TaskName 'HadleyBricks-PG-Heartbeat' -ScriptFile 'pg-heartbeat.ps1' `
+    -Trigger $heartbeatTrigger -ExecutionTimeLimit (New-TimeSpan -Minutes 10) `
+    -Description 'Daily lane-D refresh dead-man switch: Discord alert if no productive catalogPG session within the freshness window. Local-only, no CDP needed.'
+
 Write-Host ''
-Write-Host 'All four PG tasks registered.' -ForegroundColor Cyan
+Write-Host 'All five PG tasks registered.' -ForegroundColor Cyan
 Write-Host "Test:  Start-ScheduledTask -TaskName 'HadleyBricks-PG-Refresh-Cycle'"
 Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Canary'"
 Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Rank'"
 Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Digest'"
+Write-Host "       Start-ScheduledTask -TaskName 'HadleyBricks-PG-Heartbeat'"
 Write-Host 'Inspect: Get-ScheduledTask -TaskName "HadleyBricks-PG-*" | Get-ScheduledTaskInfo'
