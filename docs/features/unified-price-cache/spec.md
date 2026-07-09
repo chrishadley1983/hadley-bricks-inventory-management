@@ -64,43 +64,50 @@ cache) beyond the read-function swap.
      bl-basket    store-quality   POV/partout  inventory-explorer   analysis scripts
 ```
 
-### 3.1 `capturePriceGuide()` — the single write path
+### 3.1 `ensurePriceGuide()` + `capturePriceGuide()` — the single write path
 
 **Module:** `src/lib/bricklink/price-guide/capture.ts`
 
+**Decision (Chris, 2026-07-09): always grab ALL four quadrants and write a complete row.** The BL
+API is one quadrant per call (`new_or_used` × `guide_type`), so a complete tuple = **4 calls**
+(UK: soldNew, soldUsed, stockNew, stockUsed). Fetching all four means every write is a **complete
+row** → a plain upsert, **no coalescing RPC**, and we capture New even on used-focused scans and
+never re-fetch a missing condition. Cost: 4 calls per fresh tuple (vs 2 for a used-only scan today),
+offset by the 90-day TTL + "never re-fetch". World scope (`country_code` omitted) is a separate
+optional 4-call pass into `world_detail`; default is UK-only.
+
 ```ts
-// Normalised, source-agnostic input for one (item, colour) tuple.
-interface PriceGuideCapture {
-  item: { itemType: 'P'|'M'|'S'; itemNo: string; colourId: number /* canonical BL id */ };
-  itemName?: string | null;
-  quadrants: Partial<Record<'soldNew'|'soldUsed'|'stockNew'|'stockUsed', SideStats>>;
-  scope: 'uk' | 'world';
-  source: string;            // 'bl_api' | 'catalogpg' | 'store_api' | ...
-  fetchedAt: string;
-}
 interface SideStats {        // everything needed to recompute STR + more
   lots: number; qty: number; avg: number|null; qtyAvg: number|null;
   median: number|null; min: number|null; max: number|null;
   last2moQty: number;        // recency
   transactions?: { unitPrice: number; qty: number; dateOrdered?: string }[]; // raw → hist/median
 }
+interface PriceGuideCapture {           // a COMPLETE tuple (all 4 quadrants present)
+  item: { itemType: 'P'|'M'|'S'; itemNo: string; colourId: number /* canonical BL id */ };
+  itemName?: string | null;
+  scope: 'uk' | 'world';
+  soldNew: SideStats; soldUsed: SideStats; stockNew: SideStats; stockUsed: SideStats;
+  source: string; fetchedAt: string;
+}
 
+// Orchestrator + primary entry point for consumers. Cache-first; on miss/stale, fetches all 4
+// quadrants, captures a complete row, returns the read view (§3.3).
+async function ensurePriceGuide(client, item, colourId, opts?: { ttlDays; scope }): Promise<PriceGuideView>
+// Low-level writer (plain upsert on item_type,item_no,colour_id). Used by ensurePriceGuide + fromCatalogPg.
 async function capturePriceGuide(cap: PriceGuideCapture): Promise<void>
 ```
 
 Responsibilities:
-- **Adapters in** (thin, per-source): `fromBlApi(sold, stock, condition, country)` computes
-  `median`/`last2moQty`/`hist` from `price_detail[]`; `fromCatalogPg(PgScrapeResult)` (the existing
-  `toPgCacheRow` path, refactored to feed this). Both emit `PriceGuideCapture`.
-- **Canonical colour** via `colourMap()` (§3.2) — input colour ids normalised to **BL scheme**
-  before write.
-- **Coalescing upsert** — writes only the quadrants present, `COALESCE`-merging over the existing
-  row so a used-only or sold-only call never clobbers other quadrants. Implemented as a Postgres
-  RPC `upsert_price_guide(row jsonb)` (single round-trip, atomic) — **required**; naïve
-  Supabase upsert clobbers.
-- **Stores the raw components** so STR is always recomputable: `*_lots`, `*_qty` per quadrant,
-  plus `uk_detail`/`world_detail` jsonb (min/max/byMonth/hist/transactions sample).
-- UK calls fill `uk_*`; world calls fill `world_detail`. `parse_version` bumped.
+- **`ensurePriceGuide`** is what consumers call instead of raw `getPartPriceGuide` pairs. Cache-check
+  via `readPriceGuide`; if fresh → return it; if stale → 4 API calls → `capturePriceGuide` → return.
+- **Adapters in** (per-source): `fromBlApi(sold*, stock*)` computes `median`/`last2moQty`/`hist` from
+  `price_detail[]`; `fromCatalogPg(PgScrapeResult)` (the existing `toPgCacheRow`, refactored) — both
+  emit a complete `PriceGuideCapture`.
+- **Canonical colour** via `colourMap()` (§3.2) — colour ids normalised to **BL scheme** before write.
+- **Plain upsert** on `(item_type, item_no, colour_id)` — rows are always complete, so no merge logic.
+- **Stores the raw components** so STR is always recomputable: `*_lots`, `*_qty` per quadrant, plus
+  `uk_detail`/`world_detail` jsonb (min/max/byMonth/hist/transactions sample). `parse_version` bumped.
 
 ### 3.2 `colourMap()` — canonical BL ↔ Bricqer mapping
 
@@ -159,60 +166,72 @@ async function readPriceGuide(items: ItemRef[], opts?: { ttlDays; allowWorldFall
 
 ## 4. Downstream migration
 
-### 4.1 Writers → `capturePriceGuide()`
-- **Central hook:** `BrickLinkClient` is already constructed with a `supabase` handle
-  (`new BrickLinkClient(creds, { supabase, caller })`). Add fire-and-forget capture inside
-  `getPartPriceGuide`/`getSetPriceGuide` (opt-out flag) → **all ~15 API call sites** feed the rich
-  cache with no per-caller change.
+### 4.1 Writers → `ensurePriceGuide()` / `capturePriceGuide()`
+- **Consumers stop calling raw `getPartPriceGuide` pairs** and call `ensurePriceGuide(item, colour)`
+  which fetches all 4 quadrants (if stale) and returns the read view — one call replaces the
+  sold+stock pair per condition, and captures the complete row as a side effect.
 - Refactor `PriceGuideCacheService.upsert` (catalogPG) to call `capturePriceGuide` via `fromCatalogPg`.
-- Remove `PartPriceCacheService.upsertPrices` writers (bl-basket, analyze-bl-store, `_str-sample`,
-  `cleanup-bad-cache-rows`) — they get capture for free from the client hook.
+- Retire `PartPriceCacheService.upsertPrices` writers (bl-basket, analyze-bl-store, `_str-sample`,
+  `cleanup-bad-cache-rows`) — they now write the rich cache via `ensurePriceGuide`.
+- Raw `getPartPriceGuide`/`getSetPriceGuide` remain for low-level/edge use but are no longer the
+  standard price path.
 
 ### 4.2 Readers → `readPriceGuide()`
 Production surface (9): `inventory-explorer/bricklink-lookup.ts` (`fetchBLCache`) + `enrichment.service.ts`,
 `api/inventory/explorer/sync-status`, `bricklink/partout.service.ts` + `api/bricklink/partout/{route,stream}`,
 `store-quality/engine.ts` + `pricing.ts`, `bricklink/live-check.service.ts`.
 Scripts (~19): bl-basket, analyze-bl-store, reprice-*, scan-*, partout-bricqer-pricing, evaluate-job-lot,
-find-piece, etc. (dead `_`-prefixed one-offs excluded — left to die with the table).
+find-piece, etc. Dead `_`-prefixed one-offs are **excluded but must be marked** (Chris, 2026-07-09):
+add a header comment `// DEPRECATED: reads bricklink_part_price_cache (dropped). Do not use as a
+pattern.` so they are not copied later. They break when the table drops — that's intended.
 
 Each reader: swap the raw `.from('bricklink_part_price_cache')` for `readPriceGuide()`, replace
 `sell_through_rate_*` with `strLots`/`strQty`, and drop any bespoke colour handling (now in §3.2).
-**Dual-read** during transition: `readPriceGuide` tries `price_guide_cache`, falls back to the legacy
-table until backfill completes, so nothing regresses.
+**No legacy dual-read** — coverage gaps are covered by `readPriceGuide`'s worldwide `pg_summary`
+fallback (§5), so readers cut straight over.
 
-## 5. Backfill (coverage 1,387 → 35,031)
-Hybrid:
-1. **Lossy migrate now** — map the 35k thin rows into `price_guide_cache` (avg + counts only,
-   `parse_version=0`, null median/hist/recency), colour-normalised via §3.2, for immediate coverage.
-2. **Rich re-fetch queue** — background job re-pulls tuples via the API (through `capturePriceGuide`)
-   prioritised by our-inventory + demand rank, upgrading `parse_version=0` rows over time (~1,500
-   calls/day headroom; every basket/scan run also upgrades on the fly).
+## 5. Coverage rebuild — **drop, don't migrate** (Chris, 2026-07-09)
+
+Better to have thinner, *accurate* data than a large inconsistent cache. So the 35k thin/mixed-colour
+rows are **not migrated**:
+- **No lossy migration.** Legacy `part_price_cache` is dropped (§F9); its rows are not carried over.
+  This also removes the colour-scheme migration risk entirely — we never re-key legacy `colour_id`.
+- **Coverage rebuilds via real fetches:** `ensurePriceGuide` fills any tuple on first access (4 calls,
+  cached 90d), plus a **prioritised re-fetch queue** pre-warms our-inventory + high-demand tuples so
+  prod surfaces (Inventory Explorer, POV, store-quality) are populated around cutover.
+- **No coverage cliff:** `readPriceGuide` falls back to worldwide `pg_summary` (flagged
+  `coverage:'world_fallback'`) for any not-yet-fetched tuple — a usable number with honest provenance
+  that upgrades to UK-accurate as the queue fills. This is why **no legacy dual-read is needed**.
 
 ## 6. Data model changes
 - New table `bricklink_colour_map` (§3.2) + migration.
-- Postgres RPC `upsert_price_guide(jsonb)` — coalescing upsert (§3.1).
-- Possibly add `source` + `scope` columns to `price_guide_cache` if not already inferable from
-  `uk_detail`/`world_detail` (confirm during build).
-- No change to `pg_summary`.
+- **No coalescing RPC** — rows are always complete (§3.1), so a plain upsert on
+  `(item_type, item_no, colour_id)` suffices.
+- Add `source` + `scope` columns to `price_guide_cache` if not inferable from `uk_detail`/`world_detail`
+  (confirm during build).
+- Drop `bricklink_part_price_cache` at §F9 (rename-then-drop). No change to `pg_summary`.
 
 ## 7. Risks
 | Risk | Mitigation |
 |---|---|
-| **Colour scheme** (mixed legacy, silent wrong joins) | Canonical map §3.2 built first + verified; BL id canonical; legacy `colour_id` never trusted for migration (re-key by name where needed) |
-| **Coverage regression** on cutover | Dual-read + lossy backfill before removing fallback |
-| **Coalescing upsert clobber** | Atomic RPC, unit-tested per-quadrant |
+| **Colour scheme** (mixed legacy, silent wrong joins) | Canonical map §3.2 built + verified first; BL id canonical; legacy `colour_id` never migrated (table dropped, not carried over) |
+| **Coverage regression** on cutover | `pg_summary` world-fallback in `readPriceGuide` + pre-warm queue; accepted "thinner-but-accurate" per §5 |
+| **4-calls-per-tuple cost** | 90-day TTL + never-re-fetch; pre-warm queue paced within ~1,500/day headroom |
 | **STR semantic drift** | Single `readPriceGuide` STR source; both definitions exposed + labelled |
-| **Prod UI (explorer/POV/store-quality)** | Migrate behind dual-read; verify each against live before removing fallback |
+| **Prod UI (explorer/POV/store-quality)** | `/verify-done` each reader against live before merge; world-fallback prevents blank UI |
 
-## 8. Phasing → see `done-criteria.md`
-Ship **F1–F4 (capture + colour map)** first as an independent, additive PR (the "no wasted calls"
-win, low risk). Reader migration (F5+) follows behind dual-read.
+## 8. Build shape (Chris, 2026-07-09: **do it all in one feature**)
+Single feature build, F1–F9 in order (see `done-criteria.md`) — not split into separate PRs. F1–F5
+(colour map + capture + read) land the common functions; F6–F9 migrate consumers and drop the legacy
+table. Chris triggers the build via a goal.
 
-## 9. Open decisions
-1. Backfill: hybrid (recommended) vs rich-only vs lossy-only?
-2. Reader scope: prod + active scripts only (recommended), dead one-offs left to the table drop?
-3. Ship capture (F1–F4) independently first (recommended) vs one big PR?
-4. Canonical colour scheme = **BL id** (recommended) — confirm.
+## 9. Decisions (locked 2026-07-09)
+1. **Drop, don't migrate** — no lossy backfill; rebuild via real fetches + `pg_summary` fallback.
+2. **Reader scope:** prod app + active scripts; dead `_`-prefixed one-offs **excluded but marked** with
+   a deprecation header comment.
+3. **One feature build** (F1–F9), not split PRs.
+4. **Canonical colour = BL colour id.**
+5. **Capture always grabs all 4 quadrants** → complete rows → plain upsert (no coalescing RPC).
 
 Builds on [[bl-pg-summary-coverage]], [[bricqer-pricing-formula]], [[store-quality-framework]],
 [[bl-store-comparison-str-pricing-study]] (three-cache map + colour hazard origin).
