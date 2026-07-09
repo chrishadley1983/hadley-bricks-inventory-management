@@ -1,11 +1,11 @@
 'use client';
 
-import { Boxes, Loader2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Boxes, AlertCircle, RefreshCw } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useBricqerInventoryStats } from '@/hooks';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrencyWhole, cn } from '@/lib/utils';
 
 type Freshness = 'fresh' | 'ageing' | 'stale' | 'never';
 
@@ -55,9 +55,7 @@ export function BricqerInventoryWidget() {
   return (
     <Card className="relative">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Bricqer Store
-        </CardTitle>
+        <CardTitle className="text-sm font-medium">Bricqer Store</CardTitle>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
@@ -69,15 +67,18 @@ export function BricqerInventoryWidget() {
           >
             <RefreshCw className={`h-3 w-3 ${isRefetching ? 'animate-spin' : ''}`} />
           </Button>
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-violet-100">
-            <Boxes className="h-4 w-4 text-violet-700" />
-          </div>
+          <Boxes className="h-4 w-4 text-muted-foreground" />
         </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="flex items-center justify-center py-4">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          <div className="grid grid-cols-3 gap-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-7 w-16 animate-pulse rounded bg-muted" />
+                <div className="h-3 w-10 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
           </div>
         ) : error ? (
           <div className="flex items-center gap-2 text-destructive">
@@ -131,11 +132,11 @@ export function BricqerInventoryWidget() {
                 </div>
                 <div className="text-xs text-muted-foreground">Pieces</div>
               </div>
-              <div className="pl-3">
+              <div className="pl-3" title="Sum of Bricqer asking prices (not cost)">
                 <div className="text-2xl font-bold tracking-tight tabular-nums">
-                  {formatCurrency(inventoryValue)}
+                  {formatCurrencyWhole(inventoryValue)}
                 </div>
-                <div className="text-xs text-muted-foreground">Value</div>
+                <div className="text-xs text-muted-foreground">Listing value</div>
               </div>
             </div>
 

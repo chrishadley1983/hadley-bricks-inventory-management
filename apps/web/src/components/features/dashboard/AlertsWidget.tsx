@@ -93,13 +93,27 @@ export function AlertsWidget() {
     <Widget
       title="Alerts"
       icon={<AlertTriangle className="h-4 w-4" />}
-      isLoading={isLoading}
+      action={
+        isLoading ? null : alerts.length > 0 ? (
+          <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-600 px-1.5 text-[11px] font-semibold text-white tabular-nums">
+            {alerts.length}
+          </span>
+        ) : (
+          <span className="h-2 w-2 rounded-full bg-emerald-500" title="All clear" />
+        )
+      }
       error={error instanceof Error ? error : null}
     >
-      {alerts.length === 0 ? (
-        <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
+      {isLoading ? (
+        <div className="space-y-3">
+          {[0, 1].map((i) => (
+            <div key={i} className="h-14 w-full animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
+      ) : alerts.length === 0 ? (
+        <div className="flex items-center gap-3 rounded-lg border p-3">
           <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          <p className="text-sm text-emerald-800">All clear — nothing needs attention</p>
+          <p className="text-sm text-muted-foreground">All clear — nothing needs attention</p>
         </div>
       ) : (
         <div className="space-y-3">

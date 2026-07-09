@@ -6,7 +6,7 @@ import { Layers } from 'lucide-react';
 import { Widget } from '@/components/ui/widget';
 import { useInventorySummary } from '@/hooks';
 import { useDashboardStore } from '@/stores';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency, formatCurrencyWhole, cn } from '@/lib/utils';
 import { STATUS_META, OTHER_META, type StatusMeta } from './status-meta';
 
 interface Segment {
@@ -24,6 +24,21 @@ const STATUS_LINKS: Record<string, string> = {
   SOLD: '/inventory?status=SOLD',
   RETURNED: '/inventory?status=RETURNED',
 };
+
+const ROW_GRID = 'grid grid-cols-[minmax(0,1fr)_4rem_5.5rem_5.5rem] gap-2';
+
+function PipelineSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="h-3 w-full animate-pulse rounded-full bg-muted" />
+      <div className="space-y-2">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-6 w-full animate-pulse rounded bg-muted" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /**
  * Inventory pipeline: one stacked bar + value table, built from EVERY status
@@ -71,41 +86,52 @@ export function InventoryPipelineWidget() {
     };
   }, [data, excludeSold]);
 
-  // Listed margin (profit as % of listing value, before fees)
+  // Listed margin (profit as % of asking value, before fees)
   const listed = segments.find((s) => s.meta.key === 'LISTED');
   const listedMargin =
-    listed && listed.value > 0 ? Math.round(((listed.value - listed.cost) / listed.value) * 100) : null;
+    listed && listed.value > 0
+      ? Math.round(((listed.value - listed.cost) / listed.value) * 100)
+      : null;
 
   return (
     <Widget
       title="Inventory Pipeline"
       icon={<Layers className="h-4 w-4" />}
-      isLoading={isLoading}
       error={error instanceof Error ? error : null}
     >
-      {totals.count === 0 ? (
+      {isLoading ? (
+        <PipelineSkeleton />
+      ) : totals.count === 0 ? (
         <p className="text-sm text-muted-foreground">No inventory items</p>
       ) : (
         <div className="space-y-4">
           {/* Stacked count bar (2px gaps between segments) */}
-          <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
-            {segments.map((s) => (
-              <div
-                key={s.meta.key}
-                className="h-3 rounded-sm transition-all"
-                style={{
-                  width: `${(s.count / totals.count) * 100}%`,
-                  backgroundColor: s.meta.hex,
-                  minWidth: s.count > 0 ? 3 : 0,
-                }}
-                title={`${s.meta.label}: ${s.count.toLocaleString()} items`}
-              />
-            ))}
+          <div>
+            <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
+              {segments.map((s) => (
+                <div
+                  key={s.meta.key}
+                  className="h-3 rounded-sm transition-all"
+                  style={{
+                    width: `${(s.count / totals.count) * 100}%`,
+                    backgroundColor: s.meta.hex,
+                    minWidth: s.count > 0 ? 3 : 0,
+                  }}
+                  title={`${s.meta.label}: ${s.count.toLocaleString()} items (${((s.count / totals.count) * 100).toFixed(0)}%)`}
+                />
+              ))}
+            </div>
+            <div className="mt-1 text-right text-[11px] text-muted-foreground">share of items</div>
           </div>
 
           {/* Per-status rows */}
           <div>
-            <div className="grid grid-cols-[1fr_4rem_5.5rem_5.5rem] gap-2 border-b pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <div
+              className={cn(
+                ROW_GRID,
+                'border-b pb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground'
+              )}
+            >
               <div>Status</div>
               <div className="text-right">Items</div>
               <div className="text-right">Cost</div>
@@ -115,13 +141,13 @@ export function InventoryPipelineWidget() {
               {segments.map((s) => {
                 const href = STATUS_LINKS[s.meta.key];
                 const row = (
-                  <div className="grid grid-cols-[1fr_4rem_5.5rem_5.5rem] items-center gap-2 py-1.5 text-xs">
-                    <div className="flex items-center gap-2">
+                  <div className={cn(ROW_GRID, 'items-center py-1.5 text-xs')}>
+                    <div className="flex min-w-0 items-center gap-2">
                       <span
                         className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
                         style={{ backgroundColor: s.meta.hex }}
                       />
-                      <span className="font-medium">{s.meta.label}</span>
+                      <span className="truncate font-medium">{s.meta.label}</span>
                     </div>
                     <div className="text-right tabular-nums">{s.count.toLocaleString()}</div>
                     <div className="text-right tabular-nums text-muted-foreground">
@@ -143,18 +169,20 @@ export function InventoryPipelineWidget() {
             </div>
 
             {/* Total row (from the same response — reconciles with rows by construction) */}
-            <div className="grid grid-cols-[1fr_4rem_5.5rem_5.5rem] gap-2 border-t pt-2 text-sm font-semibold">
-              <div>Total</div>
+            <div className={cn(ROW_GRID, 'border-t pt-2 text-sm font-semibold')}>
+              <div className="truncate">{excludeSold ? 'Total (excl. sold)' : 'Total'}</div>
               <div className="text-right tabular-nums">{totals.count.toLocaleString()}</div>
-              <div className="text-right tabular-nums">{formatCurrency(totals.cost)}</div>
-              <div className="text-right tabular-nums">{formatCurrency(totals.value)}</div>
+              <div className="text-right tabular-nums">{formatCurrencyWhole(totals.cost)}</div>
+              <div className="text-right tabular-nums">{formatCurrencyWhole(totals.value)}</div>
             </div>
           </div>
 
           {/* Listed margin */}
           {listedMargin != null && (
-            <div className="flex items-center justify-between border-t pt-2 text-xs">
-              <span className="text-muted-foreground">Listed margin (before fees)</span>
+            <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs">
+              <span className="text-muted-foreground">
+                Potential margin on listed stock (asking vs cost, before fees)
+              </span>
               <span
                 className={cn(
                   'font-semibold tabular-nums',

@@ -2,13 +2,12 @@
 
 import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, TrendingUp, CalendarDays, PiggyBank, Target } from 'lucide-react';
 import {
   useProfitLossReport,
   useDailyActivityReport,
   useReportSettings,
 } from '@/hooks/use-reports';
-import { formatCurrency, cn } from '@/lib/utils';
+import { formatCurrency, formatCurrencyWhole, cn } from '@/lib/utils';
 import { BarSparkline } from './Sparkline';
 
 // Default target if settings haven't loaded yet
@@ -56,38 +55,32 @@ function getCurrentMonthRange(): { startDate: Date; endDate: Date } {
   return { startDate, endDate };
 }
 
+function KpiSkeleton() {
+  return (
+    <div className="space-y-2">
+      <div className="h-8 w-28 animate-pulse rounded bg-muted" />
+      <div className="h-3 w-20 animate-pulse rounded bg-muted" />
+    </div>
+  );
+}
+
 function KpiCard({
   title,
-  icon,
-  iconClass,
   isLoading,
   children,
 }: {
   title: string;
-  icon: React.ReactNode;
-  iconClass: string;
   isLoading: boolean;
   children: React.ReactNode;
 }) {
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardHeader className="pb-2">
         <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {title}
         </CardTitle>
-        <div className={cn('flex h-7 w-7 items-center justify-center rounded-md', iconClass)}>
-          {icon}
-        </div>
       </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-3">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          children
-        )}
-      </CardContent>
+      <CardContent>{isLoading ? <KpiSkeleton /> : children}</CardContent>
     </Card>
   );
 }
@@ -103,17 +96,14 @@ function TargetRow({ label, actual, target }: { label: string; actual: number; t
           <span className={cn('font-semibold', met ? 'text-emerald-600' : 'text-foreground')}>
             {formatCurrency(actual)}
           </span>
-          <span className="text-muted-foreground"> / {formatCurrency(target)}</span>
+          <span className="text-muted-foreground"> / {formatCurrencyWhole(target)}</span>
         </span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className={cn('h-2 rounded-full', met ? 'bg-emerald-500' : 'bg-amber-500')}
+          className={cn('h-2 rounded-full', met ? 'bg-emerald-500' : 'bg-primary')}
           style={{ width: `${Math.min(100, pct)}%` }}
         />
-      </div>
-      <div className="text-right text-[11px] tabular-nums text-muted-foreground">
-        {pct.toFixed(0)}% of target
       </div>
     </div>
   );
@@ -122,8 +112,8 @@ function TargetRow({ label, actual, target }: { label: string; actual: number; t
 /**
  * Dashboard Summary Widget
  * Hero KPI band: annual turnover (with 12-month sparkline), month turnover
- * (with pace projection), month profit (with margin), and listing performance
- * vs target (actuals shown, not just diffs).
+ * (with pace projection), month profit (with net margin), and listing value
+ * added vs target.
  */
 export function DashboardSummaryWidget() {
   // Date ranges
@@ -154,16 +144,18 @@ export function DashboardSummaryWidget() {
     'daily'
   );
 
-  // Monthly income series for the sparkline (ordered by report.months)
+  // Monthly income series for the sparkline (ordered by report.months; the
+  // final month is the in-progress one — labelled and rendered as provisional)
   const monthlyIncome = useMemo(() => {
     if (!annualReport?.months) return { values: [] as number[], labels: [] as string[] };
     const income = annualReport.categoryTotals?.Income ?? {};
+    const last = annualReport.months.length - 1;
     return {
       values: annualReport.months.map((m) => income[m] ?? 0),
-      labels: annualReport.months.map((m) => {
+      labels: annualReport.months.map((m, i) => {
         const [y, mo] = m.split('-').map(Number);
         const name = new Date(y, mo - 1, 1).toLocaleString('en-GB', { month: 'short' });
-        return `${name} ${y}: ${formatCurrency(income[m] ?? 0)}`;
+        return `${name} ${y}: ${formatCurrency(income[m] ?? 0)}${i === last ? ' (month to date)' : ''}`;
       }),
     };
   }, [annualReport]);
@@ -214,79 +206,67 @@ export function DashboardSummaryWidget() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       {/* Annual turnover + 12-month trend */}
-      <KpiCard
-        title="Annual Turnover"
-        icon={<TrendingUp className="h-4 w-4 text-teal-700" />}
-        iconClass="bg-teal-100"
-        isLoading={annualLoading}
-      >
+      <KpiCard title="Annual Turnover" isLoading={annualLoading}>
         <div className="text-3xl font-bold tracking-tight tabular-nums">
-          {formatCurrency(annualTurnover)}
+          {formatCurrencyWhole(annualTurnover)}
         </div>
-        <p className="text-xs text-muted-foreground">Rolling 12 months</p>
+        <p className="text-xs text-muted-foreground">Rolling 12 months · current month to date</p>
         <div className="mt-3">
-          <BarSparkline values={monthlyIncome.values} labels={monthlyIncome.labels} />
+          <BarSparkline
+            values={monthlyIncome.values}
+            labels={monthlyIncome.labels}
+            emphasisColor="#0f172a"
+          />
         </div>
       </KpiCard>
 
       {/* This month turnover + pace */}
-      <KpiCard
-        title="Turnover This Month"
-        icon={<CalendarDays className="h-4 w-4 text-blue-700" />}
-        iconClass="bg-blue-100"
-        isLoading={monthLoading}
-      >
+      <KpiCard title="Turnover This Month" isLoading={monthLoading}>
         <div className="text-3xl font-bold tracking-tight tabular-nums">
-          {formatCurrency(monthTurnover)}
+          {formatCurrencyWhole(monthTurnover)}
         </div>
         <p className="text-xs text-muted-foreground">{monthLabel}</p>
         {monthPace > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">
             On pace for{' '}
             <span className="font-semibold text-foreground tabular-nums">
-              £{Math.round(monthPace).toLocaleString()}
+              {formatCurrencyWhole(monthPace)}
             </span>{' '}
             this month
           </p>
         )}
       </KpiCard>
 
-      {/* This month profit + margin */}
-      <KpiCard
-        title="Profit This Month"
-        icon={<PiggyBank className="h-4 w-4 text-emerald-700" />}
-        iconClass="bg-emerald-100"
-        isLoading={monthLoading}
-      >
+      {/* This month profit + net margin */}
+      <KpiCard title="Profit This Month" isLoading={monthLoading}>
         <div
           className={cn(
             'text-3xl font-bold tracking-tight tabular-nums',
             monthProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
           )}
         >
-          {formatCurrency(monthProfit)}
+          {formatCurrencyWhole(monthProfit)}
         </div>
         <p className="text-xs text-muted-foreground">Net profit after all costs</p>
         {profitMargin != null && (
-          <span
+          <p
             className={cn(
-              'mt-3 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums',
-              profitMargin >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+              'mt-3 text-xs tabular-nums',
+              profitMargin >= 0 ? 'text-muted-foreground' : 'text-rose-600'
             )}
           >
-            {profitMargin.toFixed(0)}% margin
-          </span>
+            {profitMargin.toFixed(0)}% net margin
+          </p>
         )}
       </KpiCard>
 
-      {/* Listing performance vs target */}
-      <KpiCard
-        title="Listing Performance"
-        icon={<Target className="h-4 w-4 text-amber-700" />}
-        iconClass="bg-amber-100"
-        isLoading={todayLoading || weekLoading}
-      >
-        <div className="space-y-3">
+      {/* Listing value added vs target */}
+      <KpiCard title="Listing Value Added" isLoading={todayLoading || weekLoading}>
+        <div className="text-3xl font-bold tracking-tight tabular-nums">
+          {formatCurrency(todayListingValue)}
+        </div>
+        <p className="text-xs text-muted-foreground">Value of stock listed today vs target</p>
+        <div className="mt-3 space-y-2.5">
           <TargetRow label="Today" actual={todayListingValue} target={dailyTarget} />
           <TargetRow
             label="This Week"

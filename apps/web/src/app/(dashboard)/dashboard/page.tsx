@@ -88,6 +88,7 @@ export default function DashboardPage() {
 
         {/* Dashboard Controls */}
         <div className="mb-4 flex flex-wrap items-center justify-end gap-4">
+          <span className="text-xs text-muted-foreground">Filters the pipeline &amp; alerts only</span>
           {/* Platform Filter */}
           <div className="flex items-center gap-2">
             <Label htmlFor="platform-filter" className="text-sm text-muted-foreground">
@@ -125,13 +126,15 @@ export default function DashboardPage() {
           <div className="lg:col-span-2">
             <InventoryPipelineWidget />
           </div>
-          <BricqerInventoryWidget />
+          <div className="lg:self-start">
+            <BricqerInventoryWidget />
+          </div>
         </div>
 
-        {/* Bottom widgets */}
+        {/* Bottom widgets — alerts lead so attention items surface first */}
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <RecentActivityWidget />
           <AlertsWidget />
+          <RecentActivityWidget />
         </div>
       </div>
     </>
