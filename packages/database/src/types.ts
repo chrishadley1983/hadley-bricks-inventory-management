@@ -1747,6 +1747,36 @@ export type Database = {
           },
         ]
       }
+      bricklink_colour_map: {
+        Row: {
+          bl_colour_id: number
+          bl_colour_name: string
+          bricqer_colour_id: number | null
+          bricqer_colour_name: string | null
+          created_at: string
+          rgb: string | null
+          updated_at: string
+        }
+        Insert: {
+          bl_colour_id: number
+          bl_colour_name: string
+          bricqer_colour_id?: number | null
+          bricqer_colour_name?: string | null
+          created_at?: string
+          rgb?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bl_colour_id?: number
+          bl_colour_name?: string
+          bricqer_colour_id?: number | null
+          bricqer_colour_name?: string | null
+          created_at?: string
+          rgb?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_part_out_value_cache: {
         Row: {
           break_type: string
