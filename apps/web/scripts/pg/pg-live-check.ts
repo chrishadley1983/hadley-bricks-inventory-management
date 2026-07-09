@@ -3,8 +3,10 @@
  *
  * Thin wrapper around `liveCheckBatch` (src/lib/bricklink/live-check.service.ts): fetches the
  * official UK sold 6MA (and optionally stock) price guide for one or more tuples via the BL
- * store API, writes through to `bricklink_price_guide_cache` + `bricklink_part_price_cache`,
- * and prints a compact table. This is the callable surface bl-basket / set-buy-check use for
+ * store API, writes through to the unified `bricklink_price_guide_cache` (a deliberate PARTIAL
+ * upsert of only the fetched quadrants — see the service header for why it bypasses
+ * `capturePriceGuide`), and prints a compact table. This is the callable surface bl-basket /
+ * set-buy-check use for
  * a "verify before acting" live check, and can be driven directly for ad-hoc lookups.
  *
  * Usage (from apps/web):
@@ -148,8 +150,8 @@ function printReport(result: Awaited<ReturnType<typeof liveCheckBatch>>): void {
   }
   console.log('');
 
-  const header = '| Item | Colour | N: lots/qty/avg | U: lots/qty/avg | Cache | Part-price | Errors |';
-  const sep = '|---|---|---|---|---|---|---|';
+  const header = '| Item | Colour | N: lots/qty/avg | U: lots/qty/avg | Cache | Errors |';
+  const sep = '|---|---|---|---|---|---|';
   console.log(header);
   console.log(sep);
   for (const r of result.results) {
@@ -157,10 +159,9 @@ function printReport(result: Awaited<ReturnType<typeof liveCheckBatch>>): void {
     const n = r.sold.N ? `${r.sold.N.lots}/${r.sold.N.qty}/${money(r.sold.N.avg)}` : '—';
     const u = r.sold.U ? `${r.sold.U.lots}/${r.sold.U.qty}/${money(r.sold.U.avg)}` : '—';
     const cache = r.wroteToUkCache ? '✓' : '—';
-    const part = r.tuple.itemType === 'S' ? 'n/a' : r.wroteToPartPriceCache ? '✓' : '—';
     const prior = r.priorCacheAgeDays == null ? 'new' : `${r.priorCacheAgeDays.toFixed(1)}d old`;
     const errs = r.errors.length > 0 ? r.errors.join('; ').slice(0, 60) : '';
-    console.log(`| ${item} | ${r.tuple.colourId} | ${n} | ${u} | ${cache} (was ${prior}) | ${part} | ${errs} |`);
+    console.log(`| ${item} | ${r.tuple.colourId} | ${n} | ${u} | ${cache} (was ${prior}) | ${errs} |`);
   }
   console.log('');
 }

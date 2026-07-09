@@ -4,11 +4,14 @@
  * Scores a prospective bulk lot for part-out quality BEFORE buying — expected
  * list value (Bricqer formula), liquidity mix (liquid vs dead vs blind), picking
  * drag, and a BUY/PASS verdict vs the asking price. Makes ZERO external API
- * calls; uses the BL price cache + a snapshot-derived colour crosswalk.
+ * calls; uses the unified price cache (readPriceGuide) + a snapshot-derived
+ * colour crosswalk.
  *
- * Colour bridge (framework §1.1): BSX carries BrickLink colour-ids; our cache is
- * keyed on Bricqer colour-ids. We chain BL colour-id → colour name (from our own
- * BL order_items) → Bricqer colour-id (from the snapshot) → cache.
+ * Colour bridge (framework §1.1): BSX carries BrickLink colour-ids. We chain
+ * BL colour-id → colour name (from our own BL order_items) → Bricqer colour-id
+ * (from the snapshot), then hand readPriceGuide the Bricqer id with
+ * scheme:'bricqer' — the shared colour map normalises it back to the canonical
+ * BL id used by bricklink_price_guide_cache.
  *
  * Usage (from apps/web):
  *   npx tsx scripts/evaluate-job-lot.ts --bsx=lot.bsx --asking=25
@@ -29,7 +32,9 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { XMLParser } from 'fast-xml-parser';
-import { projectListPrice, VAR_FEE_PCT, strRatioFromCache } from '../src/lib/store-quality/pricing';
+import { projectListPrice, VAR_FEE_PCT } from '../src/lib/store-quality/pricing';
+import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
+import { loadColourMap } from '../src/lib/bricklink/colour-map';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -62,6 +67,7 @@ const num = (v: any) => {
 };
 
 interface ManifestItem {
+  itemType: 'P' | 'M'; // BSX ItemTypeID (CSV manifests default to 'P')
   itemNumber: string;
   colorId: number | null; // BL colour id (from BSX) — may be null for CSV-by-name
   colorName: string | null;
@@ -78,6 +84,7 @@ function parseBsx(file: string): ManifestItem[] {
   return arr
     .filter((it: any) => (it.ItemTypeID ?? 'P') === 'P' || (it.ItemTypeID ?? 'P') === 'M')
     .map((it: any) => ({
+      itemType: ((it.ItemTypeID ?? 'P') === 'M' ? 'M' : 'P') as 'P' | 'M',
       itemNumber: String(it.ItemID),
       colorId: it.ColorID != null ? parseInt(String(it.ColorID), 10) : null,
       colorName: it.ColorName ? String(it.ColorName) : null,
@@ -95,6 +102,7 @@ function parseCsv(file: string): ManifestItem[] {
     const c = line.split(',');
     const cond = (c[idx('condition')] ?? 'U').trim();
     out.push({
+      itemType: 'P',
       itemNumber: (c[idx('item_number')] ?? '').trim(),
       colorId: idx('color_id') >= 0 && c[idx('color_id')]?.trim() ? parseInt(c[idx('color_id')], 10) : null,
       colorName: idx('color_name') >= 0 ? (c[idx('color_name')] ?? '').trim() : null,
@@ -152,25 +160,29 @@ async function main() {
   );
   for (const r of snapRows) if (r.color_name) nameToBricqerId.set(norm(r.color_name), r.color_id);
 
-  // resolve each item's Bricqer colour-id + cache lookup
-  const partNumbers = [...new Set(items.map((i) => i.itemNumber))];
-  const cache = new Map<string, any>();
-  const PART_BATCH = 300;
-  for (let i = 0; i < partNumbers.length; i += PART_BATCH) {
-    const batch = partNumbers.slice(i, i + PART_BATCH);
-    // A part fans out to many colour rows — paginate within the batch.
-    for (let from = 0; ; from += 1000) {
-      const { data, error } = await (supabase as any)
-        .from('bricklink_part_price_cache')
-        .select('part_number,colour_id,price_new,price_used,sell_through_rate_new,sell_through_rate_used')
-        .in('part_number', batch)
-        .order('id', { ascending: true })
-        .range(from, from + 999);
-      if (error) throw error;
-      for (const r of data ?? []) cache.set(`${r.part_number}|${r.colour_id}`, r);
-      if (!data || data.length < 1000) break;
-    }
-  }
+  // Resolve each item's Bricqer colour-id, then read the unified price cache.
+  // Provenance: lookup colour ids come out of the bricqer_inventory_snapshot crosswalk,
+  // so refs use scheme:'bricqer' — readPriceGuide normalises them to canonical BL ids
+  // via the shared colour map (pagination past the 1000-row cap happens inside it too).
+  const resolved = items.map((it) => {
+    const colourResolved = it.colorName ?? (it.colorId != null ? blIdToName.get(it.colorId) ?? null : null);
+    const bricqerColorId = colourResolved ? nameToBricqerId.get(norm(colourResolved)) ?? null : null;
+    return { it, colourResolved, bricqerColorId };
+  });
+  const cmap = await loadColourMap(supabase);
+  const viewKey = (it: ManifestItem, bricqerColorId: number) =>
+    pgKey(it.itemType, it.itemNumber, it.itemType === 'P' ? cmap.toBl(bricqerColorId, 'bricqer') : 0);
+  const refs: ItemRef[] = [
+    ...new Map(
+      resolved
+        .filter((r) => r.bricqerColorId != null)
+        .map((r) => [
+          viewKey(r.it, r.bricqerColorId!),
+          { itemType: r.it.itemType, itemNo: r.it.itemNumber, colourId: r.bricqerColorId!, scheme: 'bricqer' as const },
+        ] as const)
+    ).values(),
+  ];
+  const views = await readPriceGuide(supabase, refs, { ttlDays: 90, allowWorldFallback: false });
 
   type Row = ManifestItem & {
     colourResolved: string | null;
@@ -182,13 +194,13 @@ async function main() {
     liquidity: 'LIQUID' | 'SLOW' | 'DEAD' | 'PRICED?' | 'BLIND';
   };
 
-  const rows: Row[] = items.map((it) => {
-    const colourResolved = it.colorName ?? (it.colorId != null ? blIdToName.get(it.colorId) ?? null : null);
-    const bricqerColorId = colourResolved ? nameToBricqerId.get(norm(colourResolved)) ?? null : null;
-    const c = bricqerColorId != null ? cache.get(`${it.itemNumber}|${bricqerColorId}`) : null;
-    const ma6raw = c ? (it.condition === 'N' ? c.price_new : c.price_used) : null;
-    const ma6 = ma6raw && Number(ma6raw) > 0 ? Number(ma6raw) : null;
-    const strRatio = c ? strRatioFromCache(it.condition === 'N' ? c.sell_through_rate_new : c.sell_through_rate_used) : null;
+  const rows: Row[] = resolved.map(({ it, colourResolved, bricqerColorId }) => {
+    const view = bricqerColorId != null ? views.get(viewKey(it, bricqerColorId)) : undefined;
+    const side = view && view.coverage === 'uk' ? (it.condition === 'N' ? view.new : view.used) : null;
+    const ma6 = side?.soldAvg && side.soldAvg > 0 ? side.soldAvg : null;
+    // Legacy sell_through_rate_* stored the qty-based STR ×100 and strRatioFromCache
+    // divided it back down — view.strQty IS that raw qty ratio, exactly equivalent.
+    const strRatio = side ? side.strQty : null;
     const unitList = projectListPrice(ma6, it.condition === 'N' ? 'New' : 'Used', strRatio);
     const lineList = unitList != null ? unitList * it.qty : null;
     let liquidity: Row['liquidity'];

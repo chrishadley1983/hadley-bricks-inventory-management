@@ -2,6 +2,15 @@
  * BrickLink Arbitrage Sync Service
  *
  * Handles syncing BrickLink pricing data for arbitrage tracking.
+ *
+ * UNIFIED-PRICE-CACHE EXCEPTION (deliberate): this lane fetches daily STOCK
+ * (asking) snapshots with seller-level `price_detail` into its own domain table
+ * (`bricklink_arbitrage_pricing`). It does NOT write `bricklink_price_guide_cache`:
+ * a stock-only partial upsert would bump `fetched_at` and make rows look fresh to
+ * sold-data readers (`readPriceGuide`/`ensurePriceGuide`) that would then skip
+ * fetching the sold quadrants — poisoning the shared cache's freshness contract.
+ * Seller-level price_detail also has no home in the unified schema. If the cache
+ * ever gains per-quadrant freshness, revisit and capture the stock quadrants here.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';

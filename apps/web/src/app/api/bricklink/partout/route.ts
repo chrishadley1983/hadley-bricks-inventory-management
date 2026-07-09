@@ -14,7 +14,6 @@ import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { CredentialsRepository } from '@/lib/repositories';
 import { PartoutService } from '@/lib/bricklink/partout.service';
-import { PartPriceCacheService } from '@/lib/bricklink/part-price-cache.service';
 import type { PartoutApiResponse, PartoutApiError } from '@/types/partout';
 
 const QuerySchema = z.object({
@@ -71,8 +70,7 @@ export async function GET(
       supabase,
       caller: 'partout',
     });
-    const cacheService = new PartPriceCacheService(supabase);
-    const partoutService = new PartoutService(brickLinkClient, cacheService);
+    const partoutService = new PartoutService(brickLinkClient, supabase);
 
     // 5. Get partout value
     const data = await partoutService.getPartoutValue(setNumber, { forceRefresh });

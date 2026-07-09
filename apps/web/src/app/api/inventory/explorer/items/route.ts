@@ -129,8 +129,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch BL cache for enriched filter and data columns
-    const allPartNumbers = lots.map((l) => l.itemNumber);
-    const blCache = await fetchBLCache(supabase, allPartNumbers);
+    const blCache = await fetchBLCache(
+      supabase,
+      lots.map((l) => ({ itemNumber: l.itemNumber, colorId: l.colorId, itemType: l.itemType }))
+    );
 
     // Apply enriched filter
     if (enriched === 'yes') {

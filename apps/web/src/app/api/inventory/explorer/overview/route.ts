@@ -129,9 +129,11 @@ export async function GET() {
       }))
       .sort((a, b) => b.items - a.items);
 
-    // Fetch BrickLink cache for all part numbers
-    const allPartNumbers = lots.map((l) => l.itemNumber);
-    const blCache = await fetchBLCache(supabase, allPartNumbers);
+    // Fetch BrickLink cache for all lots
+    const blCache = await fetchBLCache(
+      supabase,
+      lots.map((l) => ({ itemNumber: l.itemNumber, colorId: l.colorId, itemType: l.itemType }))
+    );
 
     // Calculate average STR (weighted by value, only for lots with BL data)
     let strWeightedSum = 0;

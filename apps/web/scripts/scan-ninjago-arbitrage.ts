@@ -3,9 +3,10 @@
  *
  * Pulls every Ninjago set from brickset_sets, enumerates the unique
  * (part, colour) universe via the BrickLink subsets API, then scans
- * the top N most-frequent parts for sold + stock price guides. Scores
- * each lot for arbitrage (min ask vs 6-month sold average) and emits
- * an HTML report ranked by projected lot profit.
+ * the top N most-frequent parts for UK sold + stock price guides via
+ * ensurePriceGuide (unified price cache — 4 API calls per item, both
+ * conditions captured). Scores each lot for arbitrage (UK min ask vs
+ * UK 6-month sold average) and emits an HTML report ranked by margin.
  *
  * Usage (from apps/web):
  *   npx tsx scripts/scan-ninjago-arbitrage.ts
@@ -19,8 +20,10 @@ import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BrickLinkClient, BrickLinkApiError } from '../src/lib/bricklink/client';
-import type { BrickLinkSubsetEntry, BrickLinkPriceGuide } from '../src/lib/bricklink/types';
+import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '../src/lib/bricklink/client';
+import type { BrickLinkSubsetEntry } from '../src/lib/bricklink/types';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import type { PriceGuideView } from '../src/lib/bricklink/price-guide/read';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -53,6 +56,8 @@ const MAX_DISCOUNT = parseFloat(argv['max-discount'] ?? '0.80'); // best ask mus
 const MIN_UNIT_PROFIT = parseFloat(argv['min-unit-profit'] ?? '0.20');
 /** UK-only is the default — at our scale intl shipping kills the margin. */
 const UK_ONLY = (argv['uk-only'] ?? 'true') !== 'false';
+/** Unified price-cache freshness — items with a fresh UK row cost 0 API calls. */
+const CACHE_TTL_DAYS = 90;
 
 const TMP_DIR = path.resolve(__dirname, '../../../tmp/ninjago-arbitrage');
 const REPORT_PATH = path.join(TMP_DIR, 'report.html');
@@ -358,7 +363,7 @@ async function scanOpportunities(universe: PartUniverseEntry[]): Promise<ScanRes
     const k = `${p.partNumber}::${p.colourId}`;
     if (doneSet.has(k)) continue;
 
-    if (progress.callsUsed + 3 > DAILY_BUDGET) {
+    if (progress.callsUsed + 4 > DAILY_BUDGET) {
       console.warn(
         `[scan] Daily budget reached (${progress.callsUsed}/${DAILY_BUDGET}). Resume later to continue.`,
       );
@@ -367,35 +372,21 @@ async function scanOpportunities(universe: PartUniverseEntry[]): Promise<ScanRes
 
     try {
       await sleep(API_DELAY_MS);
-      const sold = await bl.getPartPriceGuide(p.partType, p.partNumber, p.colourId, {
-        condition: 'U',
-        guideType: 'sold',
-        currencyCode: 'GBP',
-      });
-      progress.callsUsed++;
+      // One ensurePriceGuide call = all four UK quadrants (sold/stock × N/U),
+      // 4 API calls, captured into the unified price cache automatically.
+      const view = await ensurePriceGuide(
+        bl,
+        supabase,
+        { itemType: p.partType === 'MINIFIG' ? 'M' : 'P', itemNo: p.partNumber, colourId: p.colourId },
+        { ttlDays: CACHE_TTL_DAYS },
+      );
+      progress.callsUsed += 4;
 
-      await sleep(API_DELAY_MS);
-      const stock = await bl.getPartPriceGuide(p.partType, p.partNumber, p.colourId, {
-        condition: 'U',
-        guideType: 'stock',
-        currencyCode: 'GBP',
-      });
-      progress.callsUsed++;
-
-      await sleep(API_DELAY_MS);
-      const ukStock = await bl.getPartPriceGuide(p.partType, p.partNumber, p.colourId, {
-        condition: 'U',
-        guideType: 'stock',
-        currencyCode: 'GBP',
-        countryCode: 'UK',
-      });
-      progress.callsUsed++;
-
-      results.push(summarise(p, sold, stock, ukStock));
+      results.push(summarise(p, view));
       progress.done.push(k);
       scannedThisRun++;
     } catch (err) {
-      if (err instanceof BrickLinkApiError && err.code === 429) {
+      if (err instanceof RateLimitError || (err instanceof BrickLinkApiError && err.code === 429)) {
         console.error('[scan] Rate limit hit — saving progress and aborting.');
         saveProgress();
         break;
@@ -420,44 +411,12 @@ async function scanOpportunities(universe: PartUniverseEntry[]): Promise<ScanRes
   return results;
 }
 
-function summarise(
-  p: PartUniverseEntry,
-  sold: BrickLinkPriceGuide,
-  stock: BrickLinkPriceGuide,
-  ukStock: BrickLinkPriceGuide,
-): ScanResult {
-  const num = (s: string | undefined) => {
-    const n = parseFloat(s ?? '');
-    return Number.isFinite(n) ? n : null;
-  };
-
-  // Best ask among lots that ship to us (shipping_available=true).
-  // BL's price_detail.seller_country_code is never populated for stock guides,
-  // so we rely on shipping_available as the ships-to-buyer filter.
-  let minAsk: number | null = null;
-  let minAskQty: number | null = null;
-  for (const d of stock.price_detail ?? []) {
-    if (d.shipping_available === false) continue;
-    const price = parseFloat(d.unit_price);
-    if (!Number.isFinite(price)) continue;
-    if (minAsk === null || price < minAsk) {
-      minAsk = price;
-      minAskQty = d.quantity;
-    }
-  }
-
-  // Best UK-seller lot (from country_code=UK query).
-  let ukAsk: number | null = null;
-  let ukAskQty: number | null = null;
-  for (const d of ukStock.price_detail ?? []) {
-    const price = parseFloat(d.unit_price);
-    if (!Number.isFinite(price)) continue;
-    if (ukAsk === null || price < ukAsk) {
-      ukAsk = price;
-      ukAskQty = d.quantity;
-    }
-  }
-
+function summarise(p: PartUniverseEntry, view: PriceGuideView): ScanResult {
+  // Used-condition UK view from the unified price cache. Scope note: every figure
+  // below is UK-only (UK 6-month sold, UK current stock). The legacy scan mixed a
+  // worldwide sold benchmark + worldwide stock detail with a UK stock query; UK-only
+  // is our operating rule, so the whole row is now UK-scoped.
+  const u = view.used;
   return {
     partNumber: p.partNumber,
     colourId: p.colourId,
@@ -466,25 +425,25 @@ function summarise(
     partType: p.partType,
     frequency: p.frequency,
 
-    soldAvgPrice: num(sold.avg_price),
-    soldQtyAvgPrice: num(sold.qty_avg_price),
-    soldMinPrice: num(sold.min_price),
-    soldMaxPrice: num(sold.max_price),
-    timesSold: sold.unit_quantity ?? 0,
-    totalQtySold: sold.total_quantity ?? 0,
+    soldAvgPrice: u.soldAvg,
+    soldQtyAvgPrice: u.soldQtyAvg,
+    soldMinPrice: null, // sold min/max not exposed by the unified view
+    soldMaxPrice: null,
+    timesSold: u.soldLots, // sold lots — matches legacy unit_quantity
+    totalQtySold: u.soldQty,
 
-    stockMinPrice: num(stock.min_price),
-    stockAvgPrice: num(stock.avg_price),
-    stockQtyAvgPrice: num(stock.qty_avg_price),
-    stockTotalLots: stock.unit_quantity ?? 0,
-    stockTotalQty: stock.total_quantity ?? 0,
+    stockMinPrice: u.stockMin, // UK (legacy was worldwide ships-to-us)
+    stockAvgPrice: null, // plain lot-average asking price not exposed
+    stockQtyAvgPrice: u.stockAvg, // qty-weighted asking average
+    stockTotalLots: u.stockLots,
+    stockTotalQty: u.stockQty,
 
-    minAskPrice: minAsk,
-    minAskQty,
+    minAskPrice: u.stockMin, // UK min ask (legacy: global ships-to-us min)
+    minAskQty: null, // per-lot detail not exposed by the unified view
 
-    ukAskMinPrice: ukAsk,
-    ukAskQtyAtMin: ukAskQty,
-    ukTotalLots: ukStock.unit_quantity ?? 0,
+    ukAskMinPrice: u.stockMin,
+    ukAskQtyAtMin: null, // per-lot detail not exposed → scoring lotQty defaults to 1
+    ukTotalLots: u.stockLots,
 
     scannedAt: new Date().toISOString(),
   };
@@ -648,7 +607,7 @@ ${rows}
 </table>
 
 <div class="legend">
-  <b>Methodology.</b> "Avg sold" = qty-weighted 6-month sold average (used, GBP). "Best ask" = lowest
+  <b>Methodology.</b> "Avg sold" = qty-weighted UK 6-month sold average (used, GBP, unified price cache). "Best ask" = lowest
   current UK-seller price${UK_ONLY ? ' (UK-only mode)' : ''}. Landed cost = ask ×
   ${(LANDED_COST_UPLIFT_UK).toFixed(2)} (UK) or ${(LANDED_COST_UPLIFT_INTL).toFixed(2)} (intl) —
   assumes basket-shared shipping. Revenue per unit = avg_sold ×

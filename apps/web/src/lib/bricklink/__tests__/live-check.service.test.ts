@@ -5,7 +5,6 @@ import type { BrickLinkPriceGuide } from '../types';
 import type { PriceGuideCacheService } from '../price-guide-cache.service';
 import {
   apiPriceGuideToUkCacheFields,
-  apiPriceGuideToPartPriceCacheFields,
   liveCheckTuple,
   liveCheckBatch,
   LIVE_CHECK_PARSE_VERSION,
@@ -163,49 +162,6 @@ describe('apiPriceGuideToUkCacheFields', () => {
 });
 
 // ---------------------------------------------------------------------------
-// apiPriceGuideToPartPriceCacheFields
-// ---------------------------------------------------------------------------
-
-describe('apiPriceGuideToPartPriceCacheFields', () => {
-  it('returns null for sets — that table has no set rows', () => {
-    const fetches: TupleFetches = {
-      ...noFetches,
-      soldNew: { requested: true, ok: true, guide: fakeGuide({ unit_quantity: 2, total_quantity: 3 }) },
-    };
-    expect(apiPriceGuideToPartPriceCacheFields({ itemType: 'S', itemNo: '45501', colourId: 0 }, fetches)).toBeNull();
-  });
-
-  it('returns null when nothing was fetched', () => {
-    expect(apiPriceGuideToPartPriceCacheFields({ itemType: 'P', itemNo: '3001', colourId: 11 }, noFetches)).toBeNull();
-  });
-
-  it('maps sold-only fetches to price_new/times_sold_new, leaving stock fields absent', () => {
-    const fetches: TupleFetches = {
-      ...noFetches,
-      soldNew: { requested: true, ok: true, guide: fakeGuide({ unit_quantity: 10, total_quantity: 25, avg_price: '0.12' }) },
-    };
-    const row = apiPriceGuideToPartPriceCacheFields({ itemType: 'P', itemNo: '3001', colourId: 11 }, fetches);
-    expect(row).not.toBeNull();
-    expect(row!.part_number).toBe('3001');
-    expect(row!.part_type).toBe('PART');
-    expect(row!.price_new).toBeCloseTo(0.12, 4);
-    expect(row!.times_sold_new).toBe(25);
-    expect('price_used' in row!).toBe(false);
-    expect('stock_available_new' in row!).toBe(false);
-  });
-
-  it('uses MINIFIG part_type for M tuples', () => {
-    const fetches: TupleFetches = {
-      ...noFetches,
-      soldUsed: { requested: true, ok: true, guide: fakeGuide({ unit_quantity: 1, total_quantity: 1, avg_price: '5.00' }) },
-    };
-    const row = apiPriceGuideToPartPriceCacheFields({ itemType: 'M', itemNo: 'sw1479', colourId: 0 }, fetches);
-    expect(row!.part_type).toBe('MINIFIG');
-    expect(row!.price_used).toBeCloseTo(5, 4);
-  });
-});
-
-// ---------------------------------------------------------------------------
 // liveCheckTuple — RateLimitError propagation
 // ---------------------------------------------------------------------------
 
@@ -224,7 +180,7 @@ describe('liveCheckTuple', () => {
     ).rejects.toBeInstanceOf(RateLimitError);
   });
 
-  it('writes through to both caches on a successful sold-only check (P/M types)', async () => {
+  it('writes through to the unified cache only on a successful sold-only check (P/M types)', async () => {
     const client = {
       getPartPriceGuide: vi.fn().mockResolvedValue(fakeGuide({ unit_quantity: 3, total_quantity: 8, avg_price: '0.30' })),
     } as unknown as BrickLinkClient;
@@ -241,12 +197,11 @@ describe('liveCheckTuple', () => {
 
     expect(result.requests).toBe(2); // N + U sold, default conditions
     expect(result.wroteToUkCache).toBe(true);
-    expect(result.wroteToPartPriceCache).toBe(true);
     expect(calls.some((c) => c.table === 'bricklink_price_guide_cache' && c.op === 'upsert')).toBe(true);
-    expect(calls.some((c) => c.table === 'bricklink_part_price_cache' && c.op === 'upsert')).toBe(true);
+    expect(calls.some((c) => c.table === 'bricklink_part_price_cache')).toBe(false);
   });
 
-  it('does not write to bricklink_part_price_cache for SET tuples', async () => {
+  it('writes SET tuples to the unified cache with colour 0', async () => {
     const client = {
       getPartPriceGuide: vi.fn().mockResolvedValue(fakeGuide({ unit_quantity: 3, total_quantity: 8, avg_price: '30.00' })),
     } as unknown as BrickLinkClient;
@@ -261,7 +216,7 @@ describe('liveCheckTuple', () => {
       { callSpacingMs: 0 }
     );
 
-    expect(result.wroteToPartPriceCache).toBe(false);
+    expect(result.wroteToUkCache).toBe(true);
     expect(calls.some((c) => c.table === 'bricklink_part_price_cache')).toBe(false);
     expect(calls.some((c) => c.table === 'bricklink_price_guide_cache')).toBe(true);
   });

@@ -1,10 +1,17 @@
 /**
- * Helper to look up BrickLink price cache data for snapshot items.
- * Shared between overview and items API routes.
+ * Helper to look up BrickLink price data for snapshot items.
+ * Shared between overview, items and sync-status API routes.
+ *
+ * Reads via the unified price cache (`readPriceGuide`) — snapshot colour ids are
+ * Bricqer-scheme and are normalised to BL ids internally; the returned map is
+ * keyed by the CALLER's scheme (`itemNumber|bricqerColourId`) so route keying
+ * is unchanged. STR here is the house sold/stock ratio ×100 (can exceed 100).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
+import { readPriceGuide, pgKey, type ItemRef, type PgType, type Coverage } from '@/lib/bricklink/price-guide/read';
+import { loadColourMap } from '@/lib/bricklink/colour-map';
 
 export interface BLCacheEntry {
   partNumber: string;
@@ -17,47 +24,77 @@ export interface BLCacheEntry {
   stockUsed: number | null;
   soldNew: number | null;
   soldUsed: number | null;
+  coverage: Coverage;
+  freshnessDays: number | null;
+}
+
+export interface BLLookupRef {
+  itemNumber: string;
+  /** Bricqer-scheme colour id from the snapshot (null = not colour-keyed). */
+  colorId: number | null;
+  /** Explorer item type: 'Part' | 'Set' | 'Minifig'. Defaults to Part. */
+  itemType?: string;
+}
+
+function toPgType(itemType: string | undefined): PgType {
+  if (itemType === 'Set') return 'S';
+  if (itemType === 'Minifig') return 'M';
+  return 'P';
 }
 
 /**
- * Fetch BrickLink cache entries for a list of part numbers.
- * Returns a Map keyed by "partNumber|colourId".
+ * Fetch price views for a list of snapshot lots.
+ * Returns a Map keyed by "itemNumber|bricqerColourId" ('' when colorId is null).
  */
 export async function fetchBLCache(
   supabase: SupabaseClient<Database>,
-  partNumbers: string[]
+  refs: BLLookupRef[],
+  opts: { ttlDays?: number; allowWorldFallback?: boolean } = {}
 ): Promise<Map<string, BLCacheEntry>> {
   const map = new Map<string, BLCacheEntry>();
-  if (partNumbers.length === 0) return map;
+  if (refs.length === 0) return map;
 
-  // Dedupe
-  const unique = [...new Set(partNumbers)];
+  const cmap = await loadColourMap(supabase);
 
-  // Fetch in batches of 500 (Supabase IN limit)
-  for (let i = 0; i < unique.length; i += 500) {
-    const batch = unique.slice(i, i + 500);
-    const { data } = await supabase
-      .from('bricklink_part_price_cache')
-      .select('part_number, colour_id, price_new, price_used, sell_through_rate_new, sell_through_rate_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used')
-      .in('part_number', batch);
+  // Dedupe on the caller's key; remember one representative ref per key
+  const byCallerKey = new Map<string, BLLookupRef>();
+  for (const r of refs) {
+    const key = `${r.itemNumber}|${r.colorId ?? ''}`;
+    if (!byCallerKey.has(key)) byCallerKey.set(key, r);
+  }
 
-    if (data) {
-      for (const row of data) {
-        const key = `${row.part_number}|${row.colour_id}`;
-        map.set(key, {
-          partNumber: row.part_number,
-          colourId: row.colour_id,
-          priceNew: row.price_new ? parseFloat(String(row.price_new)) : null,
-          priceUsed: row.price_used ? parseFloat(String(row.price_used)) : null,
-          strNew: row.sell_through_rate_new ? parseFloat(String(row.sell_through_rate_new)) : null,
-          strUsed: row.sell_through_rate_used ? parseFloat(String(row.sell_through_rate_used)) : null,
-          stockNew: row.stock_available_new,
-          stockUsed: row.stock_available_used,
-          soldNew: row.times_sold_new,
-          soldUsed: row.times_sold_used,
-        });
-      }
-    }
+  const items: ItemRef[] = [...byCallerKey.values()].map((r) => ({
+    itemType: toPgType(r.itemType),
+    itemNo: r.itemNumber,
+    colourId: r.colorId ?? 0,
+    scheme: 'bricqer' as const,
+  }));
+
+  const views = await readPriceGuide(supabase, items, {
+    ttlDays: opts.ttlDays,
+    allowWorldFallback: opts.allowWorldFallback ?? true,
+  });
+
+  for (const [callerKey, r] of byCallerKey) {
+    const itemType = toPgType(r.itemType);
+    const blColourId = itemType === 'P' ? cmap.toBl(r.colorId ?? 0, 'bricqer') : 0;
+    const view = views.get(pgKey(itemType, r.itemNumber, blColourId));
+    if (!view || view.coverage === 'none') continue;
+
+    map.set(callerKey, {
+      partNumber: r.itemNumber,
+      colourId: r.colorId ?? 0,
+      priceNew: view.new.soldAvg,
+      priceUsed: view.used.soldAvg,
+      strNew: view.new.strQty === null ? null : view.new.strQty * 100,
+      strUsed: view.used.strQty === null ? null : view.used.strQty * 100,
+      stockNew: view.new.stockQty,
+      stockUsed: view.used.stockQty,
+      soldNew: view.new.soldQty,
+      soldUsed: view.used.soldQty,
+      coverage: view.coverage,
+      freshnessDays: view.freshnessDays,
+    });
   }
 
   return map;

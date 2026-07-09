@@ -1,3 +1,4 @@
+// DEPRECATED: reads bricklink_part_price_cache (dropped). Do not use as a pattern.
 /**
  * One-time cleanup: delete `bricklink_part_price_cache` rows that are most
  * likely EnrichmentService pollution from the colour-id-as-Bricqer-id bug.

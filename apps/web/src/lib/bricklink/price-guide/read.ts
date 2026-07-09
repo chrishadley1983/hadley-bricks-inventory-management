@@ -29,6 +29,10 @@ export interface SideView {
   stockLots: number;
   stockQty: number;
   stockMin: number | null;
+  /** Highest asking price, from the stock detail blob (null pre-v2 rows). */
+  stockMax: number | null;
+  /** Qty-weighted average asking price, derived from the stock histogram (null pre-v3 rows). */
+  stockAvg: number | null;
   strLots: number | null; // sold_lots / stock_lots
   strQty: number | null; // sold_qty / stock_qty
   hist: Record<string, number> | undefined; // sold-side qty histogram (price 4dp -> qty)
@@ -57,16 +61,31 @@ export function pgKey(itemType: string, itemNo: string, blColourId: number): str
 
 const EMPTY_SIDE: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
-  stockLots: 0, stockQty: 0, stockMin: null, strLots: null, strQty: null, hist: undefined,
+  stockLots: 0, stockQty: 0, stockMin: null, stockMax: null, stockAvg: null, strLots: null, strQty: null, hist: undefined,
 };
+
+/** Qty-weighted mean of a price(4dp)->qty histogram; ignores the rolled-up "other" bucket. */
+function histAvg(hist: Record<string, number> | undefined): number | null {
+  if (!hist) return null;
+  let qty = 0;
+  let sum = 0;
+  for (const [price, q] of Object.entries(hist)) {
+    const p = Number(price);
+    if (!Number.isFinite(p) || !q) continue;
+    qty += q;
+    sum += p * q;
+  }
+  return qty > 0 ? sum / qty : null;
+}
 
 function ukSide(row: Row, cond: 'new' | 'used'): SideView {
   const soldLots = iNum(row[`uk_sold_lots_${cond}`]);
   const soldQty = iNum(row[`uk_sold_qty_${cond}`]);
   const stockLots = iNum(row[`uk_stock_lots_${cond}`]);
   const stockQty = iNum(row[`uk_stock_qty_${cond}`]);
-  const detail = (row.uk_detail ?? {}) as Record<string, { hist?: Record<string, number> }>;
+  const detail = (row.uk_detail ?? {}) as Record<string, { min?: number | null; max?: number | null; hist?: Record<string, number> }>;
   const histKey = cond === 'new' ? 'soldNew' : 'soldUsed';
+  const stockHistKey = cond === 'new' ? 'stockNew' : 'stockUsed';
   return {
     soldAvg: nOrNull(row[`uk_sold_avg_${cond}`]),
     soldMedian: nOrNull(row[`uk_sold_median_${cond}`]),
@@ -75,6 +94,8 @@ function ukSide(row: Row, cond: 'new' | 'used'): SideView {
     soldLast2moQty: iNum(row[`uk_sold_last2mo_qty_${cond}`]),
     stockLots, stockQty,
     stockMin: nOrNull(row[`uk_stock_min_${cond}`]),
+    stockMax: nOrNull(detail?.[stockHistKey]?.max),
+    stockAvg: histAvg(detail?.[stockHistKey]?.hist),
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
     hist: detail?.[histKey]?.hist,
@@ -91,6 +112,7 @@ function worldSide(row: Row, cond: 'new' | 'used'): SideView {
     soldAvg: nOrNull(row[`sold6m_${cond}_avg`]),
     soldQtyAvg: nOrNull(row[`sold6m_${cond}_qavg`]),
     soldLots, soldQty, stockLots, stockQty,
+    stockAvg: null,
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
   };
