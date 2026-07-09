@@ -24,6 +24,10 @@ Write-Output "[pg-canary.ps1] $(Get-Date -Format o) starting (cwd=$webDir)" | Te
 
 # --api included so all three lanes are compared daily (spec §4.4 "every active
 # lane"); the golden set costs ~20 store-API calls/day, well inside the budget gate.
+# npx's "npm warn config ignoring workspace config" stderr line would abort the runner
+# under ErrorActionPreference=Stop before tsx runs — drop to Continue; $LASTEXITCODE is
+# the real pass/fail signal.
+$ErrorActionPreference = 'Continue'
 & npx tsx scripts/pg/pg-canary.ts --cdp --api 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pg-canary.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
