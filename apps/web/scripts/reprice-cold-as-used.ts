@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
+import { bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -62,7 +63,6 @@ for (const [k, v] of Object.entries(creds)) {
 const bl = new BrickLinkClient(creds, { supabase, caller: 'reprice-cold-as-used-script' });
 
 type StoreItemCode = 'P' | 'S' | 'M';
-type ItemCondition = 'N' | 'U';
 
 interface ScrapedItem {
   invID: number;
@@ -79,14 +79,7 @@ interface ScrapedItem {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// Canonical Bricqer formula (v3 + 7p floor) — never re-inline; see bricqer-pricing.ts.
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;
@@ -149,8 +142,7 @@ async function main() {
     if (!ns || ns.ukSoldAvg == null) continue; // can't classify without N benchmark
     const str = ns.ukStockQty > 0 ? ns.ukSoldQty / ns.ukStockQty : 0;
     if (str >= THRESHOLD) continue;
-    const mul = bricqerMultiplier('N', str);
-    const listPerUnit = ns.ukSoldAvg * mul;
+    const listPerUnit = bricqerListPrice(ns.ukSoldAvg, 'N', str) ?? 0;
     coldRows.push({ it, key, nSlot: ns, nStr: str, nList: listPerUnit, nLot: listPerUnit * it.invQty });
   }
   const coldListTotal = coldRows.reduce((a, r) => a + r.nLot, 0);
@@ -198,8 +190,7 @@ async function main() {
       return { ...r, uSlot: us, uStr: 0, uList: 0, uLot: 0, deltaList: -r.nLot, bucket: 'no-used-data' as const };
     }
     const uStr = us.ukStockQty > 0 ? us.ukSoldQty / us.ukStockQty : 0;
-    const uMul = bricqerMultiplier('U', uStr);
-    const uList = us.ukSoldAvg * uMul;
+    const uList = bricqerListPrice(us.ukSoldAvg, 'U', uStr) ?? 0;
     const uLot = uList * r.it.invQty;
     let bucket: Repriced['bucket'];
     if (uStr >= 1) bucket = 'becomes-hot';
