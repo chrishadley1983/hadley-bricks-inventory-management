@@ -2,6 +2,8 @@
  * API client functions for the investment tracker
  */
 
+import type { MaxBuyResult } from '@/lib/investment/max-buy';
+
 export interface InvestmentSet {
   id: string;
   set_number: string;
@@ -180,14 +182,20 @@ export async function fetchPriceHistory(setNumber: string): Promise<PriceHistory
 
 export interface PredictionsFilters {
   minScore?: number;
+  minConfidence?: number;
   retiringWithinMonths?: number;
   theme?: string;
   page?: number;
   pageSize?: number;
 }
 
+export type PredictionItem = InvestmentSet & {
+  prediction: InvestmentPrediction;
+  max_buy: MaxBuyResult | null;
+};
+
 interface PredictionsResponse {
-  data: (InvestmentSet & { prediction: InvestmentPrediction })[];
+  data: PredictionItem[];
   total: number;
   page: number;
   pageSize: number;
@@ -198,6 +206,7 @@ export async function fetchPredictions(filters?: PredictionsFilters): Promise<Pr
   const params = new URLSearchParams();
 
   if (filters?.minScore != null) params.set('minScore', String(filters.minScore));
+  if (filters?.minConfidence != null) params.set('minConfidence', String(filters.minConfidence));
   if (filters?.retiringWithinMonths != null)
     params.set('retiringWithinMonths', String(filters.retiringWithinMonths));
   if (filters?.theme) params.set('theme', filters.theme);
@@ -236,4 +245,107 @@ export async function fetchInvestmentThemes(): Promise<string[]> {
 
   const result = await response.json();
   return result.themes;
+}
+
+export interface ModelHorizonMetrics {
+  model_type: string;
+  mae_pct: number;
+  r_squared: number;
+  spearman: number;
+  baseline_mae_pct: number;
+  beats_baseline: boolean;
+  n_train: number;
+  n_holdout: number;
+}
+
+export interface ModelStatus {
+  model_version: string | null;
+  trained_at: string | null;
+  temporal_cutoff_date: string | null;
+  horizon_1yr: ModelHorizonMetrics | null;
+  horizon_3yr: ModelHorizonMetrics | null;
+  scored_sets: number;
+  high_confidence_sets: number;
+  training_labels: number;
+  last_scored_at: string | null;
+  scoring_age_days: number | null;
+  scoring_stale: boolean;
+}
+
+export async function fetchModelStatus(): Promise<ModelStatus> {
+  const response = await fetch('/api/investment/model-status');
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch model status (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export interface PatternsResponse {
+  total_labels: number;
+  overall_median_1yr_pct: number | null;
+  by_theme: { theme: string; n: number; median_1yr_pct: number | null; mean_1yr_pct: number | null }[];
+  by_retirement_year: { year: number; n: number; median_1yr_pct: number | null }[];
+  by_rrp_band: { band: string; label: string; n: number; median_1yr_pct: number | null }[];
+  by_licence: { group: string; label: string; n: number; median_1yr_pct: number | null }[];
+}
+
+export async function fetchPatterns(): Promise<PatternsResponse> {
+  const response = await fetch('/api/investment/patterns');
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch patterns (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export interface RadarSet {
+  set_number: string;
+  set_name: string | null;
+  theme: string | null;
+  year_from: number | null;
+  pieces: number | null;
+  uk_retail_price: number | null;
+  retirement_status: string | null;
+  expected_retirement_date: string | null;
+  retirement_confidence: string | null;
+  exit_date: string | null;
+  image_url: string | null;
+  amazon_asin: string | null;
+  retirement_date: string | null;
+  investment_score: number | null;
+  predicted_1yr_appreciation: number | null;
+  confidence: number | null;
+  risk_factors: string[] | null;
+  buy_box_price: number | null;
+  buy_box_vs_rrp_pct: number | null;
+  max_buy: MaxBuyResult | null;
+}
+
+export interface RetirementRadarResponse {
+  window_months: number;
+  retiring: { total: number; data: RadarSet[] };
+  retired: { total: number; data: RadarSet[] };
+}
+
+export async function fetchRetirementRadar(params?: {
+  window?: number;
+  limit?: number;
+}): Promise<RetirementRadarResponse> {
+  const search = new URLSearchParams();
+  if (params?.window != null) search.set('window', String(params.window));
+  if (params?.limit != null) search.set('limit', String(params.limit));
+
+  const response = await fetch(`/api/investment/retirement-radar?${search.toString()}`);
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `Failed to fetch retirement radar (${response.status})`);
+  }
+
+  return response.json();
 }

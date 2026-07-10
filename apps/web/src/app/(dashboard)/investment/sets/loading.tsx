@@ -1,12 +1,12 @@
 import { HeaderSkeleton, PageTitleSkeleton, TableSkeleton } from '@/components/ui/skeletons';
 
-export default function TopPicksLoading() {
+export default function InvestmentSetsLoading() {
   return (
     <>
       <HeaderSkeleton />
       <div className="p-6">
         <PageTitleSkeleton />
-        <TableSkeleton columns={9} rows={10} />
+        <TableSkeleton columns={8} rows={10} />
       </div>
     </>
   );
