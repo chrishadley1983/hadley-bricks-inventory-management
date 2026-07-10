@@ -52,15 +52,20 @@ export interface AiUsageRow {
  * the audit path adds no startup cost, and omits null/undefined fields.
  */
 export function logAiUsage(row: AiUsageRow): void {
-  // Run the actual work in a detached async IIFE so a synchronous throw (e.g.
-  // a missing env var inside createServiceRoleClient) can't bubble up to the
-  // caller. The outer try/catch is belt-and-suspenders.
+  // Run the actual work in a detached async IIFE so a synchronous throw can't
+  // bubble up to the caller. The outer try/catch is belt-and-suspenders.
   try {
     void (async () => {
       try {
-        // Lazy import — keeps this off the hot import path and avoids pulling
-        // the Supabase client into bundles that never log.
-        const { createServiceRoleClient } = await import('@/lib/supabase/server');
+        // Lazy import of @supabase/supabase-js directly — NOT '@/lib/supabase/server',
+        // whose next/headers import breaks any client-bundle consumer of this module
+        // (webpack follows dynamic imports into the graph, so even a lazy import of
+        // that module poisons the build).
+        const { createClient } = await import('@supabase/supabase-js');
+
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (!serviceRoleKey || !supabaseUrl) return; // no env (e.g. client bundle) — silently skip
 
         const fullRow: Record<string, unknown> = {
           project: 'hadley-bricks',
@@ -76,7 +81,9 @@ export function logAiUsage(row: AiUsageRow): void {
           }
         }
 
-        const supabase = createServiceRoleClient();
+        const supabase = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
         // The shared audit table isn't in the generated Database types, so cast
         // through unknown to reach `.from('ai_api_usage')`.
         await (supabase as unknown as {
