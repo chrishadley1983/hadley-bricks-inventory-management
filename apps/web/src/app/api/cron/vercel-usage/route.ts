@@ -60,7 +60,11 @@ const METRIC_KEY_BY_NAME: Record<string, string> = {
 export const runtime = 'nodejs';
 export const maxDuration = 30;
 
-const USER_EMAILS = ['chris@hadleybricks.co.uk', 'chrishadley1983@gmail.com'];
+// Resend's unverified onboarding@resend.dev sender only delivers to the
+// account owner's address; any other recipient 403s the ENTIRE send. The
+// gmail address here silently killed this report for weeks (every other
+// cron route already sends to the hadleybricks address alone).
+const USER_EMAILS = ['chris@hadleybricks.co.uk'];
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
