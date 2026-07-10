@@ -1,31 +1,60 @@
 import { describe, it, expect } from 'vitest';
-import { planSweep, classifyDelta, ALERT_RULES, type WatchlistCandidate, type RunSnapshot } from '../batch';
+import { planSweep, classifyDelta, ALERT_RULES, CADENCE_DAYS, type WatchlistCandidate, type RunSnapshot } from '../batch';
 
 const NOW = new Date('2026-07-10T02:00:00Z');
 const daysAgo = (d: number) => new Date(NOW.getTime() - d * 86400000).toISOString();
 
-const cand = (slug: string, lastScannedAt: string | null): WatchlistCandidate =>
-  ({ storeSlug: slug, storeName: null, lastScannedAt });
+const cand = (slug: string, lastScannedAt: string | null, lastVerdict: string | null = null): WatchlistCandidate =>
+  ({ storeSlug: slug, storeName: null, lastScannedAt, lastVerdict });
 
-describe('planSweep', () => {
-  const candidates = [
-    cand('fresh-store', daysAgo(1)),      // scanned yesterday — skipped
-    cand('stale-store', daysAgo(20)),
-    cand('staler-store', daysAgo(40)),
-    cand('never-b', null),
-    cand('never-a', null),
-    cand('borderline', daysAgo(5.1)),
-  ];
-
-  it('skips recently-scanned stores entirely', () => {
-    const plan = planSweep(candidates, { budget: 10, minAgeDays: 5, now: NOW });
-    expect(plan.map((p) => p.storeSlug)).not.toContain('fresh-store');
-    expect(plan).toHaveLength(5);
+describe('planSweep (verdict-tiered cadence)', () => {
+  it('never-assessed stores come first, in slug order, honouring the budget', () => {
+    const plan = planSweep(
+      [cand('never-b', null), cand('due-skip', daysAgo(90), 'SKIP'), cand('never-a', null)],
+      { budget: 2, minAgeDays: 5, now: NOW },
+    );
+    expect(plan.map((p) => p.storeSlug)).toEqual(['never-a', 'never-b']);
   });
 
-  it('orders never-assessed first, then stalest-first, and honours the budget', () => {
-    const plan = planSweep(candidates, { budget: 3, minAgeDays: 5, now: NOW });
-    expect(plan.map((p) => p.storeSlug)).toEqual(['never-a', 'never-b', 'staler-store']);
+  it('re-checks each verdict on its own cadence', () => {
+    const candidates = [
+      cand('buy-due', daysAgo(CADENCE_DAYS.BUY + 1), 'BUY'),
+      cand('buy-not-due', daysAgo(CADENCE_DAYS.BUY - 1), 'BUY'),
+      cand('review-due', daysAgo(CADENCE_DAYS.REVIEW + 1), 'REVIEW'),
+      cand('review-not-due', daysAgo(CADENCE_DAYS.REVIEW - 1), 'REVIEW'),
+      cand('skip-due', daysAgo(CADENCE_DAYS.SKIP + 1), 'SKIP'),
+      cand('skip-not-due', daysAgo(CADENCE_DAYS.SKIP - 5), 'SKIP'),
+    ];
+    const plan = planSweep(candidates, { budget: 10, minAgeDays: 5, now: NOW }).map((p) => p.storeSlug);
+    expect(plan).toEqual(expect.arrayContaining(['buy-due', 'review-due', 'skip-due']));
+    expect(plan).not.toContain('buy-not-due');
+    expect(plan).not.toContain('review-not-due');
+    expect(plan).not.toContain('skip-not-due');
+  });
+
+  it('orders assessed stores most-overdue first', () => {
+    const plan = planSweep(
+      [
+        cand('skip-barely-due', daysAgo(CADENCE_DAYS.SKIP + 1), 'SKIP'),   // 1d overdue
+        cand('buy-very-overdue', daysAgo(CADENCE_DAYS.BUY + 30), 'BUY'),   // 30d overdue
+      ],
+      { budget: 10, minAgeDays: 5, now: NOW },
+    );
+    expect(plan.map((p) => p.storeSlug)).toEqual(['buy-very-overdue', 'skip-barely-due']);
+  });
+
+  it('minAgeDays is a hard floor even for BUY stores', () => {
+    // BUY cadence 7d, but minAgeDays 10 → a 8d-old BUY store is NOT due.
+    const plan = planSweep([cand('buy-8d', daysAgo(8), 'BUY')], { budget: 10, minAgeDays: 10, now: NOW });
+    expect(plan).toHaveLength(0);
+  });
+
+  it('unknown verdicts fall back to the default cadence', () => {
+    const plan = planSweep(
+      [cand('odd-due', daysAgo(31), null), cand('odd-not-due', daysAgo(29), null)],
+      { budget: 10, minAgeDays: 5, now: NOW },
+    );
+    expect(plan.map((p) => p.storeSlug)).toEqual(['odd-due']);
   });
 });
 

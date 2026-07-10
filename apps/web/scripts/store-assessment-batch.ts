@@ -1,19 +1,25 @@
 /**
  * store-assessment-batch.ts — nightly sweep over the store watchlist.
  *
- * Picks the stalest enabled `store_assessment_watchlist` entries (never-assessed
- * first), runs the single-store assess CLI for each (light mode — caches only, one
- * polite scrape per store), then Discord-alerts anything card-worthy: BUY verdicts,
- * buyable-net jumps, price drops, or promising first assessments. Each store runs in
- * a CHILD PROCESS so one bad store can't take the night down.
+ * Picks due `store_assessment_watchlist` entries — never-assessed first, then by
+ * verdict cadence (BUY 7d / REVIEW 14d / SKIP 60d, most overdue first) — runs the
+ * single-store assess CLI for each (light mode — caches only, one polite scrape per
+ * store), then Discord-alerts anything card-worthy: BUY verdicts, buyable-net jumps,
+ * price drops, or promising first assessments. Each store runs in a CHILD PROCESS so
+ * one bad store can't take the night down.
+ *
+ * Every ~90 days the sweep also re-scans the BL UK store directory (England group,
+ * one slow page-load) and adds newly-opened stores to the watchlist.
  *
  * Usage:
  *   npx tsx scripts/store-assessment-batch.ts [--budget=25] [--min-age-days=5]
  *     [--store-slugs=a,b,c] [--pace-min-s=20] [--pace-max-s=45] [--mode=light]
  *     [--seed] [--dry-run] [--no-discord]
+ *     [--sync-directory] [--directory-max-age-days=90] [--min-items=50]
  *
- *   --seed     upsert watchlist entries from assessed stores + arbitrage purchases, then exit
- *   --dry-run  print tonight's selection and exit (no scraping)
+ *   --seed            upsert watchlist entries from assessed stores + arbitrage purchases, then exit
+ *   --dry-run         print tonight's selection and exit (no store scraping)
+ *   --sync-directory  force the England directory scan now (combine with --dry-run to only discover)
  *
  * Scheduled nightly via scripts/register-store-assessment-batch-task.ps1; needs the
  * CDP Chrome (:9222) up. Pacing is deliberately slow + jittered — see
@@ -26,6 +32,8 @@ import * as path from 'path';
 import {
   planSweep, classifyDelta, type WatchlistCandidate, type RunSnapshot, type DeltaAlert,
 } from '../src/lib/bl-store-assessment/batch';
+import { connectCdp } from './lib/store-scrape';
+import { scrapeEnglandStores } from './lib/store-directory';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local'), quiet: true });
 
@@ -45,6 +53,10 @@ const DRY_RUN = argv['dry-run'] === 'true';
 const NO_DISCORD = argv['no-discord'] === 'true';
 const EXPLICIT_SLUGS = argv['store-slugs']?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+// Quarterly England store-directory discovery.
+const SYNC_DIRECTORY = argv['sync-directory'] === 'true';
+const DIRECTORY_MAX_AGE_DAYS = parseFloat(argv['directory-max-age-days'] ?? '90');
+const DIRECTORY_MIN_ITEMS = parseInt(argv['min-items'] ?? '50', 10);
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -86,34 +98,116 @@ async function seedWatchlist(userId: string): Promise<void> {
   console.log(`[seed] watchlist upserted ${rows.size} candidate stores`);
 }
 
+// ---- quarterly directory discovery ------------------------------------------
+
+/**
+ * One slow page-load of the BL UK store directory; new England stores land on the
+ * watchlist. Runs when the latest store_directory_scans row is older than
+ * DIRECTORY_MAX_AGE_DAYS (or --sync-directory forces it) — four times a year.
+ */
+async function syncDirectoryIfDue(userId: string): Promise<void> {
+  if (!SYNC_DIRECTORY) {
+    const { data } = await supabase
+      .from('store_directory_scans')
+      .select('scanned_at')
+      .eq('user_id', userId)
+      .order('scanned_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (data && (Date.now() - Date.parse(data.scanned_at)) / 86400000 < DIRECTORY_MAX_AGE_DAYS) return;
+    console.log(`[directory] last scan ${data ? data.scanned_at.slice(0, 10) : 'never'} — due, scanning England stores...`);
+  } else {
+    console.log('[directory] forced scan (--sync-directory)...');
+  }
+
+  const cdp = await connectCdp(CDP_PORT, 'browseStores');
+  let stores;
+  let totalUkOpen: number | null;
+  try {
+    ({ stores, totalUkOpen } = await scrapeEnglandStores(cdp));
+  } finally {
+    cdp.close();
+  }
+  if (stores.length === 0) throw new Error('[directory] scrape returned 0 England stores — page structure changed?');
+
+  const bigEnough = stores.filter((s) => s.items >= DIRECTORY_MIN_ITEMS);
+  const skippedSmall = stores.length - bigEnough.length;
+
+  // Existing slugs (paginate — watchlist may exceed 1,000 once seeded).
+  const existing = new Set<string>();
+  for (let from = 0; from < 10000; from += 1000) {
+    const { data, error } = await supabase
+      .from('store_assessment_watchlist')
+      .select('store_slug')
+      .eq('user_id', userId)
+      .order('store_slug', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    for (const r of data ?? []) existing.add(r.store_slug);
+    if (!data || data.length < 1000) break;
+  }
+
+  const fresh = bigEnough.filter((s) => !existing.has(s.slug));
+  for (let i = 0; i < fresh.length; i += 500) {
+    const batch = fresh.slice(i, i + 500).map((s) => ({
+      user_id: userId, store_slug: s.slug, store_name: s.name, source: 'directory',
+      region: 'England', directory_items: s.items,
+      notes: `directory scan ${new Date().toISOString().slice(0, 10)} · ${s.items.toLocaleString()} items`,
+    }));
+    const { error } = await supabase
+      .from('store_assessment_watchlist')
+      .upsert(batch, { onConflict: 'user_id,store_slug', ignoreDuplicates: true });
+    if (error) throw error;
+  }
+
+  const { error: logErr } = await supabase.from('store_directory_scans').insert({
+    user_id: userId, region: 'England',
+    stores_found: stores.length, stores_added: fresh.length, stores_skipped_small: skippedSmall,
+  });
+  if (logErr) console.error(`[directory] scan log failed: ${logErr.message}`);
+
+  console.log(`[directory] England: ${stores.length} stores (UK total ${totalUkOpen ?? '?'}) · ${fresh.length} new added · ${skippedSmall} skipped <${DIRECTORY_MIN_ITEMS} items`);
+  await postDiscord('DISCORD_WEBHOOK_SYNC_STATUS', {
+    content: `🗺️ BL directory scan: ${stores.length} England stores (${totalUkOpen ?? '?'} UK open) → **${fresh.length} new** on the watchlist (${skippedSmall} skipped as <${DIRECTORY_MIN_ITEMS} items). Next scan in ~${DIRECTORY_MAX_AGE_DAYS} days.`,
+  });
+}
+
 // ---- selection -------------------------------------------------------------
 
 async function loadCandidates(userId: string): Promise<WatchlistCandidate[]> {
-  const { data: wl, error } = await supabase
-    .from('store_assessment_watchlist')
-    .select('store_slug,store_name')
-    .eq('user_id', userId).eq('enabled', true)
-    .limit(1000);
-  if (error) throw error;
+  // Watchlist can exceed 1,000 rows once the England directory is seeded — paginate.
+  const wl: Array<{ store_slug: string; store_name: string | null }> = [];
+  for (let from = 0; from < 10000; from += 1000) {
+    const { data, error } = await supabase
+      .from('store_assessment_watchlist')
+      .select('store_slug,store_name')
+      .eq('user_id', userId).eq('enabled', true)
+      .order('store_slug', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw error;
+    wl.push(...(data ?? []));
+    if (!data || data.length < 1000) break;
+  }
 
-  // Latest scanned_at per slug (paginate — CLAUDE.md 1,000-row rule).
-  const lastBySlug = new Map<string, string>();
+  // Latest scanned_at + verdict per slug (paginate — CLAUDE.md 1,000-row rule).
+  const lastBySlug = new Map<string, { scannedAt: string; verdict: string | null }>();
   for (let from = 0; from < 20000; from += 1000) {
     const { data, error: e } = await supabase
       .from('store_assessments')
-      .select('store_slug,scanned_at')
+      .select('store_slug,scanned_at,verdict')
       .eq('user_id', userId)
       .order('scanned_at', { ascending: false })
       .range(from, from + 999);
     if (e) throw e;
-    for (const r of data ?? []) if (!lastBySlug.has(r.store_slug)) lastBySlug.set(r.store_slug, r.scanned_at);
+    for (const r of data ?? []) if (!lastBySlug.has(r.store_slug)) lastBySlug.set(r.store_slug, { scannedAt: r.scanned_at, verdict: r.verdict });
     if (!data || data.length < 1000) break;
   }
 
-  return (wl ?? []).map((w) => ({
+  return wl.map((w) => ({
     storeSlug: w.store_slug,
     storeName: w.store_name,
-    lastScannedAt: lastBySlug.get(w.store_slug) ?? null,
+    lastScannedAt: lastBySlug.get(w.store_slug)?.scannedAt ?? null,
+    lastVerdict: lastBySlug.get(w.store_slug)?.verdict ?? null,
   }));
 }
 
@@ -207,15 +301,24 @@ async function main() {
 
   if (SEED) { await seedWatchlist(userId); return; }
 
+  // Quarterly England directory discovery (one slow page-load, 4×/year).
+  try {
+    await syncDirectoryIfDue(userId);
+  } catch (e) {
+    console.error(`[directory] sync failed (sweep continues): ${(e as Error).message}`);
+    await postDiscord('DISCORD_WEBHOOK_ALERTS', { content: `⚠️ BL directory scan failed: ${(e as Error).message}` });
+  }
+
   let plan: WatchlistCandidate[];
   if (EXPLICIT_SLUGS) {
-    plan = EXPLICIT_SLUGS.map((s) => ({ storeSlug: s, storeName: null, lastScannedAt: null }));
+    plan = EXPLICIT_SLUGS.map((s) => ({ storeSlug: s, storeName: null, lastScannedAt: null, lastVerdict: null }));
   } else {
     const candidates = await loadCandidates(userId);
     plan = planSweep(candidates, { budget: BUDGET, minAgeDays: MIN_AGE_DAYS, now: new Date() });
-    console.log(`[plan] ${candidates.length} watchlist stores → ${plan.length} selected (budget ${BUDGET}, min age ${MIN_AGE_DAYS}d)`);
+    const never = plan.filter((p) => p.lastScannedAt == null).length;
+    console.log(`[plan] ${candidates.length} watchlist stores → ${plan.length} selected (${never} never assessed; budget ${BUDGET}, cadence BUY 7d / REVIEW 14d / SKIP 60d)`);
   }
-  for (const p of plan) console.log(`  - ${p.storeSlug}${p.lastScannedAt ? ` (last ${p.lastScannedAt.slice(0, 10)})` : ' (never assessed)'}`);
+  for (const p of plan) console.log(`  - ${p.storeSlug}${p.lastScannedAt ? ` (last ${p.lastScannedAt.slice(0, 10)}, ${p.lastVerdict ?? '?'})` : ' (never assessed)'}`);
   if (DRY_RUN) return;
   if (plan.length === 0) { console.log('[plan] nothing stale enough tonight'); return; }
 
