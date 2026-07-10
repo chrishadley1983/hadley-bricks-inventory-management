@@ -61,7 +61,18 @@ Original exploration notes:
 - **Output:** the existing `store_assessments` table already keeps history; the list
   page dedupe was built for exactly this. Add a trend/delta column set + alert hooks.
 
-## 3. UI review — non-AI-look improvements — *Chris priority*
+## 3. UI review — non-AI-look improvements — ✅ SHIPPED (2026-07-10, PR #558)
+
+"Trading-desk ledger" redesign: Store Radar league table (grade meters, comparable-run
+deltas, money-first stat strip, verdict filter chips), detail verdict masthead with the
+five grade signals rendered, raid card, buy-list-first layout, run history, demoted
+diagnostics. Barlow Condensed + IBM Plex Mono via next/font; dataviz-validated palette
+with AA text variants; zero client JS. Hardened by an adversarial 6-lens design
+workflow (35 findings raised, 32 upheld, 21-item punch list all applied — incl. the
+major: delta now compares same-mode, same-truncation runs only). Production-tested
+authenticated.
+
+Original scope:
 
 The `/arbitrage/store-assessment` pages are functional shadcn defaults — card grid,
 stat tiles, badges — i.e. they read as AI-generated. A design pass with the
