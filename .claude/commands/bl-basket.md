@@ -48,6 +48,29 @@ store with a strong sub-basket grades REVIEW, not SKIP. Worldwide-fallback bench
 carry a +11% UK calibration (marked † in reports). If the report shows
 **⚠ SCAN TRUNCATED**, re-run with a higher `--max-pages` — totals understate the store.
 
+Engine v3 (2026-07-09): every P/M lot is overlap-tagged vs OUR store — NEW /
+RESTOCK-OUT / RESTOCK-THIN / DUP (section [11], "Ours?" badges, `buyable_fresh_lots`).
+Prioritise stores whose buyable net is mostly NEW + RESTOCK-OUT ("fresh demand").
+
+## Nightly sweep (phase 2, 2026-07-10)
+
+```bash
+# Seed/refresh the watchlist from assessed stores + arbitrage-purchase sellers:
+cd apps/web && npx tsx scripts/store-assessment-batch.ts --seed
+
+# Tonight's selection without scraping:
+cd apps/web && npx tsx scripts/store-assessment-batch.ts --dry-run
+
+# Manual sweep (defaults: budget 25, min-age 5d, jittered 20-45s pacing):
+cd apps/web && npx tsx scripts/store-assessment-batch.ts --budget=10
+```
+
+Runs nightly at 02:15 via the `HadleyBricks-Store-Assessment-Local` scheduled task
+(`scripts/register-store-assessment-batch-task.ps1`). Needs the CDP Chrome on :9222.
+Discord: BUY verdicts + material deltas (net jump ≥£20, price drop ≥10pts, promising
+first assessment) → #opportunities; sweep summary → #sync-status. Manage candidates in
+`store_assessment_watchlist` (enabled flag; unique per user+slug).
+
 ---
 
 # BrickLink Seller Basket Builder (buy lens)
