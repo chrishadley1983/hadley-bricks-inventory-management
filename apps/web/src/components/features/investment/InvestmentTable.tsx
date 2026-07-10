@@ -7,8 +7,8 @@ import { InvestmentFilters } from './InvestmentFilters';
 import { useInvestmentSets } from '@/hooks/use-investment';
 import type { InvestmentFilters as Filters } from '@/lib/api/investment';
 
-export function InvestmentTable() {
-  const [filters, setFilters] = useState<Filters>({});
+export function InvestmentTable({ initialFilters }: { initialFilters?: Filters } = {}) {
+  const [filters, setFilters] = useState<Filters>(initialFilters ?? {});
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 

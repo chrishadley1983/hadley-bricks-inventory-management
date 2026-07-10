@@ -99,8 +99,9 @@ const navSections: NavSection[] = [
     title: 'Investment',
     defaultOpen: false,
     items: [
-      { href: '/investment', label: 'Investment Tracker', icon: LineChart },
+      { href: '/investment', label: 'Dashboard', icon: LineChart },
       { href: '/investment/top-picks', label: 'Top Picks', icon: TrendingUp },
+      { href: '/investment/sets', label: 'All Sets', icon: Package },
     ],
   },
   {

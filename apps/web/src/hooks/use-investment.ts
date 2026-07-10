@@ -6,8 +6,13 @@ import {
   fetchInvestmentSetDetail,
   fetchPriceHistory,
   fetchInvestmentThemes,
+  fetchModelStatus,
+  fetchPatterns,
+  fetchRetirementRadar,
+  fetchPredictions,
   type InvestmentFilters,
   type InvestmentPaginationParams,
+  type PredictionsFilters,
 } from '@/lib/api/investment';
 
 /**
@@ -69,5 +74,49 @@ export function useInvestmentThemes() {
     queryKey: investmentKeys.themes(),
     queryFn: fetchInvestmentThemes,
     staleTime: 10 * 60 * 1000, // 10 minutes - themes rarely change
+  });
+}
+
+/**
+ * Hook to fetch ML model status for the dashboard strip
+ */
+export function useModelStatus() {
+  return useQuery({
+    queryKey: [...investmentKeys.all, 'model-status'] as const,
+    queryFn: fetchModelStatus,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch appreciation patterns (theme/year/RRP/licence aggregates)
+ */
+export function useInvestmentPatterns() {
+  return useQuery({
+    queryKey: [...investmentKeys.all, 'patterns'] as const,
+    queryFn: fetchPatterns,
+    staleTime: 30 * 60 * 1000, // labels change only when the pipeline reruns
+  });
+}
+
+/**
+ * Hook to fetch the retirement radar (retiring next N months + recently retired)
+ */
+export function useRetirementRadar(params?: { window?: number; limit?: number }) {
+  return useQuery({
+    queryKey: [...investmentKeys.all, 'retirement-radar', params] as const,
+    queryFn: () => fetchRetirementRadar(params),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+/**
+ * Hook to fetch scored predictions (top picks / deal sheet)
+ */
+export function usePredictions(filters?: PredictionsFilters) {
+  return useQuery({
+    queryKey: [...investmentKeys.all, 'predictions', filters] as const,
+    queryFn: () => fetchPredictions(filters),
+    staleTime: 10 * 60 * 1000,
   });
 }
