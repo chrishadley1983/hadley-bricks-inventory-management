@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeOrder, normalizeOrders, calculateOrderStats } from '../adapter';
+import { normalizeOrder, normalizeOrders, calculateOrderStats, parseBrickOwlTime } from '../adapter';
 import type { BrickOwlOrderDetail, BrickOwlOrderItem, NormalizedBrickOwlOrder } from '../types';
 
 describe('Brick Owl Adapter', () => {
@@ -607,6 +607,61 @@ describe('Brick Owl Adapter', () => {
 
       expect(stats.totalRevenue).toBe(100);
       expect(stats.averageOrderValue).toBeCloseTo(33.33, 2);
+    });
+  });
+
+  describe('parseBrickOwlTime', () => {
+    it('parses ISO strings', () => {
+      expect(parseBrickOwlTime('2026-07-08T10:00:00.000Z').toISOString()).toBe(
+        '2026-07-08T10:00:00.000Z'
+      );
+    });
+
+    it('parses unix-seconds strings (the /order/list order_date format)', () => {
+      // 1783529823 = 2026-07-08T09:37:03Z
+      expect(parseBrickOwlTime('1783529823').getTime()).toBe(1783529823000);
+    });
+
+    it('parses unix-seconds and unix-millis numbers', () => {
+      expect(parseBrickOwlTime(1783529823).getTime()).toBe(1783529823000);
+      expect(parseBrickOwlTime(1783529823000).getTime()).toBe(1783529823000);
+    });
+
+    it('returns Invalid Date for missing values', () => {
+      expect(isNaN(parseBrickOwlTime(undefined).getTime())).toBe(true);
+      expect(isNaN(parseBrickOwlTime('').getTime())).toBe(true);
+    });
+  });
+
+  describe('list-summary payloads (no iso_order_time/order_time)', () => {
+    it('normalizes a real /order/list summary via order_date unix seconds', () => {
+      // Exactly the shape the live list endpoint returns — this used to throw
+      // "Invalid time value" for every order in the summary sync path.
+      const summary = {
+        order_id: '8416595',
+        order_date: '1783529823',
+        total_quantity: 4,
+        total_lots: 2,
+        base_order_total: '3.20',
+        status: 'Shipped',
+        status_id: '5',
+      } as unknown as BrickOwlOrderDetail;
+
+      const result = normalizeOrder(summary, []);
+
+      expect(result.status).toBe('Shipped');
+      expect(result.orderDate.getTime()).toBe(1783529823000);
+      expect(result.total).toBe(3.2);
+    });
+
+    it('throws a descriptive error when no time field is present at all', () => {
+      const summary = {
+        order_id: '1',
+        base_order_total: '1.00',
+        status: 'Shipped',
+      } as unknown as BrickOwlOrderDetail;
+
+      expect(() => normalizeOrder(summary, [])).toThrow(/Cannot parse Brick Owl order time/);
     });
   });
 });

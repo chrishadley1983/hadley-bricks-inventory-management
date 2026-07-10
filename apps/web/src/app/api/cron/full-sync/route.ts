@@ -85,6 +85,40 @@ interface FullSyncResults {
   totalDurationMs: number;
 }
 
+/**
+ * Map an order-sync result to a report row, honouring per-order errors.
+ * Previously every resolved sync was labelled 'success', which hid a
+ * BrickOwl sync that errored on ALL 148 orders ("Invalid time value") for
+ * months while Discord reported it green.
+ */
+function reportPlatformSync(
+  platform: string,
+  result:
+    | {
+        success?: boolean;
+        ordersProcessed?: number;
+        ordersCreated?: number;
+        ordersUpdated?: number;
+        errors?: string[];
+        error?: string;
+      }
+    | undefined
+): SyncResult {
+  const errors = result?.errors ?? [];
+  const isFailed = result ? result.success === false || errors.length > 0 : true;
+  return {
+    platform,
+    status: isFailed ? 'failed' : 'success',
+    processed: result?.ordersProcessed ?? 0,
+    created: result?.ordersCreated ?? 0,
+    updated: result?.ordersUpdated ?? 0,
+    failed: errors.length || undefined,
+    error: errors.length
+      ? `${errors.length} order error(s), first: ${errors[0]}`
+      : (result?.error ?? (result ? undefined : 'No result returned')),
+  };
+}
+
 /** Timeout wrapper for individual sync operations */
 async function withTimeout<T>(
   promise: Promise<T>,
@@ -758,13 +792,7 @@ export async function POST(request: NextRequest) {
       const syncPromises = [
         // eBay Orders
         withTimeout(ebayOrderSyncService.syncOrders(userId), SYNC_TIMEOUT, 'eBay Orders')
-          .then((result) => ({
-            platform: 'eBay Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('eBay Orders', result))
           .catch((error) => ({
             platform: 'eBay Orders',
             status: 'failed' as const,
@@ -795,13 +823,7 @@ export async function POST(request: NextRequest) {
           SYNC_TIMEOUT,
           'Amazon Orders'
         )
-          .then((result) => ({
-            platform: 'Amazon Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('Amazon Orders', result))
           .catch((error) => ({
             platform: 'Amazon Orders',
             status: error.message.includes('credentials')
@@ -821,13 +843,7 @@ export async function POST(request: NextRequest) {
           BRICKLINK_TIMEOUT,
           'BrickLink Orders'
         )
-          .then((result) => ({
-            platform: 'BrickLink Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('BrickLink Orders', result))
           .catch((error) => ({
             platform: 'BrickLink Orders',
             status: error.message.includes('credentials')
@@ -842,13 +858,7 @@ export async function POST(request: NextRequest) {
           SYNC_TIMEOUT,
           'Brick Owl Orders'
         )
-          .then((result) => ({
-            platform: 'Brick Owl Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('Brick Owl Orders', result))
           .catch((error) => ({
             platform: 'Brick Owl Orders',
             status: error.message.includes('credentials')

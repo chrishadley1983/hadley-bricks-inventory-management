@@ -8,38 +8,12 @@ const mockBrickOwlClient = {
   getOrderWithItems: vi.fn(),
 };
 
-vi.mock('../../brickowl', () => ({
+vi.mock('../../brickowl', async (importOriginal) => ({
+  // Keep the real error classes and pure helpers (normalizeStatus,
+  // parseBrickOwlTime) — only the client and normalizeOrder are stubbed.
+  ...(await importOriginal<Record<string, unknown>>()),
   BrickOwlClient: function MockBrickOwlClient() {
     return mockBrickOwlClient;
-  },
-  BrickOwlApiError: class BrickOwlApiError extends Error {
-    code: string;
-    constructor(message: string, code: string) {
-      super(message);
-      this.code = code;
-      this.name = 'BrickOwlApiError';
-    }
-  },
-  BrickOwlRateLimitError: class BrickOwlRateLimitError extends Error {
-    rateLimitInfo: {
-      remaining: number;
-      resetTime: Date;
-      dailyLimit: number;
-      dailyRemaining: number;
-    };
-    constructor(
-      message: string,
-      rateLimitInfo: {
-        remaining: number;
-        resetTime: Date;
-        dailyLimit: number;
-        dailyRemaining: number;
-      }
-    ) {
-      super(message);
-      this.rateLimitInfo = rateLimitInfo;
-      this.name = 'BrickOwlRateLimitError';
-    }
   },
   normalizeOrder: vi.fn((order, items) => ({
     platformOrderId: order.order_id || 'BO-123',
@@ -180,18 +154,32 @@ describe('BrickOwlSyncService', () => {
   });
 
   describe('syncOrders', () => {
+    // Realistic /order/list summary shape: unix-seconds order_date, NO
+    // iso_order_time/order_time, no buyer/shipping detail.
     const mockOrders = [
-      { order_id: 'BO-001', status: 'Paid', total: 100 },
-      { order_id: 'BO-002', status: 'Shipped', total: 150 },
+      { order_id: 'BO-001', status: 'Payment Received', order_date: '1783529823', base_order_total: '100' },
+      { order_id: 'BO-002', status: 'Shipped', order_date: '1783529900', base_order_total: '150' },
     ];
 
     beforeEach(() => {
       mockBrickOwlClient.getSalesOrders.mockResolvedValue(mockOrders);
+      mockBrickOwlClient.getOrderWithItems.mockImplementation((id: string) =>
+        Promise.resolve({
+          order: {
+            order_id: id,
+            status: 'Shipped',
+            iso_order_time: '2026-07-08T10:00:00.000Z',
+            base_order_total: '100',
+            buyer_name: 'Buyer',
+          },
+          items: [],
+        })
+      );
       mockOrderRepo.findByPlatformOrderId.mockResolvedValue(null);
       mockOrderRepo.upsert.mockResolvedValue({ id: 'order-id' });
     });
 
-    it('should sync orders successfully', async () => {
+    it('should sync orders successfully (new orders fetch full detail)', async () => {
       const result = await service.syncOrders(testUserId);
 
       expect(result.success).toBe(true);
@@ -200,6 +188,8 @@ describe('BrickOwlSyncService', () => {
       expect(result.ordersCreated).toBe(2);
       expect(result.ordersUpdated).toBe(0);
       expect(result.errors).toHaveLength(0);
+      // New orders always pull detail + items
+      expect(mockBrickOwlClient.getOrderWithItems).toHaveBeenCalledTimes(2);
     });
 
     it('should count updated orders correctly', async () => {
@@ -211,6 +201,27 @@ describe('BrickOwlSyncService', () => {
 
       expect(result.ordersCreated).toBe(1);
       expect(result.ordersUpdated).toBe(1);
+    });
+
+    it('refreshes existing orders from the summary without fetching detail', async () => {
+      mockOrderRepo.findByPlatformOrderId.mockResolvedValue({ id: 'existing-order' });
+
+      const result = await service.syncOrders(testUserId);
+
+      expect(result.success).toBe(true);
+      expect(result.ordersUpdated).toBe(2);
+      expect(mockBrickOwlClient.getOrderWithItems).not.toHaveBeenCalled();
+
+      // Summary upsert carries status/total/order_date/synced_at only — it must
+      // never blank out buyer/shipping detail it doesn't have.
+      const upsert = mockOrderRepo.upsert.mock.calls[0][0];
+      expect(upsert.status).toBe('Paid'); // 'Payment Received' normalized
+      expect(upsert.total).toBe(100);
+      expect(upsert.order_date).toBe(new Date(1783529823000).toISOString());
+      expect(upsert.synced_at).toBeTruthy();
+      expect(upsert).not.toHaveProperty('buyer_name');
+      expect(upsert).not.toHaveProperty('shipping');
+      expect(upsert).not.toHaveProperty('fees');
     });
 
     it('should respect limit option', async () => {
