@@ -12,31 +12,51 @@ export interface WatchlistCandidate {
   storeName: string | null;
   /** Latest store_assessments.scanned_at for this slug, null = never assessed. */
   lastScannedAt: string | null;
+  /** Verdict of that latest assessment — drives the re-check cadence. */
+  lastVerdict: string | null;
 }
+
+/**
+ * Re-check cadence by last verdict. Attractive stores get watched closely; SKIPs
+ * still come round often enough to catch repricing events. With ~1,400 England
+ * stores mostly SKIP, steady state is ~23 stores/night at 60d — inside the
+ * default budget of 25, so the sweep never has to rush.
+ */
+export const CADENCE_DAYS: Record<string, number> = {
+  BUY: 7,
+  REVIEW: 14,
+  SKIP: 60,
+};
+/** Assessed but verdict missing/unknown (old rows, errors). */
+export const DEFAULT_CADENCE_DAYS = 30;
 
 export interface SweepPlanInputs {
   /** Max stores to scan tonight. */
   budget: number;
-  /** Skip stores scanned more recently than this. */
+  /** Hard floor — never re-scan a store within this many days, whatever its cadence. */
   minAgeDays: number;
   now: Date;
 }
 
 /**
- * Pick tonight's stores: never-assessed first (discovery beats refresh), then
- * stalest-first. Anything scanned within minAgeDays is skipped entirely.
+ * Pick tonight's stores. Never-assessed first (discovery beats refresh, in slug
+ * order for a stable rotation), then assessed stores whose verdict-based cadence
+ * has lapsed, most-overdue first.
  */
 export function planSweep(candidates: WatchlistCandidate[], inp: SweepPlanInputs): WatchlistCandidate[] {
-  const cutoffMs = inp.now.getTime() - inp.minAgeDays * 86400000;
-  const eligible = candidates.filter(
-    (c) => c.lastScannedAt == null || Date.parse(c.lastScannedAt) < cutoffMs,
-  );
+  const nowMs = inp.now.getTime();
+  const dueAtMs = (c: WatchlistCandidate): number => {
+    const last = Date.parse(c.lastScannedAt!);
+    const cadence = CADENCE_DAYS[c.lastVerdict ?? ''] ?? DEFAULT_CADENCE_DAYS;
+    return last + Math.max(cadence, inp.minAgeDays) * 86400000;
+  };
+  const eligible = candidates.filter((c) => c.lastScannedAt == null || dueAtMs(c) <= nowMs);
   return eligible
     .sort((a, b) => {
       if (a.lastScannedAt == null && b.lastScannedAt == null) return a.storeSlug.localeCompare(b.storeSlug);
       if (a.lastScannedAt == null) return -1;
       if (b.lastScannedAt == null) return 1;
-      return Date.parse(a.lastScannedAt) - Date.parse(b.lastScannedAt);
+      return dueAtMs(a) - dueAtMs(b); // most overdue first
     })
     .slice(0, inp.budget);
 }
