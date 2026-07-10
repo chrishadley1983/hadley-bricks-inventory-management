@@ -65,6 +65,7 @@ export async function POST(
       success: true,
       action: proposal.proposed_action,
       pushedToPlatform: result.pushed,
+      queuedForSync: result.queued ?? false,
     });
   } catch (error) {
     console.error('Error:', error);

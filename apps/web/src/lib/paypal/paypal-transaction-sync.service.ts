@@ -4,7 +4,9 @@
  * Handles syncing fee transactions from PayPal Transaction Search API
  * to the local database. Supports full sync, incremental sync, and historical imports.
  *
- * Key feature: Only stores transactions where fee_amount != 0
+ * Key feature: Only stores transactions where fee_amount != 0, plus payment
+ * refunds (event code T1107) which carry no PayPal fee but are needed by the
+ * cash-basis MTD export to net refunds-issued off BrickLink/Brick Owl income.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -222,8 +224,11 @@ export class PayPalTransactionSyncService extends BaseTransactionSyncService {
         allTransactions.length
       );
 
-      // Filter for transactions with fees
+      // Filter for transactions with fees, plus zero-fee payment refunds
+      // (T1107) which the cash-basis MTD export needs to net off income
       const transactionsWithFees = allTransactions.filter((tx) => {
+        if (tx.transaction_info.transaction_event_code === 'T1107') return true;
+
         const feeAmount = tx.transaction_info.fee_amount;
         if (!feeAmount) return false;
 

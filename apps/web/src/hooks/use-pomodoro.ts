@@ -133,7 +133,10 @@ export function useCurrentPomodoro() {
   return useQuery({
     queryKey: pomodoroKeys.current(),
     queryFn: fetchCurrentSession,
-    refetchInterval: 1000, // Refetch every second to keep UI in sync
+    // The PomodoroPanel runs a local setInterval for the live countdown — the
+    // server poll only needs to re-sync state occasionally, not every second.
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

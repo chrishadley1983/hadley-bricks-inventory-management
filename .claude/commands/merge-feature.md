@@ -71,8 +71,18 @@ For this project:
 8. **Wait for Vercel deployment** (NEW)
 9. **Run production verification** (NEW)
 10. **Update last-deploy.json** (NEW)
-11. Delete merged branches
-12. Generate merge report
+11. **Refresh local production server** (NEW) — `powershell -ExecutionPolicy Bypass -File scripts/redeploy-local.ps1`
+12. Delete merged branches
+13. Generate merge report
+
+> **Step 11 — why it matters:** Vercel is not the only thing running this app. The
+> `HadleyBricks` NSSM Windows service runs `next start` on `localhost:3000`, and that
+> local server (not Vercel) is what the Peter bot / WhatsApp flows and all morning HB
+> crons (`jobs/hb_crons.py`, `HB_BASE=localhost:3000`) actually hit. `next start` does
+> not hot-reload, so without this rebuild+restart the local server runs stale code even
+> after a clean Vercel deploy. The script restarts via the dashboard API (no admin) and
+> leaves the old build running if the rebuild fails. See repo memory
+> `local-production-server.md`.
 
 ### Configuration Files
 

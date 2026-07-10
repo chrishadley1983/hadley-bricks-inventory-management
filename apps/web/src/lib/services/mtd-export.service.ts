@@ -7,7 +7,11 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
-import { ProfitLossReportService, type ProfitLossReport } from './profit-loss-report.service';
+import {
+  ProfitLossReportService,
+  type ProfitLossReport,
+  type ReportBasis,
+} from './profit-loss-report.service';
 import {
   type MtdSalesRow,
   type MtdExpenseRow,
@@ -80,12 +84,15 @@ export class MtdExportService {
   }
 
   /**
-   * Generate CSV data for a period (start to end month inclusive)
+   * Generate CSV data for a period (start to end month inclusive).
+   * `basis` selects accrual (sale-date income, the default) or cash
+   * (receipt-date income) — both run on the same underlying data.
    */
   async generateCsvData(
     userId: string,
     startMonth: string,
-    endMonth?: string
+    endMonth?: string,
+    basis: ReportBasis = 'accrual'
   ): Promise<MtdCsvData> {
     const effectiveEndMonth = endMonth || startMonth;
 
@@ -93,6 +100,7 @@ export class MtdExportService {
     const report = await this.profitLossService.generateReport(userId, {
       startMonth,
       endMonth: effectiveEndMonth,
+      basis,
     });
 
     const allSales: MtdSalesRow[] = [];
@@ -118,6 +126,7 @@ export class MtdExportService {
       expenses: allExpenses,
       month: startMonth,
       lastDayOfMonth: getLastDayOfMonth(effectiveEndMonth),
+      basis,
     };
   }
 
@@ -381,13 +390,14 @@ export class MtdExportService {
   async generateExportPreview(
     userId: string,
     startMonth: string,
-    endMonth?: string
+    endMonth?: string,
+    basis: ReportBasis = 'accrual'
   ): Promise<MtdExportPreview> {
     const effectiveEndMonth = endMonth || startMonth;
-    const csvData = await this.generateCsvData(userId, startMonth, effectiveEndMonth);
+    const csvData = await this.generateCsvData(userId, startMonth, effectiveEndMonth, basis);
 
-    // Check for previous QuickFile export (check start month as the key)
-    const previousExport = await this.getQuickFileExportHistory(userId, startMonth);
+    // Check for previous QuickFile export of the same month AND basis
+    const previousExport = await this.getQuickFileExportHistory(userId, startMonth, basis);
 
     const salesTotal = csvData.sales.reduce((sum, row) => sum + row.netAmount, 0);
     const expensesTotal = csvData.expenses.reduce((sum, row) => sum + row.netAmount, 0);
@@ -395,6 +405,7 @@ export class MtdExportService {
     return {
       month: startMonth,
       monthLabel: formatPeriodLabel(startMonth, effectiveEndMonth),
+      basis,
       salesCount: csvData.sales.length,
       salesTotal: Math.round(salesTotal * 100) / 100,
       expensesCount: csvData.expenses.length,
@@ -416,14 +427,18 @@ export class MtdExportService {
     month: string,
     exportType: 'csv' | 'quickfile',
     entriesCount: number,
-    quickfileResponse?: Record<string, unknown>
+    quickfileResponse?: Record<string, unknown>,
+    basis: ReportBasis = 'accrual'
   ): Promise<void> {
+    // The basis rides inside the quickfile_response JSON so no schema change is
+    // needed; legacy rows without a basis are treated as accrual on read.
+    const responseWithBasis = { ...(quickfileResponse ?? {}), basis };
     const { error } = await this.supabase.from('mtd_export_history').insert({
       user_id: userId,
       month,
       export_type: exportType,
       entries_count: entriesCount,
-      quickfile_response: quickfileResponse as unknown as Record<string, never> | null,
+      quickfile_response: responseWithBasis as unknown as Record<string, never> | null,
     });
 
     if (error) {
@@ -437,26 +452,33 @@ export class MtdExportService {
    */
   async getQuickFileExportHistory(
     userId: string,
-    month: string
+    month: string,
+    basis: ReportBasis = 'accrual'
   ): Promise<{ exported: boolean; exportedAt?: string }> {
     const { data, error } = await this.supabase
       .from('mtd_export_history')
-      .select('created_at')
+      .select('created_at, quickfile_response')
       .eq('user_id', userId)
       .eq('month', month)
       .eq('export_type', 'quickfile')
-      .order('created_at', { ascending: false })
-      .limit(1);
+      .order('created_at', { ascending: false });
 
     if (error) {
       console.error('[MtdExportService] Failed to get export history:', error);
       return { exported: false };
     }
 
-    if (data && data.length > 0) {
+    // Legacy rows carry no basis in quickfile_response — treat them as accrual.
+    const match = (data ?? []).find((row) => {
+      const response = row.quickfile_response as Record<string, unknown> | null;
+      const rowBasis = (response?.basis as ReportBasis | undefined) ?? 'accrual';
+      return rowBasis === basis;
+    });
+
+    if (match) {
       return {
         exported: true,
-        exportedAt: data[0].created_at ?? undefined,
+        exportedAt: match.created_at ?? undefined,
       };
     }
 
@@ -479,14 +501,18 @@ export class MtdExportService {
       return [];
     }
 
-    return (data || []).map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      month: row.month,
-      exportType: row.export_type as 'csv' | 'quickfile',
-      entriesCount: row.entries_count,
-      quickfileResponse: row.quickfile_response as Record<string, unknown> | undefined,
-      createdAt: row.created_at ?? undefined,
-    }));
+    return (data || []).map((row) => {
+      const response = row.quickfile_response as Record<string, unknown> | null;
+      return {
+        id: row.id,
+        userId: row.user_id,
+        month: row.month,
+        exportType: row.export_type as 'csv' | 'quickfile',
+        basis: ((response?.basis as ReportBasis | undefined) ?? 'accrual') as ReportBasis,
+        entriesCount: row.entries_count,
+        quickfileResponse: response ?? undefined,
+        createdAt: row.created_at ?? undefined,
+      };
+    });
   }
 }

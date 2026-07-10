@@ -7,16 +7,10 @@ export type InventoryItem = Tables<'inventory_items'>;
 export type InventoryItemInsert = TablesInsert<'inventory_items'>;
 export type InventoryItemUpdate = TablesUpdate<'inventory_items'>;
 
-// Inventory status type (based on actual usage in the app - some values are uppercase, some title case)
-export type InventoryStatus =
-  | 'In Stock' | 'IN STOCK'
-  | 'Listed' | 'LISTED'
-  | 'Sold' | 'SOLD'
-  | 'Shipped' | 'SHIPPED'
-  | 'Archived' | 'ARCHIVED'
-  | 'Backlog' | 'BACKLOG'
-  | 'Returned' | 'RETURNED'
-  | 'NOT YET RECEIVED';
+// Inventory status type — canonical uppercase values only. The DB enforces this
+// set via chk_inventory_status; mixed-case variants caused invisible rows in
+// every status-filtered view (43 'Not Yet Received' items, fixed 2026-07-09).
+export type InventoryStatus = 'NOT YET RECEIVED' | 'BACKLOG' | 'LISTED' | 'SOLD' | 'RETURNED';
 
 export type Purchase = Tables<'purchases'>;
 export type PurchaseInsert = TablesInsert<'purchases'>;
@@ -94,6 +88,12 @@ export type BrickLinkPartOutValueInsert = TablesInsert<'bricklink_part_out_value
 export type BrickLinkPartOutValueUpdate = TablesUpdate<'bricklink_part_out_value_cache'>;
 export type BrickLinkPovConfig = Tables<'bricklink_pov_config'>;
 export type BrickLinkPovConfigUpdate = TablesUpdate<'bricklink_pov_config'>;
+
+// POV freshness / refresh mechanism
+export type PovRefreshStatus = Tables<'bricklink_pov_refresh_status'>;
+export type PovRefreshRun = Tables<'pov_refresh_runs'>;
+export type PovRefreshRunInsert = TablesInsert<'pov_refresh_runs'>;
+export type PovRefreshRunUpdate = TablesUpdate<'pov_refresh_runs'>;
 
 // Aliases for backwards compatibility (singular names)
 export type PlatformCredential = PlatformCredentials;

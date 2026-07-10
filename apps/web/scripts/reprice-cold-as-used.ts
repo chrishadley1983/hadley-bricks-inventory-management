@@ -7,8 +7,9 @@
  * with the Bricqer Used multiplier curve. Reports aggregate STR + list
  * delta so we can decide whether condition-flipping changes the picture.
  *
- * Cache-first (re-uses bricklink_part_price_cache rows, which carry both
- * N and U fields) — only hits the API for missing Used tuples.
+ * Cache-first (unified price cache via readPriceGuide — rows are complete, carrying
+ * both N and U sides) — only hits the API (ensurePriceGuide, 4 calls/tuple) for
+ * missing Used tuples.
  *
  * Usage:
  *   cd apps/web && npx tsx scripts/reprice-cold-as-used.ts --store-slug=<SLUG>
@@ -20,7 +21,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createClient } from '@supabase/supabase-js';
 import { BrickLinkClient } from '../src/lib/bricklink/client';
-import type { BrickLinkPriceGuide, BrickLinkItemType } from '../src/lib/bricklink/types';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
+import { bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -60,8 +63,6 @@ for (const [k, v] of Object.entries(creds)) {
 const bl = new BrickLinkClient(creds, { supabase, caller: 'reprice-cold-as-used-script' });
 
 type StoreItemCode = 'P' | 'S' | 'M';
-type ItemCondition = 'N' | 'U';
-const STORE_TO_API: Record<StoreItemCode, BrickLinkItemType> = { P: 'PART', S: 'SET', M: 'MINIFIG' };
 
 interface ScrapedItem {
   invID: number;
@@ -78,14 +79,7 @@ interface ScrapedItem {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// Canonical Bricqer formula (v3 + 7p floor) — never re-inline; see bricqer-pricing.ts.
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;
@@ -114,54 +108,30 @@ async function main() {
   }
   console.log(`Unique (item, colour) tuples: ${tuples.size}`);
 
-  // --- Cache lookup (both N and U at once) ---
-  type CacheRow = { part_number: string; part_type: string; colour_id: number; price_new: string | null; price_used: string | null; stock_available_new: number | null; stock_available_used: number | null; times_sold_new: number | null; times_sold_used: number | null; fetched_at: string };
+  // --- Cache lookup (both N and U at once, unified price cache) ---
+  // Strict UK, no world fallback — the cold/Used maths must stay on UK 6MA.
+  // Colour ids come from the BL store scrape (inventory.json) → BL scheme.
   const newSlot = new Map<string, Slot>();
   const usedSlot = new Map<string, Slot>();
-  const ttlMs = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
-  const now = Date.now();
-  const partNos = [...new Set(newLots.map((i) => i.itemNo))];
-  const CHUNK = 500;
-  const PAGE = 1000;
-  let totalRows = 0;
-  for (let i = 0; i < partNos.length; i += CHUNK) {
-    const chunk = partNos.slice(i, i + CHUNK);
-    let pageStart = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('bricklink_part_price_cache')
-        .select('part_number, part_type, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used, fetched_at')
-        .in('part_number', chunk)
-        .range(pageStart, pageStart + PAGE - 1);
-      if (error) { console.warn(`  cache page error: ${error.message}`); break; }
-      const rows = (data ?? []) as CacheRow[];
-      totalRows += rows.length;
-      for (const row of rows) {
-        const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
-        if (!fresh) continue;
-        const code = row.part_type === 'PART' ? 'P' : 'M';
-        const key = `${code}:${row.part_number}:${row.colour_id}`;
-        const stN = row.stock_available_new, soN = row.times_sold_new;
-        const stU = row.stock_available_used, soU = row.times_sold_used;
-        if (stN != null && soN != null && row.price_new != null) {
-          const p = parseFloat(row.price_new);
-          if (p > 0) newSlot.set(key, { ukSoldAvg: p, ukSoldQty: soN, ukStockQty: stN, source: 'cache' });
-        }
-        if (stU != null && soU != null) {
-          if (row.price_used != null) {
-            const p = parseFloat(row.price_used);
-            if (p > 0) usedSlot.set(key, { ukSoldAvg: p, ukSoldQty: soU, ukStockQty: stU, source: 'cache' });
-            else if (soU === 0) usedSlot.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stU, source: 'cache' });
-          } else if (soU === 0) {
-            usedSlot.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stU, source: 'cache' });
-          }
-        }
-      }
-      if (rows.length < PAGE) break;
-      pageStart += PAGE;
+  const refs: ItemRef[] = [...tuples.values()].map((t) => ({
+    itemType: t.itemType as 'P' | 'M', itemNo: t.itemNo, colourId: t.colourId, scheme: 'bl' as const,
+  }));
+  const views = await readPriceGuide(supabase, refs, { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false });
+  for (const t of tuples.values()) {
+    const key = `${t.itemType}:${t.itemNo}:${t.colourId}`;
+    const view = views.get(pgKey(t.itemType, t.itemNo, t.colourId));
+    if (!view || view.coverage !== 'uk') continue; // non-UK coverage = cache miss
+    if (view.new.soldAvg !== null && view.new.soldAvg > 0) {
+      newSlot.set(key, { ukSoldAvg: view.new.soldAvg, ukSoldQty: view.new.soldQty, ukStockQty: view.new.stockQty, source: 'cache' });
+    }
+    if (view.used.soldAvg !== null && view.used.soldAvg > 0) {
+      usedSlot.set(key, { ukSoldAvg: view.used.soldAvg, ukSoldQty: view.used.soldQty, ukStockQty: view.used.stockQty, source: 'cache' });
+    } else if (view.used.soldQty === 0) {
+      // Fresh row, genuinely no UK Used sales — honour the cached null result.
+      usedSlot.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: view.used.stockQty, source: 'cache' });
     }
   }
-  console.log(`Cache: ${newSlot.size} N tuples, ${usedSlot.size} U tuples (${totalRows} rows scanned)`);
+  console.log(`Cache: ${newSlot.size} N tuples, ${usedSlot.size} U tuples (${views.size} views read)`);
 
   // --- Identify cold New lots ---
   type ColdRow = { it: ScrapedItem; key: string; nSlot: Slot | null; nStr: number; nList: number; nLot: number };
@@ -172,8 +142,7 @@ async function main() {
     if (!ns || ns.ukSoldAvg == null) continue; // can't classify without N benchmark
     const str = ns.ukStockQty > 0 ? ns.ukSoldQty / ns.ukStockQty : 0;
     if (str >= THRESHOLD) continue;
-    const mul = bricqerMultiplier('N', str);
-    const listPerUnit = ns.ukSoldAvg * mul;
+    const listPerUnit = bricqerListPrice(ns.ukSoldAvg, 'N', str) ?? 0;
     coldRows.push({ it, key, nSlot: ns, nStr: str, nList: listPerUnit, nLot: listPerUnit * it.invQty });
   }
   const coldListTotal = coldRows.reduce((a, r) => a + r.nLot, 0);
@@ -184,36 +153,27 @@ async function main() {
   for (const r of coldRows) {
     if (!usedSlot.has(r.key)) needFetch.set(r.key, { itemType: r.it.itemType, itemNo: r.it.itemNo, colourId: r.it.colourId });
   }
-  console.log(`Need to fetch Used data for: ${needFetch.size} tuples (~${Math.ceil(needFetch.size * 2 * API_DELAY_MS / 60000)} min)`);
+  console.log(`Need to fetch Used data for: ${needFetch.size} tuples (~${Math.ceil(needFetch.size * API_DELAY_MS / 60000)} min)`);
 
+  // ensurePriceGuide fetches ALL FOUR quadrants (4 calls/tuple) and captures a
+  // complete row in the unified cache — no manual write-back needed.
   let calls = 0, fetched = 0, nullCnt = 0;
-  type Upsert = { part_number: string; part_type: string; colour_id: number; price_used: number | null; stock_available_used: number; times_sold_used: number; fetched_at: string };
-  const upserts: Upsert[] = [];
   for (const [key, t] of needFetch) {
-    if (calls + 2 > API_BUDGET) { console.warn(`API budget reached`); break; }
+    if (calls + 4 > API_BUDGET) { console.warn(`API budget reached`); break; }
     try {
       await sleep(API_DELAY_MS);
-      const sold: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: 'U', guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK' });
-      calls++;
-      await sleep(API_DELAY_MS);
-      const stock: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: 'U', guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK' });
-      calls++;
+      const view = await ensurePriceGuide(bl, supabase, { itemType: t.itemType as 'P' | 'M', itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: CACHE_TTL_DAYS });
+      calls += 4;
       fetched++;
-      const avg = parseFloat(sold.avg_price);
-      const soldQty = sold.total_quantity ?? 0;
-      const stockQty = stock.total_quantity ?? 0;
-      if (avg > 0 && soldQty > 0) usedSlot.set(key, { ukSoldAvg: avg, ukSoldQty: soldQty, ukStockQty: stockQty, source: 'api' });
-      else { usedSlot.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stockQty, source: 'api' }); nullCnt++; }
-      upserts.push({ part_number: t.itemNo, part_type: t.itemType === 'P' ? 'PART' : 'MINIFIG', colour_id: t.colourId, price_used: avg > 0 && soldQty > 0 ? avg : null, stock_available_used: stockQty, times_sold_used: soldQty, fetched_at: new Date().toISOString() });
+      const u = view.used;
+      if (u.soldAvg !== null && u.soldAvg > 0 && u.soldQty > 0) usedSlot.set(key, { ukSoldAvg: u.soldAvg, ukSoldQty: u.soldQty, ukStockQty: u.stockQty, source: 'api' });
+      else { usedSlot.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: u.stockQty, source: 'api' }); nullCnt++; }
       if (fetched % 50 === 0) console.log(`  fetched ${fetched}/${needFetch.size} (${nullCnt} no-used-sales)`);
     } catch (err) {
       console.warn(`  fetch error ${key}: ${(err as Error).message}`);
     }
   }
   console.log(`Fetched ${fetched} Used tuples (${nullCnt} returned no UK Used sales).`);
-
-  // Note: skipping cache upsert here — table has the upsert-constraint mismatch already
-  // surfaced in the main analysis run; we don't want the same warnings to clutter the report.
 
   // --- Reprice each cold-N lot with Used data ---
   type Repriced = ColdRow & {
@@ -230,8 +190,7 @@ async function main() {
       return { ...r, uSlot: us, uStr: 0, uList: 0, uLot: 0, deltaList: -r.nLot, bucket: 'no-used-data' as const };
     }
     const uStr = us.ukStockQty > 0 ? us.ukSoldQty / us.ukStockQty : 0;
-    const uMul = bricqerMultiplier('U', uStr);
-    const uList = us.ukSoldAvg * uMul;
+    const uList = bricqerListPrice(us.ukSoldAvg, 'U', uStr) ?? 0;
     const uLot = uList * r.it.invQty;
     let bucket: Repriced['bucket'];
     if (uStr >= 1) bucket = 'becomes-hot';

@@ -33,6 +33,16 @@ export interface KeepaStats {
   avg90?: (number | null)[];
   /** Average over 180 days for each CSV type */
   avg180?: (number | null)[];
+  /** Average over 365 days for each CSV type (yearly norm — seasonal reference) */
+  avg365?: (number | null)[];
+  /** Maximum over the stats interval per CSV type; each entry is [timestamp, value] */
+  max?: ((number | null)[] | null)[];
+  /** Sales rank drop count over 30 days (sales-velocity proxy) */
+  salesRankDrops30?: number;
+  /** Sales rank drop count over 90 days (sales-velocity proxy) */
+  salesRankDrops90?: number;
+  /** Sales rank drop count over 180 days (sales-velocity proxy) */
+  salesRankDrops180?: number;
 }
 
 export interface KeepaProduct {
@@ -135,6 +145,31 @@ export function parseKeepaCSV(csv: number[] | null): { date: string; value: numb
   return points;
 }
 
+/**
+ * Parse Keepa BUY_BOX CSV data, which uses triples [timestamp, price, shipping]
+ * rather than the standard [timestamp, value] pairs. Returns the landed
+ * buy-box price (price + shipping), matching stats.current semantics.
+ *
+ * A shipping value of -1 means unknown/none and is treated as 0.
+ */
+export function parseKeepaBuyBoxCSV(csv: number[] | null): { date: string; value: number }[] {
+  if (!csv || csv.length < 3) return [];
+
+  const points: { date: string; value: number }[] = [];
+  for (let i = 0; i + 2 < csv.length; i += 3) {
+    const timestamp = csv[i];
+    const price = csv[i + 1];
+    const shipping = csv[i + 2];
+    if (price >= 0) {
+      points.push({
+        date: keepaTimestampToDate(timestamp),
+        value: price + Math.max(shipping, 0),
+      });
+    }
+  }
+  return points;
+}
+
 export class KeepaClient {
   private apiKey: string;
   private baseUrl = 'https://api.keepa.com';
@@ -192,7 +227,7 @@ export class KeepaClient {
       key: this.apiKey,
       domain: '2', // Amazon UK
       asin: validAsins.join(','),
-      stats: '90', // Include 90-day stats (for was_price_90d)
+      stats: '365', // Include stats (avg30/90/180/365 + min/max + salesRankDrops); 365 gives the yearly avg + seasonal high
       buybox: '1', // Include buy box history
       history: '1', // Include full price history
     });
@@ -233,7 +268,9 @@ export class KeepaClient {
     sales_rank: number | null;
     new_offer_count: number | null;
   }[] {
-    const buyBoxPrices = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null);
+    // BUY_BOX history is triple-encoded [timestamp, price, shipping] — using the
+    // pair parser here corrupts both dates and prices (see parseKeepaBuyBoxCSV).
+    const buyBoxPrices = parseKeepaBuyBoxCSV(product.csv?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null);
     const amazonPrices = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.AMAZON] ?? null);
     const salesRanks = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.SALES_RANK] ?? null);
     const newOfferCounts = parseKeepaCSV(product.csv?.[KEEPA_CSV_INDEX.COUNT_NEW] ?? null);
@@ -274,11 +311,23 @@ export class KeepaClient {
       }
     }
 
-    // Fill in sales ranks
+    // Fill in sales ranks. Recent rank-only dates get their own entry (price
+    // null) so demand data stays fresh even when the price hasn't moved;
+    // older rank-only dates are dropped to keep row volume bounded.
+    const rankOnlyCutoff = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
     for (const point of salesRanks) {
       const existing = dateMap.get(point.date);
       if (existing) {
         existing.sales_rank = point.value;
+      } else if (point.date >= rankOnlyCutoff) {
+        dateMap.set(point.date, {
+          buy_box_price: null,
+          amazon_price: null,
+          sales_rank: point.value,
+          new_offer_count: null,
+        });
       }
     }
 
@@ -307,6 +356,10 @@ export class KeepaClient {
     buyBoxPrice: number | null;
     salesRank: number | null;
     was90dAvg: number | null;
+    was180dAvg: number | null;
+    was365dAvg: number | null;
+    high365d: number | null;
+    salesRankDrops90: number | null;
     offerCount: number | null;
     lowestNewPrice: number | null;
   } {
@@ -336,13 +389,26 @@ export class KeepaClient {
     const offerCountRaw =
       getStatsCurrent(KEEPA_CSV_INDEX.COUNT_NEW) ?? getLatestValue(KEEPA_CSV_INDEX.COUNT_NEW);
 
-    // 90-day average buy box from stats
+    // 90/180/365-day average buy box + rank-drop velocity from stats
     const was90dRaw = product.stats?.avg90?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const was180dRaw = product.stats?.avg180?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const was365dRaw = product.stats?.avg365?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    // stats.max entries are [timestamp, value] pairs; take the value. With
+    // stats=365 this is the 365-day maximum buy box (seasonal high).
+    const maxEntry = product.stats?.max?.[KEEPA_CSV_INDEX.BUY_BOX] ?? null;
+    const high365Raw = Array.isArray(maxEntry)
+      ? (maxEntry[1] ?? null)
+      : (typeof maxEntry === 'number' ? maxEntry : null);
+    const drops90 = product.stats?.salesRankDrops90;
 
     return {
       buyBoxPrice: buyBoxRaw !== null ? keepaPriceToGBP(buyBoxRaw) : null,
       salesRank: salesRankRaw,
       was90dAvg: was90dRaw !== null && was90dRaw >= 0 ? keepaPriceToGBP(was90dRaw) : null,
+      was180dAvg: was180dRaw !== null && was180dRaw >= 0 ? keepaPriceToGBP(was180dRaw) : null,
+      was365dAvg: was365dRaw !== null && was365dRaw >= 0 ? keepaPriceToGBP(was365dRaw) : null,
+      high365d: high365Raw !== null && high365Raw >= 0 ? keepaPriceToGBP(high365Raw) : null,
+      salesRankDrops90: typeof drops90 === 'number' && drops90 >= 0 ? drops90 : null,
       offerCount: offerCountRaw,
       lowestNewPrice: lowestNewRaw !== null ? keepaPriceToGBP(lowestNewRaw) : null,
     };

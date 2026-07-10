@@ -71,11 +71,52 @@ interface FullSyncResults {
   ebayLinking: { autoLinked: number; queuedForResolution: number } | null;
   shopifyArchiveSync: SyncResult | null;
   shopifyOrderSync: SyncResult | null;
+  shopifyJanitors: {
+    dedupeDuplicateSkus: number;
+    dedupeArchived: number;
+    driftFound: number;
+    driftArchived: number;
+    errors: string[];
+  } | null;
   shopifyAlignment: ShopifyAlignment | null;
   stuckJobs: StuckJob[];
   stuckJobsReset: number;
   weeklyStats: WeeklyStats;
   totalDurationMs: number;
+}
+
+/**
+ * Map an order-sync result to a report row, honouring per-order errors.
+ * Previously every resolved sync was labelled 'success', which hid a
+ * BrickOwl sync that errored on ALL 148 orders ("Invalid time value") for
+ * months while Discord reported it green.
+ */
+function reportPlatformSync(
+  platform: string,
+  result:
+    | {
+        success?: boolean;
+        ordersProcessed?: number;
+        ordersCreated?: number;
+        ordersUpdated?: number;
+        errors?: string[];
+        error?: string;
+      }
+    | undefined
+): SyncResult {
+  const errors = result?.errors ?? [];
+  const isFailed = result ? result.success === false || errors.length > 0 : true;
+  return {
+    platform,
+    status: isFailed ? 'failed' : 'success',
+    processed: result?.ordersProcessed ?? 0,
+    created: result?.ordersCreated ?? 0,
+    updated: result?.ordersUpdated ?? 0,
+    failed: errors.length || undefined,
+    error: errors.length
+      ? `${errors.length} order error(s), first: ${errors[0]}`
+      : (result?.error ?? (result ? undefined : 'No result returned')),
+  };
 }
 
 /** Timeout wrapper for individual sync operations */
@@ -711,6 +752,7 @@ export async function POST(request: NextRequest) {
       ebayLinking: null,
       shopifyArchiveSync: null,
       shopifyOrderSync: null,
+      shopifyJanitors: null,
       shopifyAlignment: null,
       stuckJobs: [],
       stuckJobsReset: 0,
@@ -750,13 +792,7 @@ export async function POST(request: NextRequest) {
       const syncPromises = [
         // eBay Orders
         withTimeout(ebayOrderSyncService.syncOrders(userId), SYNC_TIMEOUT, 'eBay Orders')
-          .then((result) => ({
-            platform: 'eBay Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('eBay Orders', result))
           .catch((error) => ({
             platform: 'eBay Orders',
             status: 'failed' as const,
@@ -787,13 +823,7 @@ export async function POST(request: NextRequest) {
           SYNC_TIMEOUT,
           'Amazon Orders'
         )
-          .then((result) => ({
-            platform: 'Amazon Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('Amazon Orders', result))
           .catch((error) => ({
             platform: 'Amazon Orders',
             status: error.message.includes('credentials')
@@ -813,13 +843,7 @@ export async function POST(request: NextRequest) {
           BRICKLINK_TIMEOUT,
           'BrickLink Orders'
         )
-          .then((result) => ({
-            platform: 'BrickLink Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('BrickLink Orders', result))
           .catch((error) => ({
             platform: 'BrickLink Orders',
             status: error.message.includes('credentials')
@@ -834,13 +858,7 @@ export async function POST(request: NextRequest) {
           SYNC_TIMEOUT,
           'Brick Owl Orders'
         )
-          .then((result) => ({
-            platform: 'Brick Owl Orders',
-            status: 'success' as const,
-            processed: result?.ordersProcessed ?? 0,
-            created: result?.ordersCreated ?? 0,
-            updated: result?.ordersUpdated ?? 0,
-          }))
+          .then((result) => reportPlatformSync('Brick Owl Orders', result))
           .catch((error) => ({
             platform: 'Brick Owl Orders',
             status: error.message.includes('credentials')
@@ -921,6 +939,26 @@ export async function POST(request: NextRequest) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error('[Cron FullSync] Amazon Inventory Linking failed:', errorMsg);
         // Non-fatal - don't block the rest of the sync
+      }
+
+      // Step 4b-2: Amazon phantom-stock reconcile — surface units still shown as
+      // available that actually sold (order shipped, sale never linked). Sends its
+      // own Discord alert on candidates. Non-fatal.
+      try {
+        const phantom = await withTimeout(
+          new AmazonInventoryLinkingService(supabase, userId).reconcilePhantomStock(),
+          SYNC_TIMEOUT,
+          'Amazon Phantom Reconcile'
+        );
+        console.log(
+          `[Cron FullSync] Phantom reconcile: ${phantom.phantoms.length} candidate(s) across ${phantom.checkedOrders} order(s), ${phantom.uncoveredUnits} uncovered unit(s)`
+        );
+      } catch (error) {
+        console.error(
+          '[Cron FullSync] Phantom reconcile failed:',
+          error instanceof Error ? error.message : 'Unknown error'
+        );
+        // Non-fatal
       }
 
       // Step 4c: Run eBay Inventory Linking (match orders to inventory, mark SOLD, archive Shopify)
@@ -1017,11 +1055,42 @@ export async function POST(request: NextRequest) {
           'Shopify Order Sync'
         );
         // Reconcile quantities (orphans + drift) after ingestion.
+        const syncSvc = new ShopifySyncSvc(supabase, userId);
         const reconcile = await withTimeout(
-          new ShopifySyncSvc(supabase, userId).reconcileInventoryQuantities(),
+          syncSvc.reconcileInventoryQuantities(),
           180000,
           'Shopify Reconcile'
         ).catch((e) => ({ reduced: 0, errors: [{ sku: null, error: String(e) }] }));
+
+        // Janitors that previously lived only in the unscheduled /api/cron/shopify-orders
+        // route (so they never ran): archive untracked orphan duplicates, then re-archive
+        // sold products still ACTIVE on live Shopify (cache-vs-live archive drift, which
+        // otherwise leaves sold items buyable indefinitely). Both non-fatal.
+        const janitorErrors: string[] = [];
+        const dedupe = await withTimeout(syncSvc.dedupeBySku(), 120000, 'Shopify Dedupe').catch(
+          (e) => {
+            janitorErrors.push(`dedupe: ${e instanceof Error ? e.message : String(e)}`);
+            return null;
+          }
+        );
+        const drift = await withTimeout(
+          syncSvc.reconcileArchiveDrift(),
+          120000,
+          'Shopify Archive Drift'
+        ).catch((e) => {
+          janitorErrors.push(`archiveDrift: ${e instanceof Error ? e.message : String(e)}`);
+          return null;
+        });
+        results.shopifyJanitors = {
+          dedupeDuplicateSkus: dedupe?.duplicate_skus ?? 0,
+          dedupeArchived: dedupe?.archived ?? 0,
+          driftFound: drift?.drifted ?? 0,
+          driftArchived: drift?.archived ?? 0,
+          errors: janitorErrors,
+        };
+        console.log(
+          `[Cron FullSync] Shopify janitors: ${dedupe?.archived ?? 0} dupes archived, ${drift?.archived ?? 0}/${drift?.drifted ?? 0} drifted re-archived${janitorErrors.length ? `, errors: ${janitorErrors.join('; ')}` : ''}`
+        );
 
         results.shopifyOrderSync = {
           platform: 'Shopify Order Sync',

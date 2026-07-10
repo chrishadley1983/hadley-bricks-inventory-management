@@ -25,7 +25,9 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import { BrickLinkApiError } from '../src/lib/bricklink/client';
-import type { BrickLinkItemType } from '../src/lib/bricklink/types';
+import { bricqerMultiplier } from '../src/lib/bricklink/bricqer-pricing';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
 import { createScriptBlContext } from './_bl-client';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -45,6 +47,7 @@ if (!STORE_SLUG) {
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
 const BL_SELLER_FEE_RATE = 0.07;
+const CACHE_TTL_DAYS = 90; // unified price cache freshness
 
 const STORE_DIR = path.resolve(__dirname, `../../../tmp/stores/${STORE_SLUG}`);
 const ENRICHED_FILE = path.join(STORE_DIR, 'enriched.json');
@@ -55,7 +58,6 @@ const REPORT_FILE = path.join(STORE_DIR, 'bricqer-report.html');
 // ---------------------------------------------------------------------------
 
 type StoreItemCode = 'P' | 'S' | 'M';
-const STORE_TO_API: Record<StoreItemCode, BrickLinkItemType> = { P: 'PART', S: 'SET', M: 'MINIFIG' };
 
 interface EnrichedItem {
   invID: number;
@@ -94,7 +96,7 @@ interface BricqerLot {
   rejectReason?: string;
 }
 
-const { bl } = createScriptBlContext('apply-bricqer-pricing-script');
+const { bl, supabase } = createScriptBlContext('apply-bricqer-pricing-script');
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -105,14 +107,7 @@ function writeJson(p: string, data: unknown) {
   fs.writeFileSync(p, JSON.stringify(data, null, 2));
 }
 
-function bricqerMultiplier(condition: 'N' | 'U', sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// bricqerMultiplier now imported from src/lib/bricklink/bricqer-pricing (canonical v3).
 
 function escapeHtml(s: string | null | undefined): string {
   if (!s) return '';
@@ -126,28 +121,36 @@ async function fetchUkData(
   itemNo: string,
   colourId: number,
   condition: 'N' | 'U',
-): Promise<{ soldAvg: number | null; soldQty: number; stockQty: number }> {
+  budgetLeft: number,
+): Promise<{ soldAvg: number | null; soldQty: number; stockQty: number; apiCalls: number } | 'budget'> {
   // Skip sets — Bricqer disables automatic pricing for sets, and SET endpoint also
   // rejects color_id=0 with PARAMETER_MISSING_OR_INVALID.
   if (itemType === 'S') {
-    return { soldAvg: null, soldQty: 0, stockQty: 0 };
+    return { soldAvg: null, soldQty: 0, stockQty: 0, apiCalls: 0 };
   }
 
-  await sleep(API_DELAY_MS);
-  const sold = await bl.getPartPriceGuide(STORE_TO_API[itemType], itemNo, colourId, {
-    condition, guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK',
-  });
+  // Cache-first via the unified price cache. Colour ids come from the BL store
+  // scrape (enriched.json) → BL scheme. Strict UK — a non-UK view is a cache miss.
+  const ref = { itemType: itemType as 'P' | 'M', itemNo, colourId, scheme: 'bl' as const };
+  const cached = (await readPriceGuide(supabase, [ref], { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false }))
+    .get(pgKey(itemType, itemNo, colourId));
+  let view = cached && cached.coverage === 'uk' ? cached : null;
+  let apiCalls = 0;
+  if (!view) {
+    if (budgetLeft < 4) return 'budget';
+    await sleep(API_DELAY_MS);
+    // ensurePriceGuide fetches ALL FOUR quadrants (4 calls) and captures a
+    // complete unified-cache row — one fetch covers both conditions.
+    view = await ensurePriceGuide(bl, supabase, { itemType: itemType as 'P' | 'M', itemNo, colourId }, { ttlDays: CACHE_TTL_DAYS });
+    apiCalls = 4;
+  }
 
-  await sleep(API_DELAY_MS);
-  const stock = await bl.getPartPriceGuide(STORE_TO_API[itemType], itemNo, colourId, {
-    condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK',
-  });
-
-  const soldAvg = parseFloat(sold.avg_price);
+  const side = condition === 'N' ? view.new : view.used;
   return {
-    soldAvg: Number.isFinite(soldAvg) && soldAvg > 0 ? soldAvg : null,
-    soldQty: sold.total_quantity ?? 0,
-    stockQty: stock.total_quantity ?? 0,
+    soldAvg: side.soldAvg !== null && side.soldAvg > 0 ? side.soldAvg : null,
+    soldQty: side.soldQty,
+    stockQty: side.stockQty,
+    apiCalls,
   };
 }
 
@@ -174,11 +177,6 @@ async function main() {
     const key = `${item.invID}:${item.itemType}:${item.itemNo}:${item.colourId}:${cond}`;
     if (doneSet.has(key)) continue;
 
-    if (progress.callsUsed + 2 > API_BUDGET) {
-      console.warn(`[main] Budget reached (${progress.callsUsed}/${API_BUDGET}); stopping.`);
-      break;
-    }
-
     const lot: BricqerLot = {
       itemType: item.itemType,
       itemNo: item.itemNo,
@@ -200,8 +198,12 @@ async function main() {
     };
 
     try {
-      const uk = await fetchUkData(item.itemType, item.itemNo, item.colourId, cond);
-      progress.callsUsed += 2;
+      const uk = await fetchUkData(item.itemType, item.itemNo, item.colourId, cond, API_BUDGET - progress.callsUsed);
+      if (uk === 'budget') {
+        console.warn(`[main] Budget reached (${progress.callsUsed}/${API_BUDGET}); stopping.`);
+        break;
+      }
+      progress.callsUsed += uk.apiCalls;
 
       lot.ukSoldAvgPrice = uk.soldAvg;
       lot.ukSoldTotalQty = uk.soldQty;

@@ -9,17 +9,21 @@
  * - Retirement timing proximity (10%)
  *
  * Falls back to rule-based scoring when no ML model is available.
+ *
+ * v2: loads per-horizon artifact-v2 models (ridge or NN on a winsorized
+ * log-ratio target), derives confidence from holdout metrics instead of a
+ * hardcoded constant, and flags predictions sitting at the model bounds.
  */
 
-import * as tf from '@tensorflow/tfjs';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchAllRecords } from '@/lib/supabase/pagination';
-import { ModelTrainingService } from './ml/model-training.service';
+import { ModelTrainingService, type LoadedArtifact } from './ml/model-training.service';
 import {
   featuresToVector,
   fetchThemeAverages,
+  APPRECIATION_FLOOR_PCT,
+  APPRECIATION_CEIL_PCT,
   type RawFeatures,
-  type FeatureNormContext,
 } from './ml/feature-engineering';
 
 export interface ScoringResult {
@@ -75,12 +79,12 @@ export class InvestmentScoringService {
     let setsScored = 0;
     let errors = 0;
 
-    // Try to load ML model
-    const modelData = await ModelTrainingService.loadModel(this.supabase);
-    const useFallback = !modelData;
-    const modelVersion = modelData?.modelVersion ?? null;
+    // Try to load ML artifact (v2 only; a 1yr model is required to use ML)
+    const artifact = await ModelTrainingService.loadModel(this.supabase);
+    const useFallback = !artifact || artifact.models['1yr'] == null;
+    const modelVersion = artifact?.modelVersion ?? null;
 
-    // Fetch theme averages for scoring (shared with feature-engineering)
+    // Fetch theme averages for the scoring blend (shared with feature-engineering)
     const themeAvgs = await fetchThemeAverages(this.supabase);
 
     // Fetch demand data (latest sales ranks)
@@ -119,14 +123,7 @@ export class InvestmentScoringService {
 
           const prediction = useFallback
             ? this.scoreFallback(set, themeAvgs, demandData)
-            : this.scoreWithModel(
-                set,
-                modelData!.model,
-                modelData!.normContext,
-                modelData!.modelVersion,
-                themeAvgs,
-                demandData
-              );
+            : this.scoreWithModel(set, artifact!, themeAvgs, demandData);
 
           predictions.push(prediction);
         } catch (err) {
@@ -174,8 +171,8 @@ export class InvestmentScoringService {
     }
 
     // Clean up model if loaded
-    if (modelData) {
-      modelData.model.dispose();
+    if (artifact) {
+      ModelTrainingService.disposeArtifact(artifact);
     }
 
     console.log(
@@ -196,23 +193,25 @@ export class InvestmentScoringService {
    */
   private scoreWithModel(
     set: SetForScoring,
-    model: tf.Sequential,
-    normContext: FeatureNormContext,
-    modelVersion: string,
+    artifact: LoadedArtifact,
     themeAvgs: Map<string, number>,
     demandData: Map<string, { salesRank: number; offerCount: number }>
   ): PredictionRow {
-    const features = this.buildFeatures(set, themeAvgs, demandData);
-    const vector = featuresToVector(features, normContext);
+    const ctx = artifact.normContext;
+    const features = this.buildFeatures(set, ctx.theme_target_encoding, demandData);
+    features.theme_avg_appreciation =
+      ctx.theme_target_encoding[set.theme] ?? ctx.global_mean_appreciation;
+    const vector = featuresToVector(features, ctx);
 
-    // Run inference
-    const inputTensor = tf.tensor2d([vector]);
-    const prediction = model.predict(inputTensor) as tf.Tensor2D;
-    const [pred1yr, pred3yr] = prediction.dataSync();
-    inputTensor.dispose();
-    prediction.dispose();
+    const pred1yr = ModelTrainingService.predictHorizon(artifact, '1yr', vector);
+    const pred3yr = ModelTrainingService.predictHorizon(artifact, '3yr', vector);
 
-    // Normalise ML appreciation to 0-1 (assume typical range -50% to +200%)
+    if (pred1yr == null) {
+      // Shouldn't happen (caller checks the 1yr model exists) — degrade gracefully
+      return this.scoreFallback(set, themeAvgs, demandData);
+    }
+
+    // Normalise ML appreciation to 0-1 (typical range -50% to +200%)
     const mlFactor = Math.min(Math.max((pred1yr + 50) / 250, 0), 1);
 
     // Theme factor
@@ -242,19 +241,50 @@ export class InvestmentScoringService {
 
     // Risk factors
     const riskFactors = this.assessRiskFactors(set, pred1yr, demand);
+    if (
+      pred1yr >= APPRECIATION_CEIL_PCT - 0.5 ||
+      pred1yr <= APPRECIATION_FLOOR_PCT + 0.5 ||
+      (pred3yr != null &&
+        (pred3yr >= APPRECIATION_CEIL_PCT - 0.5 || pred3yr <= APPRECIATION_FLOOR_PCT + 0.5))
+    ) {
+      riskFactors.push('prediction_at_model_bound');
+    }
+
+    const confidence = this.deriveConfidence(artifact, features);
 
     return {
       set_num: set.set_number,
       investment_score: clampedScore,
       predicted_1yr_appreciation: Math.round(pred1yr * 100) / 100,
-      predicted_3yr_appreciation: Math.round(pred3yr * 100) / 100,
+      predicted_3yr_appreciation: pred3yr != null ? Math.round(pred3yr * 100) / 100 : null,
       predicted_1yr_price_gbp: Math.round(set.uk_retail_price * (1 + pred1yr / 100) * 100) / 100,
-      predicted_3yr_price_gbp: Math.round(set.uk_retail_price * (1 + pred3yr / 100) * 100) / 100,
-      confidence: 0.7, // Model-based prediction
+      predicted_3yr_price_gbp:
+        pred3yr != null
+          ? Math.round(set.uk_retail_price * (1 + pred3yr / 100) * 100) / 100
+          : null,
+      confidence,
       risk_factors: riskFactors,
       amazon_viable: set.has_amazon_listing,
-      model_version: modelVersion,
+      model_version: artifact.modelVersion,
     };
+  }
+
+  /**
+   * Confidence derived from holdout quality + per-set feature coverage.
+   * Base reflects how well the model ranked the temporal holdout; penalties
+   * apply when this set's features were degraded or out-of-distribution.
+   */
+  private deriveConfidence(artifact: LoadedArtifact, features: RawFeatures): number {
+    const m1 = artifact.metrics?.horizon_1yr;
+    let confidence = 0.25;
+    if (m1) {
+      confidence += 0.45 * Math.min(Math.max(m1.spearman, 0), 1);
+      if (m1.beats_baseline) confidence += 0.1;
+    }
+    if (features.avg_sales_rank == null || features.avg_sales_rank <= 0) confidence -= 0.1;
+    if (!(features.theme in artifact.normContext.theme_target_encoding)) confidence -= 0.1;
+
+    return Math.round(Math.min(Math.max(confidence, 0.1), 0.9) * 100) / 100;
   }
 
   /**
@@ -379,10 +409,18 @@ export class InvestmentScoringService {
    */
   private buildFeatures(
     set: SetForScoring,
-    themeAvgs: Map<string, number>,
+    themeTargetEncoding: Record<string, number>,
     demandData: Map<string, { salesRank: number; offerCount: number }>
   ): RawFeatures {
     const demand = demandData.get(set.set_number);
+
+    // Expected market lifespan: release -> (expected) retirement. For sets
+    // with no expected date, use age-to-date as the best lower bound.
+    const retirementYear = set.expected_retirement_date
+      ? parseInt(set.expected_retirement_date.slice(0, 4), 10)
+      : new Date().getFullYear();
+    const yearsOnMarket = set.year_from ? Math.max(retirementYear - set.year_from, 0) : 0;
+
     return {
       set_num: set.set_number,
       theme: set.theme,
@@ -394,10 +432,10 @@ export class InvestmentScoringService {
       is_licensed: set.is_licensed,
       is_ucs: set.is_ucs,
       is_modular: set.is_modular,
-      set_age_years: set.year_from ? new Date().getFullYear() - set.year_from : 0,
+      years_on_market: yearsOnMarket,
       has_amazon_listing: set.has_amazon_listing,
       avg_sales_rank: demand?.salesRank ?? null,
-      theme_historical_avg_appreciation: themeAvgs.get(set.theme) ?? 0,
+      theme_avg_appreciation: themeTargetEncoding[set.theme] ?? 0,
     };
   }
 
@@ -430,12 +468,17 @@ export class InvestmentScoringService {
   private async fetchDemandData(): Promise<Map<string, { salesRank: number; offerCount: number }>> {
     const demandMap = new Map<string, { salesRank: number; offerCount: number }>();
 
-    // Fetch price snapshots ordered by date desc, keeping most recent per set
+    // Fetch recent price snapshots ordered by date desc, keeping the most
+    // recent per set. Restricted to a 120-day window: the full-history table
+    // is millions of rows post-re-import and an unbounded ordered scan hits
+    // the Postgres statement timeout; older ranks are stale for demand anyway.
+    const sinceDate = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     let rows: Record<string, unknown>[] = [];
     try {
       rows = (await fetchAllRecords(this.supabase, 'price_snapshots', {
         select: 'set_num, sales_rank, seller_count, date',
         in: { source: ['keepa_amazon_buybox', 'amazon_buybox'] },
+        gte: { date: sinceDate },
         isNotNull: ['sales_rank'],
         orderBy: { column: 'date', ascending: false },
       })) as unknown as Record<string, unknown>[];

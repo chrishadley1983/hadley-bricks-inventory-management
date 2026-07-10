@@ -1,39 +1,27 @@
 /**
- * Canonical Bricqer pricing multiplier + Hadley Bricks fee model.
+ * Hadley Bricks fee model + store-quality pricing helpers.
  *
- * Single source of truth so the store-quality engine and the job-lot evaluator
- * agree with how the Bricqer parts store is actually auto-priced.
+ * The Bricqer multiplier itself lives in `../bricklink/bricqer-pricing` (the
+ * single source of truth, v3 2026-07-07) and is re-exported here so existing
+ * store-quality imports keep working.
  *
- * Multiplier formula is the version effective 2026-05-11 (see the
- * `bricqer-pricing-formula` memory and scripts/bl-basket.ts).
- *
- * NOTE on STR scale: Bricqer's STR is the ratio `times_sold / stock_available`.
- * The `bricklink_part_price_cache.sell_through_rate_*` columns store that ratio
- * **×100** (i.e. a percentage that can exceed 100). The multiplier below expects
- * the raw RATIO (0.5 = 50%), so callers must divide the cached value by 100.
+ * NOTE on STR scale: Bricqer's STR is the qty ratio `sold_qty / stock_qty`.
+ * The unified price cache exposes this as `view.<side>.strQty` (raw ratio,
+ * 0.5 = 50%, can exceed 1) via `readPriceGuide` — pass it to the multiplier
+ * directly. `strRatioFromCache` remains only for legacy ×100 inputs.
  */
 
-export type ItemCondition = 'N' | 'U';
+import { bricqerListPrice, type BricqerCondition } from '../bricklink/bricqer-pricing';
+
+export { bricqerMultiplier, BRICQER_PRICE_FLOOR } from '../bricklink/bricqer-pricing';
+
+export type ItemCondition = BricqerCondition;
 
 /** Hadley Bricks variable-fee model (verified — see bl-basket.ts). */
 export const BL_FEE = 0.03; // BrickLink platform fee
 export const BRICQER_FEE = 0.035; // Bricqer fee
 export const PAYPAL_PCT = 0.029; // PayPal fee
 export const VAR_FEE_PCT = BL_FEE + BRICQER_FEE + PAYPAL_PCT; // 9.4%
-
-/**
- * Bricqer auto-pricing multiplier applied to the 6-month UK sold average.
- * @param condition 'N' (New) or 'U' (Used)
- * @param sellThru  raw STR ratio (NOT the ×100 cached percentage)
- */
-export function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.1 : 0.85;
-  if (sellThru >= 1) return 1.4;
-  if (sellThru >= 0.75) return 1.25;
-  if (sellThru >= 0.5) return 1.15;
-  if (sellThru >= 0.25) return 0.93;
-  return 0.9;
-}
 
 /** Convert a 'New'/'Used' label to the 'N'/'U' code the multiplier expects. */
 export function conditionCode(condition: string | null | undefined): ItemCondition {
@@ -48,15 +36,14 @@ export function strRatioFromCache(cachedPct: number | null | undefined): number 
 
 /**
  * Project the Bricqer list price for a lot from its 6-month average and STR.
- * Returns null when the average is missing/zero.
+ * Returns null when the average is missing/zero. Applies the 7p floor (v3).
  */
 export function projectListPrice(
   sixMonthAvg: number | null,
   condition: string,
   strRatio: number | null
 ): number | null {
-  if (!sixMonthAvg || sixMonthAvg <= 0) return null;
-  return sixMonthAvg * bricqerMultiplier(conditionCode(condition), strRatio ?? 0);
+  return bricqerListPrice(sixMonthAvg, conditionCode(condition), strRatio ?? 0);
 }
 
 /** Net profit per unit after variable fees, given list price and unit cost. */

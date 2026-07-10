@@ -69,6 +69,7 @@ export function useWeeklyMetrics() {
     queryFn: fetchWeeklyMetrics,
     staleTime: 60000, // Cache for 1 minute
     refetchInterval: 300000, // Refetch every 5 minutes
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 
@@ -78,6 +79,7 @@ export function useListingCounts() {
     queryFn: fetchListingCounts,
     staleTime: 60000,
     refetchInterval: 300000,
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

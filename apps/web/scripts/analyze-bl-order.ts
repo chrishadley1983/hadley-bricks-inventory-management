@@ -19,15 +19,20 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
-import type { BrickLinkPriceGuide } from '../src/lib/bricklink/types';
 import { createScriptBlContext } from './_bl-client';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 
 const arg = process.argv[2];
 if (!arg) { console.error('Usage: npx tsx scripts/analyze-bl-order.ts <orderId>'); process.exit(1); }
 const ORDER_ID = parseInt(arg, 10);
 if (!Number.isFinite(ORDER_ID)) { console.error(`Invalid order ID: ${arg}`); process.exit(1); }
 
-const { bl } = createScriptBlContext('analyze-bl-order-script');
+const { bl, supabase } = createScriptBlContext('analyze-bl-order-script');
+
+// Unified price cache: cache-first UK reads via ensurePriceGuide (misses fetch all 4
+// quadrants + capture automatically). Legacy behaviour was 2-3 live API calls per lot.
+const PG_TTL_DAYS = 90;
+const API_TYPE_TO_PG: Record<string, 'P' | 'M' | 'S'> = { PART: 'P', MINIFIG: 'M', SET: 'S' };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 const median = (xs: number[]) => {
@@ -76,37 +81,62 @@ const padR = (s: string | number, w: number) => String(s).padStart(w);
 
     // Try UK first; fall back to GLOBAL only when UK has 0 sold qty in 6mo
     // (rare/low-volume items often have no UK history but do have global).
-    let sold: BrickLinkPriceGuide | null = null;
-    let stock: BrickLinkPriceGuide | null = null;
+    let soldQty: number | null = null;
+    let stockQty: number | null = null;
+    let sixMA: number | null = null;
     let sixMAScope: 'UK' | 'GLOBAL' | null = null;
     try {
-      sold = await bl.getPartPriceGuide(it.item.type, it.item.no, colourId, {
-        condition, guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK',
-      });
-      await sleep(150);
-      if ((sold?.total_quantity ?? 0) > 0) {
-        sixMAScope = 'UK';
+      // UK leg: unified price cache. Order-item colour ids come from the BL order API,
+      // so they're BL-scheme (ensurePriceGuide's default).
+      const pgType = API_TYPE_TO_PG[it.item.type];
+      let ukSoldQty = 0;
+      let ukSoldQtyAvg: number | null = null;
+      if (pgType) {
+        const view = await ensurePriceGuide(bl, supabase, { itemType: pgType, itemNo: it.item.no, colourId }, { ttlDays: PG_TTL_DAYS });
+        await sleep(150);
+        const side = condition === 'U' ? view.used : view.new;
+        ukSoldQty = side.soldQty;
+        ukSoldQtyAvg = side.soldQtyAvg;
+        soldQty = side.soldQty;
+        stockQty = side.stockQty;
       } else {
+        // Non-P/M/S catalogue types (GEAR, BOOK, …) can't live in the unified cache —
+        // keep the legacy direct UK API pair for those rare lots (no capture).
+        const sold = await bl.getPartPriceGuide(it.item.type, it.item.no, colourId, {
+          condition, guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK',
+        });
+        await sleep(150);
+        const stock = await bl.getPartPriceGuide(it.item.type, it.item.no, colourId, {
+          condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK',
+        });
+        await sleep(150);
+        ukSoldQty = sold?.total_quantity ?? 0;
+        ukSoldQtyAvg = sold ? parseFloat(sold.qty_avg_price) : null;
+        soldQty = sold?.total_quantity ?? null;
+        stockQty = stock?.total_quantity ?? null;
+      }
+
+      if (ukSoldQty > 0) {
+        sixMAScope = 'UK';
+        sixMA = ukSoldQtyAvg && ukSoldQtyAvg > 0 ? ukSoldQtyAvg : null;
+      } else {
+        // GLOBAL fallback stays a live BL API call: the unified cache is UK-scoped,
+        // so global sold data is fetched fresh and deliberately NOT captured.
         const global = await bl.getPartPriceGuide(it.item.type, it.item.no, colourId, {
           condition, guideType: 'sold', currencyCode: 'GBP', // no countryCode = global
         });
         await sleep(150);
         if ((global?.total_quantity ?? 0) > 0) {
-          sold = global;
           sixMAScope = 'GLOBAL';
+          soldQty = global.total_quantity ?? null;
+          const g = parseFloat(global.qty_avg_price);
+          sixMA = g > 0 ? g : null;
         }
       }
-      stock = await bl.getPartPriceGuide(it.item.type, it.item.no, colourId, {
-        condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK',
-      });
-      await sleep(150);
     } catch (e) {
       console.error(`  ${it.item.no}/${colourId}: price guide error — ${(e as Error).message}`);
     }
 
-    const soldQty = sold?.total_quantity ?? null;
-    const stockQty = stock?.total_quantity ?? null;
-    const sixMA = sold && parseFloat(sold.qty_avg_price) > 0 ? parseFloat(sold.qty_avg_price) : null;
     const pctVs6MA = sixMA && unit > 0 ? ((unit - sixMA) / sixMA) * 100 : null;
     const str = soldQty != null && stockQty && stockQty > 0 ? soldQty / stockQty : null;
 

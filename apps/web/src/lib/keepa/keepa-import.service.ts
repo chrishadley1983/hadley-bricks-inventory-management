@@ -17,6 +17,12 @@ export interface KeepaImportOptions {
   retiredSets?: boolean;
   /** Dry run - don't write to database */
   dryRun?: boolean;
+  /**
+   * Delete a set's existing keepa_amazon_buybox rows before upserting fresh
+   * ones (only once Keepa has returned data for it). Used by the v2 re-import
+   * to purge rows written by the corrupt pre-v2 BUY_BOX parser.
+   */
+  deleteBeforeUpsert?: boolean;
 }
 
 export interface KeepaImportSummary {
@@ -80,7 +86,9 @@ export class KeepaImportService {
     const batchSize = 10;
     for (let i = 0; i < asins.length; i += batchSize) {
       const batch = asins.slice(i, i + batchSize);
-      const batchResults = await this.processBatch(batch, asinToSetNum, options.dryRun ?? false);
+      const batchResults = await this.processBatch(batch, asinToSetNum, options.dryRun ?? false, {
+        deleteBeforeUpsert: options.deleteBeforeUpsert ?? false,
+      });
       results.push(...batchResults);
     }
 
@@ -240,7 +248,8 @@ export class KeepaImportService {
   private async processBatch(
     asins: string[],
     asinToSetNum: Map<string, string>,
-    dryRun: boolean
+    dryRun: boolean,
+    opts: { deleteBeforeUpsert: boolean } = { deleteBeforeUpsert: false }
   ): Promise<KeepaImportResult[]> {
     const results: KeepaImportResult[] = [];
 
@@ -249,7 +258,7 @@ export class KeepaImportService {
       const products = await this.keepa.fetchProducts(asins);
 
       for (const product of products) {
-        const result = await this.processProduct(product, asinToSetNum, dryRun);
+        const result = await this.processProduct(product, asinToSetNum, dryRun, opts);
         results.push(result);
       }
 
@@ -289,7 +298,8 @@ export class KeepaImportService {
   private async processProduct(
     product: KeepaProduct,
     asinToSetNum: Map<string, string>,
-    dryRun: boolean
+    dryRun: boolean,
+    opts: { deleteBeforeUpsert: boolean } = { deleteBeforeUpsert: false }
   ): Promise<KeepaImportResult> {
     const setNum = asinToSetNum.get(product.asin);
     if (!setNum) {
@@ -322,6 +332,23 @@ export class KeepaImportService {
       };
     }
 
+    // Purge pre-v2 rows only now that Keepa has returned fresh data for the set
+    if (opts.deleteBeforeUpsert) {
+      const { error: deleteError } = await this.supabase
+        .from('price_snapshots')
+        .delete()
+        .eq('set_num', setNum)
+        .eq('source', 'keepa_amazon_buybox');
+      if (deleteError) {
+        return {
+          asin: product.asin,
+          snapshots_imported: 0,
+          date_range: null,
+          error: `Pre-upsert delete failed: ${deleteError.message}`,
+        };
+      }
+    }
+
     // Upsert snapshots into price_snapshots table
     const rows = snapshots.map((s) => ({
       set_num: setNum,
@@ -336,6 +363,7 @@ export class KeepaImportService {
         sales_rank: s.sales_rank,
         new_offer_count: s.new_offer_count,
         keepa_asin: product.asin,
+        parser_version: 'v2', // BUY_BOX triple-parse fix — pre-v2 rows are corrupt
       },
     }));
 

@@ -301,6 +301,7 @@ export function useSyncFeed(
       }
       return false;
     },
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

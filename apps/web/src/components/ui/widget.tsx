@@ -9,6 +9,8 @@ interface WidgetProps {
   title: string;
   description?: string;
   icon?: React.ReactNode;
+  /** Optional element rendered in the header next to the icon (e.g. a count badge) */
+  action?: React.ReactNode;
   isLoading?: boolean;
   error?: Error | null;
   className?: string;
@@ -23,6 +25,7 @@ export function Widget({
   title,
   description,
   icon,
+  action,
   isLoading = false,
   error = null,
   className,
@@ -35,7 +38,10 @@ export function Widget({
           <CardTitle className="text-sm font-medium">{title}</CardTitle>
           {description && <CardDescription>{description}</CardDescription>}
         </div>
-        {icon && <div className="h-4 w-4 text-muted-foreground">{icon}</div>}
+        <div className="flex items-center gap-2">
+          {action}
+          {icon && <div className="h-4 w-4 text-muted-foreground">{icon}</div>}
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? <WidgetLoading /> : error ? <WidgetError message={error.message} /> : children}

@@ -191,6 +191,7 @@ export function useRefreshJob(jobId: string | undefined, options?: { enabled?: b
       }
       return false;
     },
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
   });
 }
 

@@ -139,6 +139,8 @@ export interface SyncResult {
   shopifyProductId?: string;
   /** True when an existing Shopify product was adopted instead of created. */
   adopted?: boolean;
+  /** True when the item was intentionally held back (e.g. no price) rather than failing. */
+  skipped?: boolean;
   error?: string;
 }
 
@@ -199,6 +201,8 @@ export interface ShopifyOrderSyncResult {
   itemsMarkedSold: number;
   ebayListingsEnded: number;
   shopifyProductsArchived: number;
+  /** Cross-channel removals queued for Bricqer-managed (minifig-sync) items. */
+  minifigRemovalsQueued: number;
   unmatchedLineItems: number;
   /** Lines where fewer LISTED units existed than were ordered (oversell). */
   oversoldLineItems: number;

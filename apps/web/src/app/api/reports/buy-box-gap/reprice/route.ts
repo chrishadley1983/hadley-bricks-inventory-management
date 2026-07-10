@@ -4,13 +4,14 @@
  * Updates the listing price for an ASIN:
  * 1. Updates listing_value on all inventory_items with that ASIN
  * 2. Adds them to amazon_sync_queue for price push to Amazon
+ *
+ * Logic lives in queueAmazonRepriceByAsin (shared with markdown approvals).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireUser } from '@/lib/api/require-user';
-import { AmazonSyncService } from '@/lib/amazon/amazon-sync.service';
-import { UK_MARKETPLACE_ID } from '@/lib/amazon/amazon-sync.types';
+import { queueAmazonRepriceByAsin } from '@/lib/amazon/reprice-queue';
 
 const RepriceSchema = z.object({
   asin: z.string().min(1),
@@ -34,138 +35,22 @@ export async function POST(request: NextRequest) {
 
     const { asin, newPrice } = parsed.data;
 
-    // Step 1: Find all inventory items with this ASIN that are LISTED or BACKLOG
-    const { data: inventoryItems, error: fetchError } = await supabase
-      .from('inventory_items')
-      .select('id, listing_value, status, sku, amazon_asin')
-      .eq('amazon_asin', asin)
-      .eq('user_id', user.id)
-      .in('status', ['LISTED', 'BACKLOG', 'listed', 'backlog']);
+    const result = await queueAmazonRepriceByAsin(supabase, user.id, asin, newPrice);
 
-    if (fetchError) {
-      return NextResponse.json(
-        { error: `Failed to find inventory items: ${fetchError.message}` },
-        { status: 500 }
-      );
-    }
-
-    if (!inventoryItems || inventoryItems.length === 0) {
-      return NextResponse.json(
-        { error: `No inventory items found for ASIN ${asin}` },
-        { status: 404 }
-      );
-    }
-
-    // Step 2: Update listing_value on all matching inventory items
-    const { error: updateError } = await supabase
-      .from('inventory_items')
-      .update({ listing_value: newPrice })
-      .eq('amazon_asin', asin)
-      .eq('user_id', user.id)
-      .in('status', ['LISTED', 'BACKLOG', 'listed', 'backlog']);
-
-    if (updateError) {
-      return NextResponse.json(
-        { error: `Failed to update listing price: ${updateError.message}` },
-        { status: 500 }
-      );
-    }
-
-    // Step 3: Pre-fetch Amazon SKU from platform_listings (shared across all items for this ASIN)
-    const { data: listing } = await supabase
-      .from('platform_listings')
-      .select('platform_sku, platform_item_id')
-      .eq('user_id', user.id)
-      .eq('platform', 'amazon')
-      .eq('platform_item_id', asin)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
-
-    const amazonSku = listing?.platform_sku ?? null;
-
-    // Step 4: Look up the real product type for this ASIN
-    const service = new AmazonSyncService(supabase, user.id);
-    const productType = await service.getProductTypeForAsin(asin, UK_MARKETPLACE_ID);
-
-    // Step 5: Update tracked_asins.price so the buy box gap report reflects the new price immediately
-    await supabase
-      .from('tracked_asins')
-      .update({ price: newPrice })
-      .eq('asin', asin)
-      .eq('user_id', user.id);
-
-    // Step 6: Add items to amazon sync queue
-    let queued = 0;
-    const errors: string[] = [];
-
-    for (const item of inventoryItems) {
-      try {
-        const status = item.status?.toUpperCase();
-        if (status === 'BACKLOG') {
-          // Use standard add-to-queue (it expects BACKLOG status)
-          const result = await service.addToQueue(item.id, true);
-          if (result.success) {
-            queued++;
-          } else if (result.error && !result.error.includes('already in the sync queue')) {
-            errors.push(`${item.id}: ${result.error}`);
-          } else {
-            queued++; // already in queue counts as success
-          }
-        } else if (status === 'LISTED') {
-          if (!amazonSku) {
-            errors.push(`${item.id}: No Amazon SKU found in platform_listings`);
-            continue;
-          }
-
-          // Insert directly into queue
-          const { error: insertError } = await supabase
-            .from('amazon_sync_queue')
-            .insert({
-              user_id: user.id,
-              inventory_item_id: item.id,
-              sku: item.sku || asin,
-              asin,
-              local_price: newPrice,
-              local_quantity: 1,
-              amazon_sku: amazonSku,
-              amazon_price: null,
-              amazon_quantity: null,
-              product_type: productType,
-              is_new_sku: false,
-            });
-
-          if (insertError) {
-            if (insertError.code === '23505') {
-              // Already in queue — update the price instead
-              await supabase
-                .from('amazon_sync_queue')
-                .update({ local_price: newPrice })
-                .eq('inventory_item_id', item.id)
-                .eq('user_id', user.id);
-              queued++;
-            } else {
-              errors.push(`${item.id}: ${insertError.message}`);
-            }
-          } else {
-            queued++;
-          }
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        errors.push(`${item.id}: ${msg}`);
-      }
+    if (result.error) {
+      const status = result.error.startsWith('No inventory items found') ? 404 : 500;
+      return NextResponse.json({ error: result.error }, { status });
     }
 
     return NextResponse.json({
       data: {
         asin,
         newPrice,
-        inventoryItemsUpdated: inventoryItems.length,
-        queuedForSync: queued,
-        errors,
+        inventoryItemsUpdated: result.itemsUpdated,
+        queuedForSync: result.queued,
+        errors: result.errors,
       },
-      message: `Updated ${inventoryItems.length} items to £${newPrice.toFixed(2)}, ${queued} queued for Amazon sync`,
+      message: `Updated ${result.itemsUpdated} items to £${newPrice.toFixed(2)}, ${result.queued} queued for Amazon sync`,
     });
   } catch (error) {
     console.error('[POST /api/reports/buy-box-gap/reprice] Error:', error);

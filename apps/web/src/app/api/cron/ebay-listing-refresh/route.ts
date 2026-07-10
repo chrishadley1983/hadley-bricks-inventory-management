@@ -22,6 +22,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server';
 import { EbayListingRefreshService } from '@/lib/ebay/ebay-listing-refresh.service';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import { computeTarget } from '@/lib/pricing/engine';
+import { loadMarkdownConfig } from '@/lib/markdown/config';
 import type { MarkdownConfig } from '@/lib/markdown/types';
 import {
   emailService,
@@ -39,9 +40,6 @@ export const maxDuration = 300;
 const JOB_TYPE = 'ebay-listing-refresh';
 const USER_ID = '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 const USER_EMAIL = 'chris@hadleybricks.co.uk';
-
-const CONFIG_COLUMNS =
-  'mode, amazon_step1_days, amazon_step2_days, amazon_step3_days, amazon_step4_days, amazon_step2_undercut_pct, amazon_step3_undercut_pct, ebay_step1_days, ebay_step2_days, ebay_step3_days, ebay_step4_days, ebay_step1_reduction_pct, ebay_step2_reduction_pct, amazon_fee_rate, ebay_fee_rate, overpriced_threshold_pct, low_demand_sales_rank, auction_default_duration_days, auction_max_per_day, auction_enabled, suggest_interval_days, relist_age_days, min_change_pct, report_email';
 
 interface InvData {
   id: string;
@@ -65,40 +63,9 @@ interface EnrichedListing extends EligibleListing {
 async function loadConfig(
   supabase: ReturnType<typeof createServiceRoleClient>
 ): Promise<MarkdownConfig> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any)
-    .from('markdown_config')
-    .select(CONFIG_COLUMNS)
-    .eq('user_id', USER_ID)
-    .single();
-
-  // Fall back to sane defaults if config row is missing.
-  return {
-    mode: data?.mode ?? 'review',
-    amazon_step1_days: data?.amazon_step1_days ?? 60,
-    amazon_step2_days: data?.amazon_step2_days ?? 90,
-    amazon_step3_days: data?.amazon_step3_days ?? 120,
-    amazon_step4_days: data?.amazon_step4_days ?? 150,
-    amazon_step2_undercut_pct: Number(data?.amazon_step2_undercut_pct ?? 5),
-    amazon_step3_undercut_pct: Number(data?.amazon_step3_undercut_pct ?? 10),
-    ebay_step1_days: data?.ebay_step1_days ?? 60,
-    ebay_step2_days: data?.ebay_step2_days ?? 90,
-    ebay_step3_days: data?.ebay_step3_days ?? 120,
-    ebay_step4_days: data?.ebay_step4_days ?? 150,
-    ebay_step1_reduction_pct: Number(data?.ebay_step1_reduction_pct ?? 5),
-    ebay_step2_reduction_pct: Number(data?.ebay_step2_reduction_pct ?? 10),
-    amazon_fee_rate: Number(data?.amazon_fee_rate ?? 0.1836),
-    ebay_fee_rate: Number(data?.ebay_fee_rate ?? 0.1566),
-    overpriced_threshold_pct: Number(data?.overpriced_threshold_pct ?? 10),
-    low_demand_sales_rank: data?.low_demand_sales_rank ?? 100000,
-    auction_default_duration_days: data?.auction_default_duration_days ?? 7,
-    auction_max_per_day: data?.auction_max_per_day ?? 2,
-    auction_enabled: data?.auction_enabled ?? true,
-    suggest_interval_days: data?.suggest_interval_days ?? 30,
-    relist_age_days: data?.relist_age_days ?? 90,
-    min_change_pct: Number(data?.min_change_pct ?? 3),
-    report_email: data?.report_email ?? USER_EMAIL,
-  };
+  // Shared loader (falls back to sane defaults if config row is missing).
+  const { config } = await loadMarkdownConfig(supabase, USER_ID);
+  return { ...config, report_email: config.report_email ?? USER_EMAIL };
 }
 
 /**
@@ -168,8 +135,7 @@ function priceListing(listing: EligibleListing, inv: InvData | undefined, config
     cost,
     condition,
     ageDays: listing.listingAge,
-    marketPrice: null,
-    salesRank: null,
+    amazonMarket: null,
     views: listing.views,
     watchers: listing.watchers,
     config,

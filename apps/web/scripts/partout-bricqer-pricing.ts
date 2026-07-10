@@ -3,12 +3,12 @@
  *
  * Process:
  *   1. Fetch parts list via BL getSubset(SET, <num>) — 1 call.
- *   2. For each unique (partNumber, colourId), look up bricklink_part_price_cache (free).
- *   3. For uncached: fetch UK sold + stock guide pair (2 BL API calls each).
- *   4. Apply Bricqer multiplier:
- *        condition N, STR >= 0.5 → × 1.05
- *        condition N, STR  < 0.5 → × 0.90
- *      List price per part = UK sold avg × multiplier
+ *   2. For each unique (partNumber, colourId), read the unified price cache (free).
+ *   3. For uncached: ensurePriceGuide (4 BL API calls each — all four quadrants,
+ *      captured automatically into the unified cache).
+ *   4. Apply the CANONICAL Bricqer formula (src/lib/bricklink/bricqer-pricing.ts,
+ *      v3 multipliers + £0.0699 floor):
+ *      List price per part = max(0.0699, UK sold avg × multiplier)
  *   5. Sum (list price × qty) across the set.
  *
  * Usage:
@@ -19,6 +19,9 @@ import * as path from 'path';
 import * as dotenv from 'dotenv';
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 import { BrickLinkApiError } from '../src/lib/bricklink/client';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
+import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
 import { createScriptBlContext } from './_bl-client';
 
 const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => { const [k, v] = a.replace(/^--/, '').split('='); acc[k] = v ?? 'true'; return acc; }, {});
@@ -33,14 +36,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const { bl, supabase } = createScriptBlContext('partout-bricqer-pricing-script');
 
-function bricqerMultiplier(condition: 'N' | 'U', sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.05 : 0.90;
-  if (sellThru >= 1) return 1.25;
-  if (sellThru >= 0.75) return 1.15;
-  if (sellThru >= 0.5) return 1.10;
-  if (sellThru >= 0.25) return 0.90;
-  return 0.85;
-}
+// Canonical Bricqer formula (v3 + 7p floor) imported from bricqer-pricing.ts — never re-inline.
 
 interface PartLine {
   itemNo: string;
@@ -77,52 +73,42 @@ interface PartLine {
   }
   console.log(`Subset: ${parts.length} unique part-colour entries, ${parts.reduce((s, p) => s + p.qty, 0)} pieces total`);
 
-  // 2. Cache lookup for all parts.
-  const uniquePartNos = [...new Set(parts.map((p) => p.itemNo))];
+  // 2. Cache lookup for all parts (unified price cache via readPriceGuide).
+  //    getSubset colour ids are BL-scheme. Strict UK — no world fallback; a
+  //    non-UK view is a cache miss.
+  const uniqueRefs = new Map<string, ItemRef>();
+  for (const p of parts) {
+    const k = `${p.itemNo}:${p.colourId}`;
+    if (!uniqueRefs.has(k)) uniqueRefs.set(k, { itemType: p.itemType === 'MINIFIG' ? 'M' : 'P', itemNo: p.itemNo, colourId: p.colourId, scheme: 'bl' });
+  }
   const cacheMap = new Map<string, { ukSoldAvg: number | null; ukSoldQty: number; ukStockQty: number; source: 'cache' | 'cache-none' }>();
-  const now = Date.now();
-  const ttlMs = CACHE_TTL_DAYS * 86400_000;
-  const CHUNK = 500;
-  for (let i = 0; i < uniquePartNos.length; i += CHUNK) {
-    const chunk = uniquePartNos.slice(i, i + CHUNK);
-    const { data } = await supabase.from('bricklink_part_price_cache').select('part_number, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used, fetched_at').in('part_number', chunk);
-    for (const row of (data ?? []) as Array<{ part_number: string; colour_id: number; price_new: string | null; price_used: string | null; stock_available_new: number | null; stock_available_used: number | null; times_sold_new: number | null; times_sold_used: number | null; fetched_at: string }>) {
-      const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
-      if (!fresh) continue;
-      const priceStr = CONDITION === 'N' ? row.price_new : row.price_used;
-      const stock = CONDITION === 'N' ? row.stock_available_new : row.stock_available_used;
-      const sold = CONDITION === 'N' ? row.times_sold_new : row.times_sold_used;
-      if (sold == null || stock == null) continue;
-      const key = `${row.part_number}:${row.colour_id}`;
-      if (priceStr != null) {
-        const price = parseFloat(priceStr);
-        if (price > 0) { cacheMap.set(key, { ukSoldAvg: price, ukSoldQty: sold, ukStockQty: stock, source: 'cache' }); continue; }
-      }
-      if (sold === 0) cacheMap.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stock, source: 'cache-none' });
-    }
+  const views = await readPriceGuide(supabase, [...uniqueRefs.values()], { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false });
+  for (const [k, ref] of uniqueRefs) {
+    const view = views.get(pgKey(ref.itemType, ref.itemNo, ref.colourId));
+    if (!view || view.coverage !== 'uk') continue; // cache miss → fetch below
+    const side = CONDITION === 'N' ? view.new : view.used;
+    if (side.soldAvg !== null && side.soldAvg > 0) cacheMap.set(k, { ukSoldAvg: side.soldAvg, ukSoldQty: side.soldQty, ukStockQty: side.stockQty, source: 'cache' });
+    else if (side.soldQty === 0) cacheMap.set(k, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: side.stockQty, source: 'cache-none' });
   }
   const needFetch = parts.filter((p) => !cacheMap.has(`${p.itemNo}:${p.colourId}`));
   console.log(`Cache hits: ${cacheMap.size} / ${parts.length}.  Need to fetch: ${needFetch.length} via BL API.`);
   if (NO_API && needFetch.length > 0) console.log('--no-api set; uncached parts will be marked as no-data.');
 
-  // 3. Fetch uncached parts.
+  // 3. Fetch uncached parts (ensurePriceGuide: 4 BL calls per part — all four
+  //    quadrants — captured automatically into the unified cache; no write-back).
   let calls = 0;
   if (!NO_API) {
     for (const p of needFetch) {
+      const key = `${p.itemNo}:${p.colourId}`;
+      if (cacheMap.has(key)) continue; // duplicate subset entry already fetched this run
       try {
         await sleep(API_DELAY_MS);
-        const sold = await bl.getPartPriceGuide(p.itemType, p.itemNo, p.colourId, { condition: CONDITION, guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK' });
-        calls++;
-        await sleep(API_DELAY_MS);
-        const stock = await bl.getPartPriceGuide(p.itemType, p.itemNo, p.colourId, { condition: CONDITION, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK' });
-        calls++;
-        const avg = parseFloat(sold.avg_price);
-        const soldQty = sold.total_quantity ?? 0;
-        const stockQty = stock.total_quantity ?? 0;
-        const key = `${p.itemNo}:${p.colourId}`;
-        if (avg > 0) cacheMap.set(key, { ukSoldAvg: avg, ukSoldQty: soldQty, ukStockQty: stockQty, source: 'cache' as const });
-        else cacheMap.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stockQty, source: 'cache-none' as const });
-        if (calls % 20 === 0) console.log(`  fetched ${calls} calls (${Math.ceil(calls / 2)}/${needFetch.length} parts)`);
+        const view = await ensurePriceGuide(bl, supabase, { itemType: p.itemType === 'MINIFIG' ? 'M' : 'P', itemNo: p.itemNo, colourId: p.colourId }, { ttlDays: CACHE_TTL_DAYS });
+        calls += 4;
+        const side = CONDITION === 'N' ? view.new : view.used;
+        if (side.soldAvg !== null && side.soldAvg > 0) cacheMap.set(key, { ukSoldAvg: side.soldAvg, ukSoldQty: side.soldQty, ukStockQty: side.stockQty, source: 'cache' as const });
+        else cacheMap.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: side.stockQty, source: 'cache-none' as const });
+        if (calls % 20 === 0) console.log(`  fetched ${calls} calls (${Math.ceil(calls / 4)}/${needFetch.length} parts)`);
       } catch (err) {
         if (err instanceof BrickLinkApiError && err.code === 429) { console.error('  rate limit, stopping'); break; }
         // Soft-fail: leave key absent.
@@ -137,7 +123,7 @@ interface PartLine {
     if (!entry) return { itemNo: p.itemNo, itemType: p.itemType, colourId: p.colourId, colourName: null, itemName: p.itemName, qty: p.qty, ukSoldAvg: null, ukSoldQty: 0, ukStockQty: 0, sellThru: 0, multiplier: 0, listPricePerUnit: null, lineTotal: null, source: 'none' as const };
     const sellThru = entry.ukStockQty > 0 ? entry.ukSoldQty / entry.ukStockQty : 0;
     const multiplier = bricqerMultiplier(CONDITION, sellThru);
-    const list = entry.ukSoldAvg !== null ? entry.ukSoldAvg * multiplier : null;
+    const list = bricqerListPrice(entry.ukSoldAvg, CONDITION, sellThru);
     return { itemNo: p.itemNo, itemType: p.itemType, colourId: p.colourId, colourName: null, itemName: p.itemName, qty: p.qty, ukSoldAvg: entry.ukSoldAvg, ukSoldQty: entry.ukSoldQty, ukStockQty: entry.ukStockQty, sellThru, multiplier, listPricePerUnit: list, lineTotal: list !== null ? list * p.qty : null, source: entry.source };
   });
 

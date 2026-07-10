@@ -1,0 +1,102 @@
+const $ = id => document.getElementById(id);
+
+chrome.storage.local.get(
+  ['geminiKey', 'keepaKey', 'webhookUrl', 'minDiscount', 'interval', 'maxPosts', 'refreshMinSecs', 'refreshMaxSecs', 'quietStart', 'quietEnd',
+   'defaultMode', 'povMultiple', 'povGreatMultiple', 'amazonMinMargin', 'amazonGreatMargin'],
+  data => {
+    $('geminiKey').value = data.geminiKey || '';
+    $('keepaKey').value = data.keepaKey || '';
+    $('webhookUrl').value = data.webhookUrl || '';
+    if (data.minDiscount) $('minDiscount').value = data.minDiscount;
+    if (data.interval) $('interval').value = data.interval;
+    if (data.maxPosts) $('maxPosts').value = data.maxPosts;
+    if (data.refreshMinSecs) $('refreshMinSecs').value = data.refreshMinSecs;
+    if (data.refreshMaxSecs) $('refreshMaxSecs').value = data.refreshMaxSecs;
+    if (data.quietStart !== undefined && data.quietStart !== null && data.quietStart !== '') $('quietStart').value = data.quietStart;
+    if (data.quietEnd !== undefined && data.quietEnd !== null && data.quietEnd !== '') $('quietEnd').value = data.quietEnd;
+    if (['amazon', 'hybrid', 'used'].includes(data.defaultMode)) $('defaultMode').value = data.defaultMode;
+    if (data.povMultiple) $('povMultiple').value = data.povMultiple;
+    if (data.povGreatMultiple) $('povGreatMultiple').value = data.povGreatMultiple;
+    if (data.amazonMinMargin) $('amazonMinMargin').value = data.amazonMinMargin;
+    if (data.amazonGreatMargin) $('amazonGreatMargin').value = data.amazonGreatMargin;
+  }
+);
+
+$('saveBtn').addEventListener('click', () => {
+  const webhookUrl = $('webhookUrl').value.trim();
+  if (!webhookUrl.startsWith('https://discord.com/api/webhooks/') &&
+      !webhookUrl.startsWith('https://discordapp.com/api/webhooks/')) {
+    showStatus('Invalid Discord webhook URL', 'error');
+    return;
+  }
+
+  const refreshMin = parseInt($('refreshMinSecs').value) || 60;
+  const refreshMax = parseInt($('refreshMaxSecs').value) || 240;
+  if (refreshMin >= refreshMax) {
+    showStatus('Refresh Min must be less than Refresh Max', 'error');
+    return;
+  }
+
+  const quietStartVal = $('quietStart').value.trim();
+  const quietEndVal = $('quietEnd').value.trim();
+  const quietStart = quietStartVal !== '' ? parseInt(quietStartVal) : '';
+  const quietEnd = quietEndVal !== '' ? parseInt(quietEndVal) : '';
+
+  if ((quietStart !== '' && quietEnd === '') || (quietStart === '' && quietEnd !== '')) {
+    showStatus('Set both Quiet Start and End, or leave both blank', 'error');
+    return;
+  }
+
+  const povMultiple = parseFloat($('povMultiple').value) || 3;
+  const povGreatMultiple = parseFloat($('povGreatMultiple').value) || 4;
+  if (povGreatMultiple < povMultiple) {
+    showStatus('POV Great Multiple must be ≥ Buy Multiple', 'error');
+    return;
+  }
+
+  chrome.storage.local.set({
+    geminiKey: $('geminiKey').value.trim(),
+    keepaKey: $('keepaKey').value.trim(),
+    webhookUrl,
+    minDiscount: parseInt($('minDiscount').value) || 0,
+    interval: parseInt($('interval').value) || 45,
+    maxPosts: parseInt($('maxPosts').value) || 5,
+    refreshMinSecs: refreshMin,
+    refreshMaxSecs: refreshMax,
+    quietStart,
+    quietEnd,
+    defaultMode: $('defaultMode').value,
+    povMultiple,
+    povGreatMultiple,
+    amazonMinMargin: parseFloat($('amazonMinMargin').value) || 20,
+    amazonGreatMargin: parseFloat($('amazonGreatMargin').value) || 25
+  }, () => showStatus('Settings saved ✓', 'success'));
+});
+
+$('testBtn').addEventListener('click', async () => {
+  const webhookUrl = $('webhookUrl').value.trim();
+  if (!webhookUrl) { showStatus('Enter a webhook URL first', 'error'); return; }
+  try {
+    const res = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        embeds: [{
+          title: '👗 Vinted Sniper — Test',
+          description: 'If you see this, notifications are working!',
+          color: 47252,
+          timestamp: new Date().toISOString()
+        }]
+      })
+    });
+    if (res.ok || res.status === 204) showStatus('Test sent! Check Discord.', 'success');
+    else showStatus(`Discord returned ${res.status}`, 'error');
+  } catch (e) { showStatus('Failed: ' + e.message, 'error'); }
+});
+
+function showStatus(msg, type) {
+  const el = $('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+  setTimeout(() => el.textContent = '', 4000);
+}

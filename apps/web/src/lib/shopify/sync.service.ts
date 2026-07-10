@@ -11,6 +11,7 @@ import {
   getOrGenerateAIDescription,
 } from './descriptions';
 import { resolveImages, fetchEbayListing } from './images';
+import { discordService } from '@/lib/notifications';
 import type {
   ShopifyConfig,
   ShopifyProductPayload,
@@ -401,6 +402,17 @@ export class ShopifySyncService {
       return { success: false, error: 'Item already has a Shopify product' };
     }
 
+    // Don't publish a £0 product — hold until it has a real listing_value. Both
+    // discounted sets and no-discount minifigs derive their price from listing_value,
+    // so a null/0 value would otherwise create a free, purchasable Shopify product.
+    if (!item.listing_value || item.listing_value <= 0) {
+      return {
+        success: false,
+        skipped: true,
+        error: 'Held: item has no listing_value (would publish £0)',
+      };
+    }
+
     // Get Brickset data for rich descriptions
     let bricksetData = null;
     if (item.set_number && item.set_number !== 'NA') {
@@ -622,6 +634,15 @@ export class ShopifySyncService {
 
     if (itemError || !item) {
       return { success: false, error: `Item not found: ${representativeId}` };
+    }
+
+    // Don't publish a £0 product — hold until priced (see createProduct).
+    if (!item.listing_value || item.listing_value <= 0) {
+      return {
+        success: false,
+        skipped: true,
+        error: 'Held: representative item has no listing_value (would publish £0)',
+      };
     }
 
     // Check none already synced (only count non-error entries with a real product ID)
@@ -1001,17 +1022,24 @@ export class ShopifySyncService {
     if (newPrice === undefined) {
       const { data: item } = await this.supabase
         .from('inventory_items')
-        .select('listing_value')
+        .select('listing_value, set_number, item_name')
         .eq('id', inventoryItemId)
         .single();
 
-      if (item?.listing_value) {
-        const priceResult = calculateShopifyPrice(
-          item.listing_value,
-          config.default_discount_pct ?? 10
-        );
-        newPrice = priceResult.price;
-        newCompareAt = priceResult.compare_at_price;
+      if (item?.listing_value && item.listing_value > 0) {
+        // Minifigures use the exact listing value (no direct-sale discount), matching
+        // createProduct — otherwise the recompute would wrongly discount them.
+        if (isMinifigure(item)) {
+          newPrice = item.listing_value;
+          newCompareAt = null;
+        } else {
+          const priceResult = calculateShopifyPrice(
+            item.listing_value,
+            config.default_discount_pct ?? 10
+          );
+          newPrice = priceResult.price;
+          newCompareAt = priceResult.compare_at_price;
+        }
       }
     }
 
@@ -1043,6 +1071,316 @@ export class ShopifySyncService {
     }
   }
 
+  /**
+   * Propagate listing_value changes (markdowns, corrections) to Shopify. The create
+   * flow is one-shot, so without this Shopify prices freeze at creation while the
+   * markdown engine keeps moving listing_value. Reprices any active product whose live
+   * Shopify price has drifted from the price its current listing_value implies. Never
+   * reprices toward £0 — price-less items are handled by the create-time hold.
+   */
+  async reconcilePrices(limit = 250): Promise<{
+    checked: number;
+    updated: number;
+    failed: number;
+    errors: Array<{ item_id: string; error: string }>;
+  }> {
+    const config = this.getConfig();
+    const discount = config.default_discount_pct ?? 10;
+    const out = {
+      checked: 0,
+      updated: 0,
+      failed: 0,
+      errors: [] as Array<{ item_id: string; error: string }>,
+    };
+
+    let from = 0;
+    const page = 1000;
+    for (;;) {
+      const { data: rows, error } = await this.supabase
+        .from('shopify_products')
+        .select(
+          'inventory_item_id, shopify_price, inventory_items!inner(listing_value, set_number, item_name, status)'
+        )
+        .eq('user_id', this.userId)
+        .eq('shopify_status', 'active')
+        .eq('inventory_items.status', 'LISTED')
+        .range(from, from + page - 1);
+
+      if (error || !rows || rows.length === 0) break;
+
+      for (const row of rows) {
+        // inventory_items is a to-one relation (object), but generated types widen it.
+        const inv = (row as unknown as {
+          inventory_items: { listing_value: number | null; set_number: string | null; item_name: string | null };
+        }).inventory_items;
+        const lv = inv?.listing_value ?? 0;
+        if (lv <= 0) continue; // never reprice toward £0
+
+        out.checked++;
+        const expected = isMinifigure(inv)
+          ? lv
+          : calculateShopifyPrice(lv, discount).price;
+        const current = Number(row.shopify_price) || 0;
+        if (Math.abs(expected - current) < 0.01) continue;
+
+        if (out.updated >= limit) return out;
+        const res = await this.updatePrice(row.inventory_item_id as string);
+        if (res.success) {
+          out.updated++;
+        } else {
+          out.failed++;
+          out.errors.push({
+            item_id: row.inventory_item_id as string,
+            error: res.error || 'updatePrice failed',
+          });
+        }
+      }
+
+      if (rows.length < page) break;
+      from += page;
+    }
+    return out;
+  }
+
+  /**
+   * Reconcile IMAGES for eBay-listed products stuck on generic art.
+   *
+   * resolveImages() runs once at create. An item that became eBay-listed AFTER
+   * its Shopify product was created — or whose eBay photo fetch transiently
+   * failed at create — gets frozen on Brickset box art instead of the real eBay
+   * item photos (the same create-only gap as prices). For a used-goods store
+   * that's a trust/conversion problem: a buyer must see the ACTUAL item, not
+   * stock box art. This sweep re-resolves eBay-listed products currently on a
+   * non-eBay image source and, when fresh eBay photos are available, replaces
+   * the product gallery (REST product PUT with `images` swaps the whole set).
+   *
+   * Minifigures are intentionally skipped — resolveImages routes eBay minifigs
+   * to BrickLink catalog art by design (a clean catalog image beats a phone
+   * snap), so re-resolving them would only churn back to the same source.
+   * Never downgrades: only acts when it genuinely obtains eBay photos.
+   */
+  async reconcileImages(limit = 200): Promise<{
+    checked: number;
+    updated: number;
+    skipped: number;
+    failed: number;
+    errors: Array<{ item_id: string; error: string }>;
+  }> {
+    const client = await this.getClient();
+    const out = {
+      checked: 0,
+      updated: 0,
+      skipped: 0,
+      failed: 0,
+      errors: [] as Array<{ item_id: string; error: string }>,
+    };
+
+    // Gather all candidates first (read-only) — the update mutates image_source,
+    // which is part of the filter, so offset paging while writing would skip rows.
+    type Cand = {
+      shopify_product_id: string | null;
+      shopify_title: string | null;
+      inventory_items: {
+        id: string;
+        set_number: string | null;
+        item_name: string | null;
+        ebay_listing_id: string | null;
+        listing_platform: string | null;
+      };
+    };
+    const candidates: Cand[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data: rows, error } = await this.supabase
+        .from('shopify_products')
+        .select(
+          'shopify_product_id, shopify_title, image_source, inventory_items!inner(id, set_number, item_name, ebay_listing_id, listing_platform, status)'
+        )
+        .eq('user_id', this.userId)
+        .eq('shopify_status', 'active')
+        .eq('inventory_items.status', 'LISTED')
+        .eq('inventory_items.listing_platform', 'ebay')
+        .neq('image_source', 'ebay')
+        .not('inventory_items.ebay_listing_id', 'is', null)
+        .range(from, from + 999);
+      if (error || !rows || rows.length === 0) break;
+      candidates.push(...(rows as unknown as Cand[]));
+      if (rows.length < 1000) break;
+    }
+
+    for (const row of candidates) {
+      const inv = row.inventory_items;
+      if (!inv?.ebay_listing_id || !row.shopify_product_id) continue;
+      // Minifigs are routed to BrickLink catalog art by design — skip.
+      if (isMinifigure(inv)) continue;
+      out.checked++;
+      if (out.updated >= limit) break;
+
+      // Fetch fresh eBay photos and re-resolve.
+      const ebayListing = await fetchEbayListing(inv.ebay_listing_id);
+      const imageResult = await resolveImages(
+        this.supabase,
+        {
+          id: inv.id,
+          set_number: inv.set_number,
+          item_name: inv.item_name,
+          ebay_listing_id: inv.ebay_listing_id,
+          listing_platform: inv.listing_platform,
+        },
+        ebayListing
+      );
+
+      // Only act when we genuinely obtained eBay photos — never downgrade to box art.
+      if (imageResult.source !== 'ebay' || imageResult.urls.length === 0) {
+        out.skipped++;
+        continue;
+      }
+
+      try {
+        const imagesWithAlt = addImageAltText(
+          imageResult.images,
+          row.shopify_title ?? inv.item_name ?? 'LEGO',
+          inv.set_number
+        );
+        await client.updateProduct(String(row.shopify_product_id), { images: imagesWithAlt });
+        await this.supabase
+          .from('shopify_products')
+          .update({
+            image_source: imageResult.source,
+            image_urls: imageResult.urls,
+            last_synced_at: new Date().toISOString(),
+            sync_status: 'synced',
+          })
+          .eq('inventory_item_id', inv.id);
+        out.updated++;
+      } catch (err) {
+        out.failed++;
+        out.errors.push({ item_id: inv.id, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Reconcile ARCHIVE drift: products whose every backing inventory item is non-LISTED
+   * (all sold/removed) but are STILL ACTIVE on live Shopify — re-archive them and alert.
+   *
+   * Closes the gap behind the rare "sold item still buyable" case: archiveShopifyOnSold
+   * and the batchSync safety-net both trust the cached shopify_products.shopify_status,
+   * so when a live Shopify archive silently fails (its errors are swallowed), the row is
+   * marked 'archived' while the storefront product stays active — and no notification
+   * fires (the existing Discord alert only fires on a SUCCESSFUL archive). This sweep
+   * re-derives the truth from LIVE Shopify and surfaces the mismatch.
+   */
+  async reconcileArchiveDrift(): Promise<{
+    checked: number;
+    drifted: number;
+    archived: number;
+    failed: number;
+    errors: Array<{ productId: string; error: string }>;
+  }> {
+    const client = await this.getClient();
+    const out = {
+      checked: 0,
+      drifted: 0,
+      archived: 0,
+      failed: 0,
+      errors: [] as Array<{ productId: string; error: string }>,
+    };
+
+    // 1. All mappings for this user (paginate >1000).
+    const maps: Array<{ shopify_product_id: string | null; inventory_item_id: string | null }> = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await this.supabase
+        .from('shopify_products')
+        .select('shopify_product_id, inventory_item_id')
+        .eq('user_id', this.userId)
+        .range(from, from + 999);
+      if (!data || data.length === 0) break;
+      maps.push(...data);
+      if (data.length < 1000) break;
+    }
+
+    // 2. Inventory status/name for every mapped item.
+    const invIds = [...new Set(maps.map((m) => m.inventory_item_id).filter(Boolean))] as string[];
+    const inv = new Map<string, { status: string | null; set_number: string | null; item_name: string | null }>();
+    for (let i = 0; i < invIds.length; i += 300) {
+      const { data } = await this.supabase
+        .from('inventory_items')
+        .select('id, status, set_number, item_name')
+        .in('id', invIds.slice(i, i + 300));
+      for (const r of data ?? []) inv.set(r.id, r);
+    }
+
+    // 3. Candidate products = no backing item is LISTED (every unit sold/removed).
+    const byProduct = new Map<string, { anyListed: boolean; sample: { set_number: string | null; item_name: string | null } | null }>();
+    for (const m of maps) {
+      if (!m.shopify_product_id) continue;
+      const r = m.inventory_item_id ? inv.get(m.inventory_item_id) : undefined;
+      const g = byProduct.get(m.shopify_product_id) ?? { anyListed: false, sample: null };
+      if (r) {
+        if ((r.status ?? '') === 'LISTED') g.anyListed = true;
+        if (!g.sample) g.sample = { set_number: r.set_number, item_name: r.item_name };
+      }
+      byProduct.set(m.shopify_product_id, g);
+    }
+    const candidates = [...byProduct.entries()].filter(([, g]) => !g.anyListed).map(([pid, g]) => ({ pid, sample: g.sample }));
+
+    // 4. Live-check candidates in batches; status=ACTIVE means it drifted (table says gone).
+    const drifted: Array<{ pid: string; sample: { set_number: string | null; item_name: string | null } | null }> = [];
+    for (let i = 0; i < candidates.length; i += 40) {
+      const batch = candidates.slice(i, i + 40);
+      const gids = batch.map((c) => `"gid://shopify/Product/${c.pid}"`).join(',');
+      let nodes: Array<{ id: string; status: string } | null> = [];
+      try {
+        const d = await client.graphql<{ nodes: Array<{ id: string; status: string } | null> }>(
+          `query{ nodes(ids:[${gids}]){ ... on Product{ id status } } }`
+        );
+        nodes = d.nodes ?? [];
+      } catch {
+        continue; // skip this batch on read error; next sweep retries
+      }
+      const liveStatus = new Map<string, string>();
+      for (const n of nodes) if (n) liveStatus.set(n.id.split('/').pop() as string, n.status);
+      for (const c of batch) {
+        out.checked++;
+        if (liveStatus.get(c.pid) === 'ACTIVE') drifted.push(c);
+      }
+    }
+    out.drifted = drifted.length;
+
+    // 5. Re-archive each drifted product.
+    for (const c of drifted) {
+      try {
+        await client.archiveProduct(c.pid);
+        await this.supabase
+          .from('shopify_products')
+          .update({ shopify_status: 'archived', sync_status: 'synced', last_synced_at: new Date().toISOString() })
+          .eq('shopify_product_id', c.pid);
+        out.archived++;
+      } catch (err) {
+        out.failed++;
+        out.errors.push({ productId: c.pid, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    // 6. Alert on drift — the notification archiveShopifyOnSold never sent on silent failure.
+    if (out.drifted > 0) {
+      const names = drifted
+        .slice(0, 5)
+        .map((c) => `${c.sample?.item_name ?? '?'} (${c.sample?.set_number ?? '?'})`)
+        .join(', ');
+      discordService
+        .sendSyncStatus({
+          title: '⚠️ Shopify archive drift reconciled',
+          message: `${out.drifted} sold product(s) were still ACTIVE on Shopify despite being cached as archived. Re-archived ${out.archived}${out.failed ? `, ${out.failed} failed` : ''}. e.g. ${names}.`,
+          success: out.failed === 0,
+        })
+        .catch(() => {});
+    }
+
+    return out;
+  }
+
   // ── BATCH SYNC ────────────────────────────────────────────────
 
   /**
@@ -1057,13 +1395,18 @@ export class ShopifySyncService {
    * marks the mapping active. Skips products that already have an active mapping.
    */
   private async reactivateRelistedProducts(summary: BatchSyncSummary): Promise<void> {
-    const { data: rows } = await this.supabase
-      .from('shopify_products')
-      .select('shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)')
-      .eq('user_id', this.userId)
-      .eq('shopify_status', 'archived')
-      .eq('inventory_items.status', 'LISTED');
-    if (!rows || rows.length === 0) return;
+    const rows = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'shopify_product_id, shopify_inventory_item_id, inventory_items!inner(status)',
+      eq: {
+        user_id: this.userId,
+        shopify_status: 'archived',
+        'inventory_items.status': 'LISTED',
+      },
+    })) as unknown as Array<{
+      shopify_product_id: string | null;
+      shopify_inventory_item_id: string | null;
+    }>;
+    if (rows.length === 0) return;
 
     const byProduct = new Map<string, string | null>();
     for (const r of rows as Array<{ shopify_product_id: string | null; shopify_inventory_item_id: string | null }>) {
@@ -1144,15 +1487,20 @@ export class ShopifySyncService {
 
     await this.getClient();
 
-    // 1. Archive/decrement products for items no longer LISTED
-    const { data: toArchive } = await this.supabase
-      .from('shopify_products')
-      .select(
-        'inventory_item_id, shopify_product_id, shopify_status, shopify_inventory_item_id, inventory_items!inner(status)'
-      )
-      .eq('user_id', this.userId)
-      .neq('shopify_status', 'archived')
-      .neq('inventory_items.status', 'LISTED');
+    // 1. Archive/decrement products for items no longer LISTED (paginate >1000 —
+    // this is the sold→archive safety net; a truncated read would strand sold
+    // items live on the storefront)
+    const toArchive = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select:
+        'inventory_item_id, shopify_product_id, shopify_status, shopify_inventory_item_id, inventory_items!inner(status)',
+      eq: { user_id: this.userId },
+      neq: { shopify_status: 'archived', 'inventory_items.status': 'LISTED' },
+    })) as unknown as Array<{
+      inventory_item_id: string;
+      shopify_product_id: string;
+      shopify_status: string | null;
+      shopify_inventory_item_id: string | null;
+    }>;
 
     if (toArchive) {
       for (const item of toArchive) {
@@ -1235,13 +1583,16 @@ export class ShopifySyncService {
     // Shopify forever.
     await this.reactivateRelistedProducts(summary);
 
-    // 2. Create products for LISTED items not yet on Shopify (with grouping)
-    const { data: existingMappings } = await this.supabase
-      .from('shopify_products')
-      .select('inventory_item_id')
-      .eq('user_id', this.userId);
+    // 2. Create products for LISTED items not yet on Shopify (with grouping).
+    // MUST paginate: an unpaginated read capped at 1,000 rows made already-synced
+    // items look unsynced once the table grew past 1,000 — every batch run then
+    // re-processed them (duplicate-create failures + inflated group quantities).
+    const existingMappings = (await fetchAllRecords(this.supabase, 'shopify_products', {
+      select: 'inventory_item_id',
+      eq: { user_id: this.userId },
+    })) as unknown as Array<{ inventory_item_id: string | null }>;
 
-    const existingIds = new Set(existingMappings?.map((m) => m.inventory_item_id) || []);
+    const existingIds = new Set(existingMappings.map((m) => m.inventory_item_id));
 
     // Fetch unsynced LISTED items with grouping fields (paginate for >1000)
     const unsyncedItems: Array<{
@@ -1323,17 +1674,26 @@ export class ShopifySyncService {
       // lookup would wrongly merge distinct minifigs into one product.
       let existingProductId: string | undefined;
       if (repHasRealSet) {
-        const { data: syncedSiblings } = await this.supabase
+        // .eq(col, null) matches nothing in PostgREST — a null condition or
+        // listing_value needs IS NULL, else the item falls through to create and
+        // hits the duplicate guard on every run.
+        let siblingQuery = this.supabase
           .from('shopify_products')
           .select('shopify_product_id, inventory_items!inner(set_number, condition, listing_value)')
           .eq('user_id', this.userId)
           .eq('sync_status', 'synced')
           .neq('shopify_product_id', '')
-          .eq('inventory_items.set_number', rep.set_number!)
-          .eq('inventory_items.condition', rep.condition!)
-          .eq('inventory_items.listing_value', rep.listing_value!)
-          .limit(1);
-        existingProductId = syncedSiblings?.[0]?.shopify_product_id;
+          .eq('inventory_items.set_number', rep.set_number!);
+        siblingQuery =
+          rep.condition == null
+            ? siblingQuery.is('inventory_items.condition', null)
+            : siblingQuery.eq('inventory_items.condition', rep.condition);
+        siblingQuery =
+          rep.listing_value == null
+            ? siblingQuery.is('inventory_items.listing_value', null)
+            : siblingQuery.eq('inventory_items.listing_value', rep.listing_value);
+        const { data: syncedSiblings } = await siblingQuery.limit(1);
+        existingProductId = syncedSiblings?.[0]?.shopify_product_id ?? undefined;
       }
 
       let result: SyncResult;
@@ -1360,13 +1720,44 @@ export class ShopifySyncService {
 
       summary.items_processed += ids.length;
 
-      if (!result.success) {
+      if (!result.success && !result.skipped) {
         summary.items_failed += ids.length;
         summary.errors.push({
           item_id: ids[0],
           error: result.error || `Failed to sync group ${key}`,
         });
       }
+      // result.skipped (e.g. no price yet) is an intentional hold, not a failure —
+      // the item stays unsynced and will be picked up once it has a listing_value.
+    }
+
+    // Propagate listing_value changes (markdowns, corrections) to existing active
+    // products. Without this the create flow is one-shot and Shopify prices freeze
+    // at creation while the markdown engine keeps moving the underlying price.
+    try {
+      const repriced = await this.reconcilePrices();
+      summary.items_updated += repriced.updated;
+      summary.items_failed += repriced.failed;
+      for (const e of repriced.errors) summary.errors.push(e);
+    } catch (err) {
+      summary.errors.push({
+        item_id: 'reconcilePrices',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // Backfill real eBay photos onto eBay-listed products stuck on generic box
+    // art (same create-only gap as prices — images are resolved once at create).
+    try {
+      const reimaged = await this.reconcileImages();
+      summary.items_updated += reimaged.updated;
+      summary.items_failed += reimaged.failed;
+      for (const e of reimaged.errors) summary.errors.push(e);
+    } catch (err) {
+      summary.errors.push({
+        item_id: 'reconcileImages',
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
 
     summary.duration_ms = Date.now() - startTime;
@@ -1377,6 +1768,8 @@ export class ShopifySyncService {
       sync_type: 'batch',
       items_processed: summary.items_processed,
       items_created: summary.items_created,
+      items_added_to_group: summary.items_added_to_group,
+      items_reactivated: summary.items_reactivated ?? 0,
       items_updated: summary.items_updated,
       items_archived: summary.items_archived,
       items_failed: summary.items_failed,
@@ -1406,6 +1799,16 @@ export class ShopifySyncService {
       duration_ms: 0,
     };
 
+    // Requeue jobs stranded in 'processing' by a crashed run. scheduled_for is
+    // touched when a job is picked up, so processing + scheduled_for older than
+    // 30 min means the run died mid-job (functions time out long before that).
+    await this.supabase
+      .from('shopify_sync_queue')
+      .update({ status: 'pending' })
+      .eq('user_id', this.userId)
+      .eq('status', 'processing')
+      .lt('scheduled_for', new Date(Date.now() - 30 * 60_000).toISOString());
+
     // Fetch pending jobs ordered by priority (1 = highest)
     const { data: jobs } = await this.supabase
       .from('shopify_sync_queue')
@@ -1423,10 +1826,15 @@ export class ShopifySyncService {
     }
 
     for (const job of jobs) {
-      // Mark as processing
+      // Mark as processing — touch scheduled_for so the stale-job requeue above
+      // can tell a live run from a crashed one.
       await this.supabase
         .from('shopify_sync_queue')
-        .update({ status: 'processing', attempts: job.attempts + 1 })
+        .update({
+          status: 'processing',
+          attempts: job.attempts + 1,
+          scheduled_for: new Date().toISOString(),
+        })
         .eq('id', job.id);
 
       summary.items_processed++;
@@ -1501,7 +1909,7 @@ export class ShopifySyncService {
    * Call this when an item status changes (e.g. markItemAsSold).
    */
   async enqueueJob(
-    action: 'create' | 'archive' | 'update_price' | 'delete',
+    action: 'create' | 'archive' | 'update_price',
     inventoryItemId: string,
     priority = 5,
     payload?: Record<string, unknown>
@@ -1526,14 +1934,24 @@ export class ShopifySyncService {
     pending_queue: number;
     last_sync: string | null;
   }> {
-    const [products, queue, lastLog] = await Promise.all([
-      this.supabase
+    // Count server-side — fetching rows and counting client-side truncates at the
+    // Supabase 1,000-row cap (the dashboard showed exactly 1000 at 1,225 rows).
+    const countMappings = (filter?: { column: string; value: string }) => {
+      let q = this.supabase
         .from('shopify_products')
-        .select('shopify_status, sync_status', { count: 'exact' })
-        .eq('user_id', this.userId),
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', this.userId);
+      if (filter) q = q.eq(filter.column, filter.value);
+      return q;
+    };
+    const [total, active, archived, errors, queue, lastLog] = await Promise.all([
+      countMappings(),
+      countMappings({ column: 'shopify_status', value: 'active' }),
+      countMappings({ column: 'shopify_status', value: 'archived' }),
+      countMappings({ column: 'sync_status', value: 'error' }),
       this.supabase
         .from('shopify_sync_queue')
-        .select('id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
         .eq('user_id', this.userId)
         .eq('status', 'pending'),
       this.supabase
@@ -1542,16 +1960,15 @@ export class ShopifySyncService {
         .eq('user_id', this.userId)
         .order('completed_at', { ascending: false })
         .limit(1)
-        .single(),
+        .maybeSingle(),
     ]);
 
-    const items = products.data || [];
     return {
-      total: items.length,
-      active: items.filter((i) => i.shopify_status === 'active').length,
-      archived: items.filter((i) => i.shopify_status === 'archived').length,
-      errors: items.filter((i) => i.sync_status === 'error').length,
-      pending_queue: queue.count || 0,
+      total: total.count ?? 0,
+      active: active.count ?? 0,
+      archived: archived.count ?? 0,
+      errors: errors.count ?? 0,
+      pending_queue: queue.count ?? 0,
       last_sync: lastLog.data?.completed_at || null,
     };
   }

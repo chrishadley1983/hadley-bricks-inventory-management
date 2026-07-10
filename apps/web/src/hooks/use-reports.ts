@@ -21,6 +21,20 @@ interface DateRangeParams {
   preset?: DateRangePreset;
 }
 
+/**
+ * Serialize a Date to the LOCAL calendar date (yyyy-MM-dd). Never use
+ * toISOString() here: report dates are built at local midnight, and during
+ * BST toISOString() rolls them back to the previous UTC day — which made
+ * "Today" query yesterday and "this month" pull in the whole previous month
+ * (the P&L service expands date strings to month buckets).
+ */
+function toLocalDateString(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 async function fetchReport<T>(endpoint: string, params?: Record<string, string>): Promise<T> {
   const url = new URL(`/api/reports/${endpoint}`, window.location.origin);
   if (params) {
@@ -48,8 +62,8 @@ export function useProfitLossReport(dateRange?: DateRangeParams, compareWithPrev
   };
 
   if (dateRange) {
-    params.startDate = dateRange.startDate.toISOString().split('T')[0];
-    params.endDate = dateRange.endDate.toISOString().split('T')[0];
+    params.startDate = toLocalDateString(dateRange.startDate);
+    params.endDate = toLocalDateString(dateRange.endDate);
     if (dateRange.preset) {
       params.preset = dateRange.preset;
     }
@@ -106,8 +120,8 @@ export function usePlatformPerformanceReport(dateRange?: DateRangeParams) {
     queryFn: () =>
       fetchReport<PlatformPerformanceReport>('platform-performance', {
         ...(dateRange && {
-          startDate: dateRange.startDate.toISOString().split('T')[0],
-          endDate: dateRange.endDate.toISOString().split('T')[0],
+          startDate: toLocalDateString(dateRange.startDate),
+          endDate: toLocalDateString(dateRange.endDate),
           preset: dateRange.preset,
         }),
       }),
@@ -124,8 +138,8 @@ export function usePurchaseAnalysisReport(dateRange?: DateRangeParams) {
     queryFn: () =>
       fetchReport<PurchaseAnalysisReport>('purchase-analysis', {
         ...(dateRange && {
-          startDate: dateRange.startDate.toISOString().split('T')[0],
-          endDate: dateRange.endDate.toISOString().split('T')[0],
+          startDate: toLocalDateString(dateRange.startDate),
+          endDate: toLocalDateString(dateRange.endDate),
           preset: dateRange.preset,
         }),
       }),
@@ -189,8 +203,8 @@ export function useExportReport() {
       url.searchParams.set('format', format);
 
       if (dateRange) {
-        url.searchParams.set('startDate', dateRange.startDate.toISOString().split('T')[0]);
-        url.searchParams.set('endDate', dateRange.endDate.toISOString().split('T')[0]);
+        url.searchParams.set('startDate', toLocalDateString(dateRange.startDate));
+        url.searchParams.set('endDate', toLocalDateString(dateRange.endDate));
         if (dateRange.preset) {
           url.searchParams.set('preset', dateRange.preset);
         }
@@ -237,8 +251,8 @@ export function useDailyActivityReport(
     queryFn: () =>
       fetchReport<DailyActivityReport>('daily-activity', {
         ...(dateRange && {
-          startDate: dateRange.startDate.toISOString().split('T')[0],
-          endDate: dateRange.endDate.toISOString().split('T')[0],
+          startDate: toLocalDateString(dateRange.startDate),
+          endDate: toLocalDateString(dateRange.endDate),
           preset: dateRange.preset,
         }),
         granularity,
@@ -257,8 +271,8 @@ export function useStoreStatuses(dateRange?: DateRangeParams) {
       if (!dateRange) return [];
 
       const url = new URL('/api/store-status', window.location.origin);
-      url.searchParams.set('startDate', dateRange.startDate.toISOString().split('T')[0]);
-      url.searchParams.set('endDate', dateRange.endDate.toISOString().split('T')[0]);
+      url.searchParams.set('startDate', toLocalDateString(dateRange.startDate));
+      url.searchParams.set('endDate', toLocalDateString(dateRange.endDate));
 
       const response = await fetch(url.toString());
       if (!response.ok) {

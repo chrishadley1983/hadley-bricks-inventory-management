@@ -33,7 +33,8 @@
     "store-quality:refresh": "tsx scripts/refresh-bricqer-snapshot.ts",
     "store-quality:enrich": "tsx scripts/enrich-store-quality.ts",
     "source-demand-gaps": "tsx scripts/source-demand-gaps.ts",
-    "evaluate-job-lot": "tsx scripts/evaluate-job-lot.ts"
+    "evaluate-job-lot": "tsx scripts/evaluate-job-lot.ts",
+    "typecheck:scripts": "tsc -p tsconfig.scripts.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

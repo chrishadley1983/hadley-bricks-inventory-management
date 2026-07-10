@@ -42,33 +42,43 @@ export async function POST() {
 
     for (const opp of result.opportunities) {
       try {
-        const maxBid = calculateMaxBidForMargin(
-          opp.auction.postageGbp,
-          opp.amazonData.amazonPrice,
-          config.minMarginPercent
-        );
+        const maxBid = opp.amazonData
+          ? calculateMaxBidForMargin(
+              opp.auction.postageGbp,
+              opp.amazonData.amazonPrice,
+              config.minMarginPercent
+            )
+          : null;
 
         const discordResult = await discordService.sendEbayAuctionAlert({
           setNumber: opp.setIdentification.setNumber,
-          setName: opp.amazonData.setName,
+          setName: opp.amazonData?.setName ?? opp.pov?.setName ?? null,
           ebayTitle: opp.auction.title,
           currentBid: opp.auction.currentBidGbp,
           postage: opp.auction.postageGbp,
           totalCost: opp.auction.totalCostGbp,
           bidCount: opp.auction.bidCount,
           minutesRemaining: opp.auction.minutesRemaining,
-          amazonPrice: opp.amazonData.amazonPrice,
-          amazon90dAvg: opp.amazonData.was90dAvg,
-          amazonAsin: opp.amazonData.asin,
-          salesRank: opp.amazonData.salesRank,
-          profit: opp.profitBreakdown.totalProfit,
-          marginPercent: opp.profitBreakdown.profitMarginPercent,
-          roiPercent: opp.profitBreakdown.roiPercent,
+          amazonPrice: opp.amazonData?.amazonPrice ?? null,
+          amazon90dAvg: opp.amazonData?.was90dAvg ?? null,
+          amazonAsin: opp.amazonData?.asin ?? null,
+          salesRank: opp.amazonData?.salesRank ?? null,
+          profit: opp.profitBreakdown?.totalProfit ?? null,
+          marginPercent: opp.profitBreakdown?.profitMarginPercent ?? null,
+          roiPercent: opp.profitBreakdown?.roiPercent ?? null,
           alertTier: opp.alertTier,
           ebayUrl: opp.auction.itemUrl,
           imageUrl: opp.auction.imageUrl,
-          ukRrp: opp.amazonData.ukRrp,
+          ukRrp: opp.amazonData?.ukRrp ?? opp.pov?.rrpGbp ?? null,
           maxBid,
+          conditionMode: opp.conditionMode,
+          povSoldGbp: opp.pov?.soldAvgGbp ?? null,
+          povForSaleGbp: opp.pov?.forSaleAvgGbp ?? null,
+          povMultiple: opp.povMultiple,
+          povLots: opp.pov?.lots ?? null,
+          signals: opp.signals,
+          flags: opp.flags,
+          altNewPovSoldGbp: opp.altNewPov?.soldAvgGbp ?? null,
         });
 
         await scanner.saveAlert(user.id, opp, discordResult.success);

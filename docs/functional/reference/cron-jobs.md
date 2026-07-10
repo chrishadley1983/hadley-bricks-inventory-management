@@ -14,7 +14,7 @@ All cron routes require `Authorization: Bearer {CRON_SECRET}` header. Vercel Clo
 |----------|--------|----------|---------|
 | `/api/cron/amazon-pricing` | POST | Every 30 min | Keepa API pricing sync. ~57 ASINs per call, budget-spread strategy prioritising in-stock items |
 | `/api/cron/bricklink-pricing` | POST | Daily 2:30am UTC | BrickLink pricing sync. Cursor-based, up to 1,000 items/day |
-| `/api/cron/ebay-pricing` | POST | Daily 2am UTC | eBay pricing sync. Cursor-based, up to 1,000 items/day |
+| `/api/cron/ebay-pricing` | POST | Daily 03:00 **local** (off Vercel) | eBay pricing sync. Cursor-based, up to 1,000 items/day. Runs on the local NSSM server via `scripts/run-ebay-pricing.ps1` (Windows task `HadleyBricks-Ebay-Pricing-Local`); GCP `ebay-pricing-sync` is **PAUSED** to keep this batch off Vercel Fluid CPU |
 | `/api/cron/ebay-fp-cleanup` | POST | Daily 4am UTC | eBay false-positive detection. 22 weighted signals (threshold 50) |
 | `/api/cron/spapi-buybox-overlay` | POST | Daily 6am UTC | SP-API buy box data for ~232 in-stock ASINs. Resumable with cursor |
 | `/api/cron/spapi-buybox-refresh` | POST | Every 30 min | Lightweight refresh for ASINs flagged with `spapi_refresh_needed=true` |

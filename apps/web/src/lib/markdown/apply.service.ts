@@ -1,18 +1,20 @@
 /**
  * Markdown Apply Service
  *
- * Applies an approved markdown proposal by pushing the new price LIVE to the
- * platform (eBay ReviseFixedPriceItem / Amazon SP-API), then aligning the DB.
+ * Applies an approved markdown proposal:
+ * - eBay: pushes the new price LIVE via ReviseFixedPriceItem, then aligns the DB.
+ * - Amazon: queues the price change in amazon_sync_queue so it follows the
+ *   standard two-phase sync process (feed submit → price verify → quantity),
+ *   with its verification grace and failure emails — no direct SP-API push.
  *
- * This fixes the previous DB-only behaviour where approving an eBay markdown
- * never reached the live listing. See docs/features/unified-markdown/design.md §10.
+ * See docs/features/unified-markdown/design.md §10.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@hadley-bricks/database';
 import { EbayTradingClient } from '@/lib/platform-stock/ebay/ebay-trading.client';
 import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
-import { RepricingService } from '@/lib/repricing/repricing.service';
+import { queueAmazonRepriceByAsin } from '@/lib/amazon/reprice-queue';
 
 export interface ApplyProposalInput {
   id: string;
@@ -24,7 +26,10 @@ export interface ApplyProposalInput {
 
 export interface ApplyResult {
   success: boolean;
+  /** Price is live on the platform (eBay revise succeeded). */
   pushed: boolean;
+  /** Price change queued in amazon_sync_queue awaiting the two-phase sync. */
+  queued?: boolean;
   error?: string;
 }
 
@@ -45,7 +50,7 @@ export async function applyProposalLive(
   // Look up platform identifiers for the inventory item.
   const { data: item, error: itemErr } = await supabase
     .from('inventory_items')
-    .select('id, ebay_listing_id, amazon_asin, listing_platform')
+    .select('id, sku, ebay_listing_id, amazon_asin, listing_platform')
     .eq('id', proposal.inventory_item_id)
     .single();
 
@@ -79,25 +84,25 @@ export async function applyProposalLive(
       if (!item.amazon_asin) {
         return { success: false, pushed: false, error: 'No ASIN on item' };
       }
-      // Resolve an active SKU for this ASIN.
-      const { data: listing } = await supabase
-        .from('platform_listings')
-        .select('platform_sku')
-        .eq('user_id', userId)
-        .eq('platform', 'amazon')
-        .eq('platform_item_id', item.amazon_asin)
-        .not('platform_sku', 'is', null)
-        .limit(1)
-        .maybeSingle();
 
-      if (!listing?.platform_sku) {
-        return { success: false, pushed: false, error: 'No Amazon SKU found for ASIN' };
+      // Queue the price change so it follows the standard two-phase sync
+      // (feed submit → price verify → quantity) instead of a direct push.
+      // An Amazon price is per-SKU, so this reprices and queues EVERY in-play
+      // unit of the ASIN — queueing just this unit would make the sync's
+      // quantity step clamp the live stock to 1 (see reprice-queue.ts).
+      const result = await queueAmazonRepriceByAsin(
+        supabase,
+        userId,
+        item.amazon_asin,
+        newPrice
+      );
+
+      if (!result.success) {
+        const detail = result.error || result.errors.join('; ') || 'Failed to queue reprice';
+        return { success: false, pushed: false, error: detail };
       }
-      const repricing = new RepricingService(supabase, userId);
-      const pushResult = await repricing.pushPrice(listing.platform_sku, newPrice);
-      if (!pushResult.success) {
-        return { success: false, pushed: false, error: pushResult.message };
-      }
+
+      return { success: true, pushed: false, queued: true };
     } else {
       return { success: false, pushed: false, error: `Unsupported platform: ${platform}` };
     }

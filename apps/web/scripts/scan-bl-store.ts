@@ -3,9 +3,9 @@
  *
  * Scrapes a store's inventory via Chrome CDP AJAX (following rate-limit rules copied
  * from the bricklink-arbitrage skill), cross-references each item's asking price
- * against the BL 6-month sold average (cached in `bricklink_part_price_cache`, fetched
- * fresh if missing), and ranks by % margin with a zero-shipping assumption (items
- * will be bought as a single-seller basket).
+ * against the BL UK 6-month sold average (unified price cache via readPriceGuide,
+ * fetched fresh via ensurePriceGuide if missing), and ranks by % margin with a
+ * zero-shipping assumption (items will be bought as a single-seller basket).
  *
  * Usage (from apps/web):
  *   npx tsx scripts/scan-bl-store.ts --store-slug=Bruffty --store-id=3787686
@@ -25,8 +25,9 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 import WebSocket from 'ws';
-import { BrickLinkClient, BrickLinkApiError } from '../src/lib/bricklink/client';
-import type { BrickLinkItemType, BrickLinkPriceGuide } from '../src/lib/bricklink/types';
+import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '../src/lib/bricklink/client';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -48,17 +49,11 @@ if (!STORE_SLUG || !STORE_ID) {
 }
 
 /**
- * Short codes used by BrickLink's store-search AJAX endpoint (P/S/M) — NOT the same
- * as the REST API which uses PART/SET/MINIFIG. We keep short codes internally and
- * map to REST API names when calling getPartPriceGuide.
+ * Short codes used by BrickLink's store-search AJAX endpoint (P/S/M). These are
+ * the same codes the unified price cache uses (PgType), so no mapping needed.
  */
 type StoreItemCode = 'P' | 'S' | 'M';
 const ITEM_TYPES = (argv['item-types'] ?? 'P,S,M').split(',') as StoreItemCode[];
-const STORE_TO_API: Record<StoreItemCode, BrickLinkItemType> = {
-  P: 'PART',
-  S: 'SET',
-  M: 'MINIFIG',
-};
 const MAX_PAGES = Math.min(20, parseInt(argv['max-pages'] ?? '20', 10)); // hard cap 20
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10)); // hard floor 3000ms
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
@@ -69,7 +64,7 @@ const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
 const REQUIRE_UK = (argv['require-uk'] ?? 'true') !== 'false';
 
 const BL_SELLER_FEE_RATE = 0.07;
-const CACHE_TTL_DAYS = 180; // must match PartPriceCacheService default
+const CACHE_TTL_DAYS = 180; // unified price-guide cache freshness window for this script
 
 const OUT_DIR = path.resolve(__dirname, `../../../tmp/stores/${STORE_SLUG}`);
 const LOCK_FILE = path.join(OUT_DIR, 'scan.lock');
@@ -123,17 +118,6 @@ interface ScrapedItem {
   salePercent: number | null;
   description: string | null;
   pageIndex: number;
-}
-
-interface CacheRow {
-  part_number: string;
-  part_type: string;
-  colour_id: number;
-  price_new: string | null;
-  price_used: string | null;
-  times_sold_new: number | null;
-  times_sold_used: number | null;
-  fetched_at: string;
 }
 
 interface EnrichedItem extends ScrapedItem {
@@ -478,38 +462,31 @@ async function scrapeInventory(cdp: CDPClient, usdToGbp: number, isUkStore: bool
 // Step 3 + 4: Cache lookup + BL API fetch
 // ---------------------------------------------------------------------------
 
-async function lookupCache(items: ScrapedItem[]): Promise<Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>> {
-  const result = new Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>();
-  const now = Date.now();
-  const ttlMs = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
+async function lookupCache(items: ScrapedItem[]): Promise<Map<string, { benchmark: number | null; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>> {
+  const result = new Map<string, { benchmark: number | null; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>();
 
-  // Parts + minifigs → bricklink_part_price_cache
+  // Parts + minifigs → unified price cache via readPriceGuide (strict UK, no
+  // world fallback). Rows are complete (all 4 quadrants), so one row serves
+  // both conditions; rows older than CACHE_TTL_DAYS read back as misses.
   const partItems = items.filter((i) => i.itemType === 'P' || i.itemType === 'M');
   if (partItems.length > 0) {
-    const uniquePartNos = [...new Set(partItems.map((i) => i.itemNo))];
-    const CHUNK = 500;
-    for (let i = 0; i < uniquePartNos.length; i += CHUNK) {
-      const chunk = uniquePartNos.slice(i, i + CHUNK);
-      const { data, error } = await supabase
-        .from('bricklink_part_price_cache')
-        .select('part_number, part_type, colour_id, price_new, price_used, times_sold_new, times_sold_used, fetched_at')
-        .in('part_number', chunk);
-      if (error) {
-        console.error('[cache] Query failed:', error.message);
-        continue;
-      }
-      for (const row of (data ?? []) as CacheRow[]) {
-        const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
-        // Match by (part_number, colour_id) — one entry per pair, but we pick
-        // the condition at scoring time from the scrape result.
-        for (const cond of ['N', 'U'] as const) {
-          const priceStr = cond === 'N' ? row.price_new : row.price_used;
-          const sold = cond === 'N' ? row.times_sold_new : row.times_sold_used;
-          if (priceStr == null || sold == null) continue;
-          const price = parseFloat(priceStr);
-          if (!(price > 0)) continue;
-          const key = `${row.part_type}:${row.part_number}:${row.colour_id}:${cond}`;
-          result.set(key, { benchmark: price, timesSold: sold, fresh, source: 'cache' });
+    const refs: ItemRef[] = [...new Map(partItems.map((i) => [
+      `${i.itemType}:${i.itemNo}:${i.colourId}`,
+      { itemType: i.itemType as 'P' | 'M', itemNo: i.itemNo, colourId: i.colourId, scheme: 'bl' as const },
+    ])).values()];
+    const views = await readPriceGuide(supabase, refs, { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false });
+    for (const ref of refs) {
+      const view = views.get(pgKey(ref.itemType, ref.itemNo, ref.colourId));
+      if (!view || view.coverage !== 'uk') continue; // cache miss → API step
+      for (const cond of ['N', 'U'] as const) {
+        const side = cond === 'N' ? view.new : view.used;
+        const key = `${ref.itemType}:${ref.itemNo}:${ref.colourId}:${cond}`;
+        if (side.soldAvg !== null && side.soldAvg > 0) {
+          result.set(key, { benchmark: side.soldAvg, timesSold: side.soldQty, fresh: true, source: 'cache' });
+        } else if (side.soldQty === 0) {
+          // fresh row, genuinely no UK sales in 6mo — record the null so the API
+          // step doesn't re-pay for it; scores as 'no benchmark'
+          result.set(key, { benchmark: null, timesSold: 0, fresh: true, source: 'cache' });
         }
       }
     }
@@ -543,7 +520,7 @@ async function lookupCache(items: ScrapedItem[]): Promise<Map<string, { benchmar
 
 async function fetchMissingPrices(
   items: ScrapedItem[],
-  cached: Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>,
+  cached: Map<string, { benchmark: number | null; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>,
 ): Promise<Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'api' }>> {
   const fresh = new Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'api' }>();
   const progress = readJson<{ done: string[]; callsUsed: number }>(CACHE_PROGRESS_FILE, { done: [], callsUsed: 0 });
@@ -555,54 +532,44 @@ async function fetchMissingPrices(
     return !cached.has(key);
   });
 
-  // Dedupe uncached by (type, itemNo, colourId, condition) so we only make one call per unique tuple
-  const uniqueTuples = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; condition: ItemCondition; itemName: string }>();
+  // Dedupe uncached by (type, itemNo, colourId): one ensurePriceGuide call fetches
+  // ALL FOUR quadrants (4 API calls), covers BOTH conditions, and captures a
+  // complete row in the unified cache automatically.
+  const uniqueTuples = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; conditions: ItemCondition[] }>();
   for (const it of uncached) {
     const cond: ItemCondition = it.invNew === 'New' ? 'N' : 'U';
-    const key = `${it.itemType}:${it.itemNo}:${it.colourId}:${cond}`;
-    if (!uniqueTuples.has(key)) {
-      uniqueTuples.set(key, { itemType: it.itemType, itemNo: it.itemNo, colourId: it.colourId, condition: cond, itemName: it.itemName });
+    const key = `${it.itemType}:${it.itemNo}:${it.colourId}`;
+    const existing = uniqueTuples.get(key);
+    if (existing) {
+      if (!existing.conditions.includes(cond)) existing.conditions.push(cond);
+    } else {
+      uniqueTuples.set(key, { itemType: it.itemType, itemNo: it.itemNo, colourId: it.colourId, conditions: [cond] });
     }
   }
 
-  console.log(`[api] ${uniqueTuples.size} unique (type,item,colour,cond) tuples need fetching`);
-  const forUpsert: Array<{ partNumber: string; partType: string; colourId: number; colourName: string | null; priceNew: number | null; priceUsed: number | null }> = [];
+  console.log(`[api] ${uniqueTuples.size} unique (type,item,colour) tuples need fetching (4 calls each)`);
 
   for (const [key, t] of uniqueTuples) {
     if (doneSet.has(key)) continue;
 
-    if (progress.callsUsed + 1 > API_BUDGET) {
+    if (progress.callsUsed + 4 > API_BUDGET) {
       console.warn(`[api] Budget reached (${progress.callsUsed}/${API_BUDGET}). Remaining items will score as 'none'.`);
       break;
     }
 
     try {
       await sleep(API_DELAY_MS);
-      const guide: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, {
-        condition: t.condition,
-        guideType: 'sold',
-        currencyCode: 'GBP',
-      });
-      progress.callsUsed++;
-      const avg = parseFloat(guide.avg_price);
-      const timesSold = guide.unit_quantity ?? 0;
-      if (avg > 0) {
-        fresh.set(key, { benchmark: avg, timesSold, fresh: true, source: 'api' });
-        // Queue upsert to bricklink_part_price_cache (only for P/M — sets go to brickset_sets, which we don't overwrite here)
-        if (t.itemType === 'P' || t.itemType === 'M') {
-          forUpsert.push({
-            partNumber: t.itemNo,
-            partType: t.itemType === 'P' ? 'PART' : 'MINIFIG',
-            colourId: t.colourId,
-            colourName: null,
-            priceNew: t.condition === 'N' ? avg : null,
-            priceUsed: t.condition === 'U' ? avg : null,
-          });
+      const view = await ensurePriceGuide(bl, supabase, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: CACHE_TTL_DAYS });
+      progress.callsUsed += 4;
+      for (const cond of t.conditions) {
+        const side = cond === 'N' ? view.new : view.used;
+        if (side.soldAvg !== null && side.soldAvg > 0) {
+          fresh.set(`${key}:${cond}`, { benchmark: side.soldAvg, timesSold: side.soldQty, fresh: true, source: 'api' });
         }
       }
       progress.done.push(key);
     } catch (err) {
-      if (err instanceof BrickLinkApiError && err.code === 429) {
+      if (err instanceof RateLimitError || (err instanceof BrickLinkApiError && err.code === 429)) {
         console.error('[api] Rate limit hit — aborting');
         break;
       }
@@ -617,30 +584,7 @@ async function fetchMissingPrices(
   }
   writeJson(CACHE_PROGRESS_FILE, progress);
 
-  // Upsert new prices to cache in a batch. We merge with any existing row for the
-  // same (part_number, colour_id) because the cache has a unique constraint on that.
-  if (forUpsert.length > 0) {
-    const rows = forUpsert.map((p) => ({
-      part_number: p.partNumber,
-      part_type: p.partType,
-      colour_id: p.colourId,
-      colour_name: p.colourName,
-      price_new: p.priceNew,
-      price_used: p.priceUsed,
-      fetched_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    }));
-    const CHUNK = 100;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const chunk = rows.slice(i, i + CHUNK);
-      const { error } = await supabase
-        .from('bricklink_part_price_cache')
-        .upsert(chunk, { onConflict: 'part_number,colour_id', ignoreDuplicates: false });
-      if (error) console.error('[cache] Upsert error:', error.message);
-    }
-    console.log(`[cache] Upserted ${forUpsert.length} fresh prices to bricklink_part_price_cache`);
-  }
-
+  // Capture happens inside ensurePriceGuide — no manual upsert-back to a legacy cache.
   return fresh;
 }
 
@@ -650,7 +594,7 @@ async function fetchMissingPrices(
 
 function scoreAll(
   items: ScrapedItem[],
-  cached: Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>,
+  cached: Map<string, { benchmark: number | null; timesSold: number; fresh: boolean; source: 'cache' | 'brickset' }>,
   fresh: Map<string, { benchmark: number; timesSold: number; fresh: boolean; source: 'api' }>,
 ): EnrichedItem[] {
   const out: EnrichedItem[] = [];
@@ -675,7 +619,7 @@ function scoreAll(
       passed: false,
     };
 
-    if (!entry) {
+    if (!entry || entry.benchmark == null) {
       base.rejectReason = 'no benchmark';
       out.push(base);
       continue;
@@ -835,7 +779,7 @@ ${tableFor('Minifigs', byType.M)}
 ${tableFor('Parts', byType.P)}
 
 <div class="legend">
-  <b>Methodology.</b> Items scraped from ${escapeHtml(meta.storeName)} via BL's public AJAX endpoint (rate-limited, 3s between pages). Each item's asking price in GBP compared against the BL 6-month sold average at matching condition, sourced from (priority) <b>cache</b> (bricklink_part_price_cache, ${CACHE_TTL_DAYS}-day TTL, green); <b>brickset</b> (brickset_sets.bricklink_sold_price_*, blue); or <b>api</b> fresh fetch (amber, writes back to cache). Profit = sold × (1 − ${(BL_SELLER_FEE_RATE * 100).toFixed(0)}% BL/payment fee) − ask. <b>Zero shipping assumed</b> — items will be bought together as a single-seller basket.
+  <b>Methodology.</b> Items scraped from ${escapeHtml(meta.storeName)} via BL's public AJAX endpoint (rate-limited, 3s between pages). Each item's asking price in GBP compared against the BL UK 6-month sold average at matching condition, sourced from (priority) <b>cache</b> (unified price cache bricklink_price_guide_cache, ${CACHE_TTL_DAYS}-day TTL, green); <b>brickset</b> (brickset_sets.bricklink_sold_price_*, blue); or <b>api</b> fresh fetch (amber, captured back to the unified cache). Profit = sold × (1 − ${(BL_SELLER_FEE_RATE * 100).toFixed(0)}% BL/payment fee) − ask. <b>Zero shipping assumed</b> — items will be bought together as a single-seller basket.
   Gates: times_sold ≥ ${MIN_TIMES_SOLD}, ask ≤ ${((1 - MIN_DISCOUNT) * 100).toFixed(0)}% of sold avg, positive profit.
 </div>
 </body></html>`;

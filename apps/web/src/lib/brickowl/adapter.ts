@@ -16,9 +16,26 @@ import type {
 import { parseCurrencyValue } from '@/lib/utils/currency';
 
 /**
+ * Parse a Brick Owl timestamp. Detail payloads (/order/view) provide ISO
+ * strings; list payloads (/order/list) only carry unix SECONDS (e.g.
+ * order_date: "1783529823"). `new Date("1783529823")` is Invalid Date, which
+ * silently broke every summary-path order sync — hence the explicit handling.
+ */
+export function parseBrickOwlTime(raw: string | number | undefined | null): Date {
+  if (raw === undefined || raw === null || raw === '') return new Date(NaN);
+  if (typeof raw === 'number') return new Date(raw < 1e12 ? raw * 1000 : raw);
+  const trimmed = raw.trim();
+  if (/^\d+$/.test(trimmed)) {
+    const n = parseInt(trimmed, 10);
+    return new Date(n < 1e12 ? n * 1000 : n);
+  }
+  return new Date(trimmed);
+}
+
+/**
  * Map Brick Owl order status to normalized status
  */
-function normalizeStatus(status: string): string {
+export function normalizeStatus(status: string): string {
   const statusMap: Record<string, string> = {
     Pending: 'Pending',
     'Payment Received': 'Paid',
@@ -113,8 +130,17 @@ export function normalizeOrder(
     };
   }
 
-  // Parse order date - Brick Owl provides ISO format in iso_order_time
-  const orderDate = new Date(order.iso_order_time || order.order_time);
+  // Parse order date — detail payloads have iso_order_time; list summaries
+  // only have unix-seconds order_date.
+  const orderDate = parseBrickOwlTime(
+    order.iso_order_time ?? order.order_time ?? order.order_date
+  );
+  if (isNaN(orderDate.getTime())) {
+    throw new Error(
+      `Cannot parse Brick Owl order time (iso_order_time=${order.iso_order_time}, ` +
+        `order_time=${order.order_time}, order_date=${order.order_date})`
+    );
+  }
 
   return {
     platformOrderId: order.order_id,

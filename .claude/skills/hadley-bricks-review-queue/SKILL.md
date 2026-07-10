@@ -13,15 +13,19 @@ description: >
 Clears the Purchases → **Review Queue** to zero by identifying the LEGO set
 number(s) for every skipped Vinted purchase, then importing or dismissing each.
 
-The work is split into three stages so the deterministic browser work is
+The work is split into stages so the deterministic browser work is
 scripted and the *identification* is done by Claude's own vision:
 
-1. **SCRAPE** (`fetch`) — pull each seller's Vinted listing photos to disk.
-2. **IDENTIFY** (you) — read the saved photos, cross-check Brickset, write `decisions.json`.
+1. **SCRAPE** (`fetch`) — pull each seller's Vinted listing photos to disk **and** read
+   each buy's transaction for the real condition + per-item price + cancelled flag.
+2. **IDENTIFY** (you) — read the saved photos, cross-check Brickset, write `decisions.json`
+   (condition comes from the manifest, not a guess).
 3. **APPLY** (`apply`) — import (full enrichment) or dismiss each item, then verify zero.
+4. **FINALIZE** (`finalize`) — for the New items, Keepa-validate the ASIN and set the
+   Amazon Buy-Box listing price (rounded down to .99/.49).
 
-The engine is committed at **`apps/web/scripts/clear-review-queue.ts`** with three
-subcommands: `status`, `check`, `fetch`, `apply`.
+The engine is committed at **`apps/web/scripts/clear-review-queue.ts`** with subcommands:
+`status`, `check`, `fetch`, `apply`, `finalize`.
 
 > **Why this approach beats the old inbox-scrolling one:** it reads Vinted's own
 > `/api/v2/inbox` API for conversations (no flaky sidebar scrolling), drives a
@@ -92,6 +96,15 @@ Writes `analysis/review-queue/manifest.json` (one entry per item with
 `id`, `seller_username`, `item_name`, `cost`, `conversation_description`,
 `listing_url`, `photo_files`, `note`). Reports `N/M items have photos`.
 
+`fetch` also reads each buy's transaction (`order_reference` == Vinted transaction id,
+`GET /api/v2/transactions/<ref>` → `order.items[].status`) and adds to each manifest entry:
+- **`vinted_items`** — `[{ vinted_id, title, status, condition, price }]`: Vinted's OWN
+  condition string per line item (e.g. "New with tags" / "Very good") mapped to `New`/`Used`,
+  plus the per-item price. **This is authoritative — use it; do NOT guess condition from titles.**
+- **`cancelled`** — `true` when the order was cancelled/refunded on Vinted (status_title
+  "Cancelled" or item removed). **Dismiss these — never import.** (`apply` force-dismisses them
+  as a safety net even if `decisions.json` says import.)
+
 ## Step 4 — Identify (your job — read the photos)
 
 For each manifest entry, `Read` the box-front photo(s) in
@@ -115,21 +128,18 @@ food, etc. are seller clutter — skip to the next.
   A real set name must come back and match what you see. This catches
   back-of-box misreads.
 
-**Condition rule — classify from evidence; never blanket-default to `Used`.**
-The approve API already defaults to **`New`** when `condition` is omitted, so an
-unjudged item becomes New (not Used). Most resold Vinted LEGO is sealed, and a
-wrong `Used` label both **misprices** the item and **mislabels the Amazon offer**.
+**Condition — take it from `manifest.json` `vinted_items[].condition`, NOT a guess.**
+`fetch` reads Vinted's own condition field per line item ("New with tags" / "New without
+tags" → `New`; "Very good" / "Good" / "Satisfactory" → `Used`). In a bundle, match each
+LEGO set to its Vinted line item by `title`/order to pick the right condition (e.g. a £6
+"Very good" book vs an £18 "New with tags" book). Title-guessing got ~18/21 wrong on the
+2026-06-24 batch — only the transaction field is reliable. If `vinted_items` is somehow
+empty (very old transaction), fall back to photo/title evidence and prefer `New` (the
+approve API defaults to New when `condition` is omitted), flagging it for review.
 
-- **`New`** — box sealed / shrink-wrapped, or the title/description says "brand
-  new" / "BNIB" / "sealed" / "unopened" and the photos don't contradict it.
-- **`Used`** — *only on real evidence*: opened or resealed box, built set, opened
-  poly-bags, or "used" / "incomplete" / "missing pieces" / visible wear.
-- **Ambiguous** — prefer **`New`** (matches the API default) and add the item to
-  the **"needs condition review"** list in the report so the user can confirm.
-  Do not assume secondhand ⇒ Used.
-
-**Dismiss (don't import) when:** non-LEGO, packaging consumables, or
-cancelled/refunded (check Gmail via the "View email" link if unsure).
+**Dismiss (don't import) when:** non-LEGO, packaging consumables, or the manifest flags
+**`cancelled: true`** (order cancelled/refunded on Vinted). `apply` also force-dismisses
+any cancelled order as a safety net.
 
 Write `analysis/review-queue/decisions.json` — an array, one object per queue id:
 ```json
@@ -147,9 +157,9 @@ Write `analysis/review-queue/decisions.json` — an array, one object per queue 
     "reason": "non-LEGO bubble mailers" }
 ]
 ```
-Build it programmatically from `manifest.json` (map `order_reference → {sets,
-condition}`, resolve `id` from the manifest) so ids are never mistyped. Max 10
-sets per import.
+Build it programmatically from `manifest.json` (resolve `id` from the manifest, and take
+`condition` from that entry's `vinted_items[]`) so ids are never mistyped and conditions
+match Vinted's field. Max 10 sets per import.
 
 ## Step 5 — Apply
 
@@ -162,7 +172,27 @@ allocated cost, ROI). Dismisses update Supabase directly to `manual_skip`. The
 command revalidates against the live queue first, so re-running is safe (already
 -resolved ids are skipped).
 
-## Step 6 — Verify zero
+## Step 6 — Finalize New items (Keepa ASIN + Buy-Box price)
+
+```
+npx tsx scripts/clear-review-queue.ts finalize --dry-run   # review the plan
+npx tsx scripts/clear-review-queue.ts finalize             # execute
+```
+For every **New** item imported in this batch (scope = manifest order_references), via Keepa:
+1. **Validate the ASIN** — it must be present and correct: the Keepa product's
+   `eanList`/`upcList` must contain the set's Brickset EAN/UPC (strong), else the title must
+   contain the set number (weak). A missing or **garbage ASIN** (the seeded-ASIN bug can store
+   the literal string `"amazon"`) is re-resolved via `keepa.searchByCode(EAN/UPC)`.
+2. **Set the Amazon listing** — `listing_platform='amazon'` and `listing_value` from the Keepa
+   **Buy Box** (current → 90-day avg → lowest-New fallback), **rounded DOWN to the nearest
+   .99/.49** (£52.40→£51.99, £52.60→£52.49).
+
+Writes go through `InventoryService.update` (Google Sheet mirror). Idempotent — re-run safe.
+Anything it can't validate/price is printed under **Flags** for manual follow-up (and a
+persistent garbage ASIN belongs in the `seeded_asins`/asin-audit cleanup). Used items are
+left untouched.
+
+## Step 7 — Verify zero
 
 ```
 npx tsx scripts/clear-review-queue.ts status            # expect skipped: 0
@@ -171,7 +201,7 @@ Then spot-check data integrity in Supabase: every `order_reference` should have
 `status='imported'` + a `purchase_id`, with matching `inventory_items.linked_lot`
 rows. The set_number you assigned should equal the Brickset-verified set.
 
-## Step 7 — Known gotcha: wrong seeded ASIN names
+## Step 8 — Known gotcha: wrong seeded ASIN names
 
 A few rows in `seeded_asins` map a set to the **wrong** ASIN, so enrichment names
 the inventory item after a different set (e.g. `60181` Forest Tractor came through

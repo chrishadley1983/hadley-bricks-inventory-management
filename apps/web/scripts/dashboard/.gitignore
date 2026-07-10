@@ -1,0 +1,8 @@
+# throwaway dev/test artifacts — not part of the shipped dashboard
+_*.html
+_*.json
+_*.mjs
+_test-*.ts
+_dump-*.ts
+_verify-*.ts
+shots/

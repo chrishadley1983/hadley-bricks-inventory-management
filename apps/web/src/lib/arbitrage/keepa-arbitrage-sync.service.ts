@@ -163,6 +163,10 @@ export class KeepaArbitrageSyncService {
           buy_box_price: number | null;
           sales_rank: number | null;
           was_price_90d: number | null;
+          was_price_180d: number | null;
+          was_price_365d: number | null;
+          high_365d: number | null;
+          sales_rank_drops_90d: number | null;
           offer_count: number | null;
           lowest_offer_price: number | null;
         }[] = [];
@@ -177,6 +181,10 @@ export class KeepaArbitrageSyncService {
             buy_box_price: pricing.buyBoxPrice,
             sales_rank: pricing.salesRank,
             was_price_90d: pricing.was90dAvg,
+            was_price_180d: pricing.was180dAvg,
+            was_price_365d: pricing.was365dAvg,
+            high_365d: pricing.high365d,
+            sales_rank_drops_90d: pricing.salesRankDrops90,
             offer_count: pricing.offerCount,
             lowest_offer_price: pricing.lowestNewPrice,
           });

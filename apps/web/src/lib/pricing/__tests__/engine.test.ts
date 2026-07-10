@@ -1,11 +1,18 @@
 import { describe, it, expect } from 'vitest';
-import { computeTarget, calculateFloor, ceilToCharm, type EngineInput } from '../engine';
+import {
+  computeTarget,
+  calculateFloor,
+  ceilToCharm,
+  floorToCharm,
+  type EngineInput,
+  type AmazonMarketContext,
+} from '../engine';
 import type { MarkdownConfig } from '@/lib/markdown/types';
 
-// Default config mirrors the seeded markdown_config (post unified-markdown migration).
+// Default config mirrors the seeded markdown_config (post markdown-v2 migration).
 const CONFIG: MarkdownConfig = {
   mode: 'review',
-  amazon_step1_days: 60,
+  amazon_step1_days: 30,
   amazon_step2_days: 90,
   amazon_step3_days: 120,
   amazon_step4_days: 150,
@@ -28,7 +35,45 @@ const CONFIG: MarkdownConfig = {
   relist_age_days: 90,
   min_change_pct: 3,
   report_email: 'chris@hadleybricks.co.uk',
+  amazon_postage_cost: 2.8,
+  ebay_postage_cost: 1.55,
+  amazon_persistence_window_days: 14,
+  amazon_persistence_min_pct: 75,
+  amazon_reference_window_days: 180,
+  amazon_decay_start_days: 90,
+  amazon_decay_interval_days: 60,
+  amazon_decay_step_pct: 5,
+  amazon_decay_floor_pct: 60,
+  amazon_exit_days: 365,
+  amazon_min_drops_90d: 1,
+  amazon_healthy_drops_90d: 10,
 };
+
+/** Competitor-holds-box context with a clean, persistent signal. */
+function competitorMarket(overrides: Partial<AmazonMarketContext> = {}): AmazonMarketContext {
+  return {
+    stableBuyBox: 24,
+    currentBuyBox: 24.5,
+    keepaAvg180: 24.5,
+    keepaAvg90: 24,
+    keepaAvg365: 24.5,
+    seasonalHigh365: 25,
+    persistenceBelowPct: 0.9,
+    persistenceSampleSize: 14,
+    buyBoxIsYours: false,
+    totalOfferCount: 5,
+    salesRank: 50000,
+    salesRankDrops90: 12,
+    anchorPrice: 30,
+    lastAppliedMatch: null,
+    ...overrides,
+  };
+}
+
+/** We-hold-the-box context. */
+function weHoldBoxMarket(overrides: Partial<AmazonMarketContext> = {}): AmazonMarketContext {
+  return competitorMarket({ buyBoxIsYours: true, ...overrides });
+}
 
 function base(overrides: Partial<EngineInput>): EngineInput {
   return {
@@ -37,13 +82,16 @@ function base(overrides: Partial<EngineInput>): EngineInput {
     cost: 5,
     condition: 'new',
     ageDays: 100,
-    marketPrice: null,
-    salesRank: null,
+    amazonMarket: null,
     views: 10,
     watchers: 0,
     config: CONFIG,
     ...overrides,
   };
+}
+
+function amazon(overrides: Partial<EngineInput>): EngineInput {
+  return base({ platform: 'amazon', currentPrice: 30, cost: 10, ageDays: 100, ...overrides });
 }
 
 // ============================================================================
@@ -65,14 +113,29 @@ describe('ceilToCharm', () => {
   });
 });
 
-describe('calculateFloor', () => {
-  it('Amazon uses 18.36% effective fee', () => {
-    // 10 / (1 - 0.1836) = 12.249 → ceil charm 12.49
-    expect(calculateFloor('amazon', 10, CONFIG)).toBe(12.49);
+describe('floorToCharm', () => {
+  it('rounds down to nearest charm ending', () => {
+    expect(floorToCharm(24.5)).toBe(24.49);
+    expect(floorToCharm(24.49)).toBe(24.49);
+    expect(floorToCharm(24.99)).toBe(24.99);
+    expect(floorToCharm(24.2)).toBe(23.99);
+    expect(floorToCharm(24)).toBe(23.99);
   });
-  it('eBay uses 15.66% + £0.30 flat', () => {
-    // (10 + 0.30) / (1 - 0.1566) = 12.21 → ceil charm 12.49
-    expect(calculateFloor('ebay', 10, CONFIG)).toBe(12.49);
+  it('never above the input (sits at/under the buy box)', () => {
+    for (const p of [3.1, 7.77, 12.0, 24.5, 19.99]) {
+      expect(floorToCharm(p)).toBeLessThanOrEqual(p);
+    }
+  });
+});
+
+describe('calculateFloor', () => {
+  it('Amazon includes postage: (10 + 2.80) / (1 - 0.1836)', () => {
+    // 12.80 / 0.8164 = 15.679 → ceil charm 15.99
+    expect(calculateFloor('amazon', 10, CONFIG)).toBe(15.99);
+  });
+  it('eBay includes postage + £0.30 flat: (10 + 1.55 + 0.30) / (1 - 0.1566)', () => {
+    // 11.85 / 0.8434 = 14.05 → ceil charm 14.49
+    expect(calculateFloor('ebay', 10, CONFIG)).toBe(14.49);
   });
   it('zero cost → zero floor', () => {
     expect(calculateFloor('ebay', 0, CONFIG)).toBe(0);
@@ -84,61 +147,317 @@ describe('calculateFloor', () => {
 // ============================================================================
 
 describe('age gating', () => {
-  it('holds items below the step1 threshold', () => {
+  it('holds eBay items below the step1 threshold', () => {
     const out = computeTarget(base({ ageDays: 30 }));
+    expect(out.action).toBe('HOLD');
+  });
+  it('holds Amazon items below 30d', () => {
+    const out = computeTarget(amazon({ ageDays: 20, amazonMarket: competitorMarket() }));
     expect(out.action).toBe('HOLD');
   });
 });
 
 // ============================================================================
-// Amazon
+// Amazon — position-first
 // ============================================================================
 
-describe('Amazon market-step curve', () => {
-  it('step1 matches market and never increases', () => {
-    // market below current → lower to market
-    const out = computeTarget(
-      base({ platform: 'amazon', currentPrice: 30, marketPrice: 24, ageDays: 70, cost: 5 })
-    );
-    expect(out.action).toBe('REPRICE');
-    expect(out.targetPrice).toBe(23.99); // 24 charm-rounded down
-    expect(out.markdownStep).toBe(1);
+describe('Amazon 365d exit', () => {
+  it('recommends eBay auction exit at >= amazon_exit_days with no market data', () => {
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: null }));
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+    expect(out.targetPrice).toBeNull();
   });
 
-  it('holds when market is above current (never increase)', () => {
+  it('exits when demand is thin even if a competitor market exists', () => {
     const out = computeTarget(
-      base({ platform: 'amazon', currentPrice: 20, marketPrice: 25, ageDays: 70, cost: 5 })
+      amazon({ ageDays: 400, amazonMarket: competitorMarket({ salesRankDrops90: 3 }) })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('defers exit: overpriced all along + healthy demand + market clears floor → reprice to market', () => {
+    // current 30 vs stable 24 / current box 24.5 → target floorToCharm(24.5) = 24.49,
+    // floor 15.99, drops 12 >= healthy 10 → the item never had a fair run at market.
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: competitorMarket() }));
+    expect(out.action).toBe('REPRICE');
+    expect(out.diagnosis).toBe('OVERPRICED');
+    expect(out.targetPrice).toBe(24.49);
+    expect(out.reason).toContain('exit deferred');
+  });
+
+  it('does NOT defer when already priced at/below the market — exit proceeds', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 400, currentPrice: 23.99, amazonMarket: competitorMarket() })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('does NOT defer when the stable market sits below our floor — exit proceeds', () => {
+    // cost 25 → floor 34.49 > market target 24.49: cannot compete profitably.
+    const out = computeTarget(
+      amazon({ ageDays: 400, currentPrice: 40, cost: 25, amazonMarket: competitorMarket() })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('does NOT defer when the stable reference diverges >25% from Keepa — exit proceeds', () => {
+    // stable 24 vs keepa 40 → 40% divergence: deferral target untrustworthy.
+    const out = computeTarget(
+      amazon({
+        ageDays: 400,
+        amazonMarket: competitorMarket({ keepaAvg180: 40, keepaAvg90: null }),
+      })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+
+  it('defers exit to HOLD when we hold the box with healthy demand', () => {
+    const out = computeTarget(amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket() }));
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('exit deferred');
+  });
+
+  it('exits when we hold the box but demand is thin', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 400, amazonMarket: weHoldBoxMarket({ salesRankDrops90: 2 }) })
+    );
+    expect(out.action).toBe('AUCTION');
+    expect(out.diagnosis).toBe('EXIT');
+  });
+});
+
+describe('Amazon — we hold the buy box (velocity-gated decay)', () => {
+  it('holds when no velocity data yet', () => {
+    const out = computeTarget(amazon({ amazonMarket: weHoldBoxMarket({ salesRankDrops90: null }) }));
+    expect(out.action).toBe('HOLD');
+  });
+
+  it('holds with zero drops — a cut is pure margin donation', () => {
+    const out = computeTarget(amazon({ amazonMarket: weHoldBoxMarket({ salesRankDrops90: 0 }) }));
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('cut pointless');
+  });
+
+  it('holds when demand is healthy', () => {
+    const out = computeTarget(amazon({ amazonMarket: weHoldBoxMarket({ salesRankDrops90: 25 }) }));
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('demand healthy');
+  });
+
+  it('sole offer is treated as we-are-the-market even without the box flag', () => {
+    const out = computeTarget(
+      amazon({
+        amazonMarket: competitorMarket({ buyBoxIsYours: false, totalOfferCount: 1, salesRankDrops90: 0 }),
+      })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('cut pointless');
+  });
+
+  it('thin demand before decay start holds', () => {
+    const out = computeTarget(
+      amazon({ ageDays: 60, amazonMarket: weHoldBoxMarket({ salesRankDrops90: 3 }) })
     );
     expect(out.action).toBe('HOLD');
   });
 
-  it('step2 undercuts market by configured pct', () => {
+  it('thin demand decays -5% per 60d from the anchor', () => {
+    // anchor 40, age 100 → step 1 → 40*0.95=38 → nearest charm 37.99
     const out = computeTarget(
-      base({ platform: 'amazon', currentPrice: 40, marketPrice: 30, ageDays: 95, cost: 5 })
+      amazon({
+        currentPrice: 40,
+        ageDays: 100,
+        amazonMarket: weHoldBoxMarket({ salesRankDrops90: 3, anchorPrice: 40 }),
+      })
     );
-    // 30 * 0.95 = 28.5 → charm 28.49
-    expect(out.targetPrice).toBe(28.49);
+    expect(out.action).toBe('REPRICE');
+    expect(out.targetPrice).toBe(37.99);
+    expect(out.diagnosis).toBe('LOW_DEMAND');
+  });
+
+  it('decay is bounded by the decay floor pct of the anchor', () => {
+    // aggressive decay config: 25%/step → age 150 = step 2 → 40*0.5=20,
+    // but bound = 60% of 40 = 24 → raw 24 → nearest charm 23.99
+    const cfg = { ...CONFIG, amazon_decay_step_pct: 25 };
+    const out = computeTarget(
+      amazon({
+        currentPrice: 40,
+        ageDays: 150,
+        config: cfg,
+        amazonMarket: weHoldBoxMarket({ salesRankDrops90: 3, anchorPrice: 40 }),
+      })
+    );
+    expect(out.targetPrice).toBe(23.99);
+  });
+
+  it('decay never goes below the fee+postage floor', () => {
+    // cost 20 → floor (20+2.8)/0.8164 = 27.93 → charm-ceil 27.99; decay raw would be far lower
+    const cfg = { ...CONFIG, amazon_decay_step_pct: 25, amazon_decay_floor_pct: 30 };
+    const out = computeTarget(
+      amazon({
+        currentPrice: 40,
+        cost: 20,
+        ageDays: 210,
+        config: cfg,
+        amazonMarket: weHoldBoxMarket({ salesRankDrops90: 3, anchorPrice: 40 }),
+      })
+    );
+    expect(out.targetPrice).toBeGreaterThanOrEqual(calculateFloor('amazon', 20, cfg));
+  });
+});
+
+describe('Amazon — competitor holds the buy box (stable match)', () => {
+  it('matches: largest charm at/below the stable reference', () => {
+    // reference = max(stable 24, current 24.5) = 24.5 → charm 24.49
+    const out = computeTarget(amazon({ currentPrice: 30, amazonMarket: competitorMarket() }));
+    expect(out.action).toBe('REPRICE');
+    expect(out.targetPrice).toBe(24.49);
+    expect(out.markdownStep).toBe(1);
+    expect(out.diagnosis).toBe('OVERPRICED');
+  });
+
+  it('market rising: matches todays box when above the long-run median', () => {
+    const out = computeTarget(
+      amazon({ currentPrice: 30, amazonMarket: competitorMarket({ currentBuyBox: 28, keepaAvg180: 27 }) })
+    );
+    expect(out.targetPrice).toBe(27.99);
+  });
+
+  it('never proposes below stable just because the box dipped today', () => {
+    // Today's box crashed to 15 but the median holds at 24 → target stays charm(24)
+    const out = computeTarget(
+      amazon({ currentPrice: 30, amazonMarket: competitorMarket({ currentBuyBox: 15 }) })
+    );
+    expect(out.targetPrice).toBe(23.99);
+  });
+
+  it('holds on a blip: box below us on <75% of recent snapshots', () => {
+    const out = computeTarget(
+      amazon({ currentPrice: 30, amazonMarket: competitorMarket({ persistenceBelowPct: 0.4 }) })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('blip');
+  });
+
+  it('holds with too few snapshots to judge persistence', () => {
+    const out = computeTarget(
+      amazon({ currentPrice: 30, amazonMarket: competitorMarket({ persistenceSampleSize: 3 }) })
+    );
+    expect(out.action).toBe('HOLD');
+  });
+
+  it('flags manual review when snapshot median and Keepa disagree >25%', () => {
+    const out = computeTarget(
+      amazon({ currentPrice: 30, amazonMarket: competitorMarket({ keepaAvg180: 40, keepaAvg90: null }) })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.needsReview).toBe(true);
+  });
+
+  it('stable market below floor → hold + EXIT flag, never chases', () => {
+    // cost 25 → floor (25+2.8)/0.8164 = 34.05 → 34.49 > stable 24
+    const out = computeTarget(
+      amazon({ currentPrice: 40, cost: 25, amazonMarket: competitorMarket({ keepaAvg180: 24 }) })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.diagnosis).toBe('EXIT');
+    expect(out.needsReview).toBe(true);
+  });
+
+  it('holds when already at/below the reference (never increases)', () => {
+    const out = computeTarget(amazon({ currentPrice: 23.99, amazonMarket: competitorMarket() }));
+    expect(out.action).toBe('HOLD');
+  });
+
+  it('seasonal trough: yearly high well above the off-season window → HOLD for recovery', () => {
+    // Recent window 37 (off-season trough), 365d avg 45, 365d high 52. We're at
+    // 44.99, still within reach of the yearly high → hold, do not match the trough.
+    const out = computeTarget(
+      amazon({
+        currentPrice: 44.99,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 45,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('HOLD');
+    expect(out.reason).toContain('Seasonal trough');
+  });
+
+  it('seasonal but priced above the yearly high → still cuts (genuinely overpriced)', () => {
+    const out = computeTarget(
+      amazon({
+        currentPrice: 60,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 45,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('REPRICE');
+  });
+
+  it('lone price spike does not fake a season: 365d avg near the window → normal match', () => {
+    // High 52 looks seasonal, but the yearly AVG (37.5) sits barely above the
+    // window (37) — a single spike, not a season. The guard must not trip.
+    const out = computeTarget(
+      amazon({
+        currentPrice: 44.99,
+        amazonMarket: competitorMarket({
+          stableBuyBox: 37,
+          currentBuyBox: 37,
+          keepaAvg180: 37,
+          keepaAvg90: 37,
+          keepaAvg365: 37.5,
+          seasonalHigh365: 52,
+        }),
+      })
+    );
+    expect(out.action).toBe('REPRICE');
+  });
+
+  it('tier-2 escalation: applied match ran 20d+, box not won → undercut stable by 10%', () => {
+    const appliedAt = new Date(Date.now() - 30 * 86400 * 1000).toISOString();
+    const out = computeTarget(
+      amazon({
+        currentPrice: 24.49,
+        amazonMarket: competitorMarket({ lastAppliedMatch: { price: 24.49, appliedAt } }),
+      })
+    );
+    // 24 * 0.9 = 21.6 → charm 21.49
+    expect(out.action).toBe('REPRICE');
+    expect(out.targetPrice).toBe(21.49);
     expect(out.markdownStep).toBe(2);
   });
 
-  it('step4 drops to floor', () => {
+  it('no escalation while the match is still recent', () => {
+    const appliedAt = new Date(Date.now() - 5 * 86400 * 1000).toISOString();
     const out = computeTarget(
-      base({ platform: 'amazon', currentPrice: 40, marketPrice: 30, ageDays: 160, cost: 10 })
+      amazon({
+        currentPrice: 24.49,
+        amazonMarket: competitorMarket({ lastAppliedMatch: { price: 24.49, appliedAt } }),
+      })
     );
-    expect(out.markdownStep).toBe(4);
-    expect(out.targetPrice).toBe(calculateFloor('amazon', 10, CONFIG));
-  });
-
-  it('holds with no market price', () => {
-    const out = computeTarget(base({ platform: 'amazon', marketPrice: null, ageDays: 100 }));
     expect(out.action).toBe('HOLD');
   });
 
-  it('diagnoses overpriced when far above market', () => {
-    const out = computeTarget(
-      base({ platform: 'amazon', currentPrice: 50, marketPrice: 30, ageDays: 70, cost: 5 })
-    );
-    expect(out.diagnosis).toBe('OVERPRICED');
+  it('holds with no market context at all', () => {
+    const out = computeTarget(amazon({ amazonMarket: null }));
+    expect(out.action).toBe('HOLD');
   });
 });
 
@@ -174,6 +493,16 @@ describe('eBay engagement pricing', () => {
     expect(out.action).toBe('REPRICE');
     // 20 * 0.90 = 18 → charm 17.99
     expect(out.targetPrice).toBe(17.99);
+  });
+
+  it('views-per-day judged over the analytics window, not full listing age', () => {
+    // 300d old with 50 views in the (max 89d) analytics window:
+    // 50/89 = 0.56/day → not COLD even with 0 watchers.
+    const out = computeTarget(
+      base({ currentPrice: 20, watchers: 0, views: 50, ageDays: 300, condition: 'new', cost: 2 })
+    );
+    // deep age still routes to auction at >=150d, but the tier must not be COLD
+    expect(out.tier).not.toBe('COLD');
   });
 
   it('Used adds 5% for non-HOT tiers', () => {

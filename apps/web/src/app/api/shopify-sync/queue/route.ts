@@ -9,7 +9,7 @@ const ProcessSchema = z.object({
 
 const EnqueueSchema = z.object({
   inventory_item_id: z.string().uuid('Invalid inventory item ID'),
-  action: z.enum(['create', 'archive', 'update_price', 'delete']),
+  action: z.enum(['create', 'archive', 'update_price']),
   priority: z.number().int().min(1).max(10).optional().default(5),
 });
 

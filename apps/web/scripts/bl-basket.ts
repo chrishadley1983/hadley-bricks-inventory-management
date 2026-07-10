@@ -52,8 +52,11 @@ import * as path from 'path';
 import * as readline from 'readline/promises';
 import { stdin as input, stdout as output } from 'process';
 import WebSocket from 'ws';
-import { BrickLinkClient, BrickLinkApiError } from '../src/lib/bricklink/client';
-import type { BrickLinkItemType, BrickLinkPriceGuide } from '../src/lib/bricklink/types';
+import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '../src/lib/bricklink/client';
+import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqer-pricing';
+import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
+import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
+import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -143,7 +146,6 @@ const bl = new BrickLinkClient(creds, { supabase, caller: 'bl-basket-script' });
 // ---------------------------------------------------------------------------
 
 type StoreItemCode = 'P' | 'S' | 'M';
-const STORE_TO_API: Record<StoreItemCode, BrickLinkItemType> = { P: 'PART', S: 'SET', M: 'MINIFIG' };
 type ItemCondition = 'N' | 'U';
 
 interface ScrapedItem {
@@ -316,8 +318,7 @@ function staleScreen(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: nu
     ratios.push(ratio);
 
     const sellThru = entry.ukStockQty > 0 ? entry.ukSoldQty / entry.ukStockQty : 0;
-    const multiplier = bricqerMultiplier(cond, sellThru);
-    const listPrice = entry.ukSoldAvg * multiplier;
+    const listPrice = bricqerListPrice(entry.ukSoldAvg, cond, sellThru) ?? 0;
     if (listPrice <= 0) continue;
     if (sellThru >= 0.50) {
       const netPerUnit = listPrice * (1 - VAR_FEE_PCT) - it.unitPriceGBP; // ignoring postage allocation here — screener heuristic
@@ -343,22 +344,12 @@ function staleScreen(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: nu
   return { cacheCovered, medianRatio, p25, p75, bargainBombs, verdict };
 }
 
-// Bricqer auto-pricing multipliers — updated 2026-05-11.
-// Previous brackets (kept here for diffability):
-//   N >=0.5 → 1.05 / <0.5 → 0.90
-//   U >=1 → 1.25 / >=0.75 → 1.15 / >=0.5 → 1.10 / >=0.25 → 0.90 / <0.25 → 0.85
-// Also note Bricqer now disables auto-pricing for items with a comment, or where
-// definition.lego_type == 'S' (sets). Fresh basket inventory has no comment, and
-// sets are already filtered out of the projection above (see itemType === 'S'),
-// so neither gate changes the bl-basket output.
-function bricqerMultiplier(condition: ItemCondition, sellThru: number): number {
-  if (condition === 'N') return sellThru >= 0.5 ? 1.10 : 0.85;
-  if (sellThru >= 1) return 1.40;
-  if (sellThru >= 0.75) return 1.25;
-  if (sellThru >= 0.5) return 1.15;
-  if (sellThru >= 0.25) return 0.93;
-  return 0.90;
-}
+// Bricqer auto-pricing — CANONICAL implementation lives in
+// src/lib/bricklink/bricqer-pricing.ts (v3, 2026-07-07: adds U STR>=1.5 → 1.80
+// and the £0.0699 floor). Bricqer disables auto-pricing for items with a comment
+// or where definition.lego_type == 'S' (sets); fresh basket inventory has no
+// comment and sets are filtered out of the projection, so neither gate changes
+// the bl-basket output.
 
 // ---------------------------------------------------------------------------
 // CDP client
@@ -538,71 +529,36 @@ async function scrapeInventory(cdp: CDPClient, storeId: number): Promise<Scraped
 async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukSoldAvg: number | null; ukSoldQty: number; ukStockQty: number; source: 'cache' | 'cache-none' | 'brickset' | 'api' | 'none' }>> {
   console.log(`\n[3/10] Enriching ${items.length} items with UK sold/stock data (cache TTL ${CACHE_TTL_DAYS}d)...`);
   const out = new Map<string, { ukSoldAvg: number | null; ukSoldQty: number; ukStockQty: number; source: 'cache' | 'cache-none' | 'brickset' | 'api' | 'none' }>();
-  const now = Date.now();
-  const ttlMs = CACHE_TTL_DAYS * 24 * 60 * 60 * 1000;
 
-  // Parts + minifigs → bricklink_part_price_cache
-  // Supabase caps `.in(...)` responses at 1000 rows by default. A single 500-part-number
-  // chunk can return >1000 cache rows when base parts (e.g. 3020 plates, 970c00 hips)
-  // have many colour variants in cache, silently dropping the surplus. That's a real bug
-  // — Hazel4576 (Apr 30) lost 973pb0898c01 Black Used to it, even though the cache row
-  // was warm from an ellis2547 scan two days earlier. We now paginate explicitly with
-  // .range() per chunk: keep fetching pages of 1000 until a page comes back short.
+  // Parts + minifigs → unified price cache via readPriceGuide (strict UK, no world
+  // fallback — basket maths must stay on UK 6MA). Rows are complete (all 4 quadrants),
+  // so one row serves both conditions. Pagination past PostgREST's 1000-row cap happens
+  // inside readPriceGuide (the Hazel4576 973pb0898c01 lesson lives there now).
   const pmItems = items.filter((i) => i.itemType === 'P' || i.itemType === 'M');
-  const uniquePartNos = [...new Set(pmItems.map((i) => i.itemNo))];
-  const CHUNK = 500;
-  const PAGE = 1000;
-  type CacheRow = { part_number: string; part_type: string; colour_id: number; price_new: string | null; price_used: string | null; stock_available_new: number | null; stock_available_used: number | null; times_sold_new: number | null; times_sold_used: number | null; fetched_at: string };
-  let totalRowsRead = 0;
-  for (let i = 0; i < uniquePartNos.length; i += CHUNK) {
-    const chunk = uniquePartNos.slice(i, i + CHUNK);
-    let pageStart = 0;
-    let pagesFetched = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('bricklink_part_price_cache')
-        .select('part_number, part_type, colour_id, price_new, price_used, stock_available_new, stock_available_used, times_sold_new, times_sold_used, fetched_at')
-        .in('part_number', chunk)
-        .range(pageStart, pageStart + PAGE - 1);
-      if (error) {
-        console.warn(`  cache page fetch error at chunk[${i}..${i + CHUNK}] page ${pagesFetched}: ${error.message}`);
-        break;
-      }
-      const rows = (data ?? []) as CacheRow[];
-      pagesFetched++;
-      totalRowsRead += rows.length;
-      for (const row of rows) {
-        const fresh = now - new Date(row.fetched_at).getTime() < ttlMs;
-        if (!fresh) continue;
-        for (const cond of ['N', 'U'] as const) {
-          const priceStr = cond === 'N' ? row.price_new : row.price_used;
-          const stock = cond === 'N' ? row.stock_available_new : row.stock_available_used;
-          const sold = cond === 'N' ? row.times_sold_new : row.times_sold_used;
-          // Need at least sold + stock recorded — partial cache rows from older partout
-          // runs that didn't always write velocity get treated as misses and re-fetched.
-          if (sold == null || stock == null) continue;
-          const key = `${row.part_type === 'PART' ? 'P' : 'M'}:${row.part_number}:${row.colour_id}:${cond}`;
-          if (priceStr != null) {
-            const price = parseFloat(priceStr);
-            if (price > 0) {
-              out.set(key, { ukSoldAvg: price, ukSoldQty: sold, ukStockQty: stock, source: 'cache' });
-              continue;
-            }
-          }
-          // priceStr null OR price=0 → "we asked, no UK sales found" — honour the cached null
-          // result so we don't re-pay the API for it. (See feedback memory: 9% of items legitimately
-          // have no UK 6mo sales for that exact colour×condition; current TTL gates how often
-          // we re-check whether sales materialised.)
-          if (sold === 0) {
-            out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stock, source: 'cache-none' });
-          }
-        }
-      }
-      if (rows.length < PAGE) break; // last page for this chunk
-      pageStart += PAGE;
+  const pmRefs: ItemRef[] = [...new Map(pmItems.map((i) => [
+    `${i.itemType}:${i.itemNo}:${i.colourId}`,
+    { itemType: i.itemType as 'P' | 'M', itemNo: i.itemNo, colourId: i.colourId, scheme: 'bl' as const },
+  ])).values()];
+  const views = await readPriceGuide(supabase, pmRefs, { ttlDays: CACHE_TTL_DAYS, allowWorldFallback: false });
+
+  const applySide = (key: string, side: SideView, hitSource: 'cache' | 'api', noneSource: 'cache-none' | 'none') => {
+    if (side.soldAvg !== null && side.soldAvg > 0) {
+      out.set(key, { ukSoldAvg: side.soldAvg, ukSoldQty: side.soldQty, ukStockQty: side.stockQty, source: hitSource });
+    } else if (side.soldQty === 0) {
+      // "we asked, no UK sales found" — honour the cached null result so we don't
+      // re-pay the API for it. (~9% of items legitimately have no UK 6mo sales for
+      // that exact colour×condition; the TTL gates how often we re-check.)
+      out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: side.stockQty, source: noneSource });
     }
+  };
+
+  for (const ref of pmRefs) {
+    const view = views.get(pgKey(ref.itemType, ref.itemNo, ref.colourId));
+    if (!view || view.coverage !== 'uk') continue;
+    applySide(`${ref.itemType}:${ref.itemNo}:${ref.colourId}:N`, view.new, 'cache', 'cache-none');
+    applySide(`${ref.itemType}:${ref.itemNo}:${ref.colourId}:U`, view.used, 'cache', 'cache-none');
   }
-  console.log(`  cache hit: ${out.size} tuples  (read ${totalRowsRead} rows across ${Math.ceil(uniquePartNos.length / CHUNK)} chunk(s))`);
+  console.log(`  cache hit: ${out.size} tuples  (${pmRefs.length} part/minifig tuples looked up)`);
 
   // Sets → brickset_sets
   const setItems = items.filter((i) => i.itemType === 'S');
@@ -675,35 +631,33 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
     console.log(`  Skipping API loop — proceeding to score with cache-only data.`);
     return out;
   }
-  console.log(`  need to fetch: ${needed.size} tuples from BL API`);
+  // Dedupe needed tuples by (type, itemNo, colour): ensurePriceGuide fetches ALL FOUR
+  // quadrants in one go (4 calls) and captures a complete row in the unified cache —
+  // one fetch covers both conditions, and null results cache automatically (a complete
+  // row with soldQty 0 reads back as 'cache-none' next run).
+  const neededTuples = new Map<string, { itemType: StoreItemCode; itemNo: string; colourId: number; conditions: ItemCondition[] }>();
+  for (const t of needed.values()) {
+    const tk = `${t.itemType}:${t.itemNo}:${t.colourId}`;
+    const existing = neededTuples.get(tk);
+    if (existing) existing.conditions.push(t.condition);
+    else neededTuples.set(tk, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, conditions: [t.condition] });
+  }
+  console.log(`  need to fetch: ${needed.size} condition-tuples (${neededTuples.size} distinct items) from BL API`);
   let calls = 0;
   let tuplesFetched = 0;
-  // Now also tracks null-result rows (price=null, sold=0, stock=actual) so they cache
-  // and don't re-cost the API on subsequent runs (was C1 in the hardening plan).
-  const forUpsert: Array<{ partNumber: string; partType: string; colourId: number; condition: ItemCondition; price: number | null; stockQty: number; soldQty: number }> = [];
-  fetchLoop: for (const [key, t] of needed) {
-    if (calls + 2 > API_BUDGET) { console.warn(`  API budget reached (${calls}/${API_BUDGET})`); break; }
+  fetchLoop: for (const t of neededTuples.values()) {
+    if (calls + 4 > API_BUDGET) { console.warn(`  API budget reached (${calls}/${API_BUDGET})`); break; }
     try {
       await sleep(API_DELAY_MS);
-      const sold: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: t.condition, guideType: 'sold', currencyCode: 'GBP', countryCode: 'UK' });
-      calls++;
-      await sleep(API_DELAY_MS);
-      const stock: BrickLinkPriceGuide = await bl.getPartPriceGuide(STORE_TO_API[t.itemType], t.itemNo, t.colourId, { condition: t.condition, guideType: 'stock', currencyCode: 'GBP', countryCode: 'UK' });
-      calls++;
+      const view = await ensurePriceGuide(bl, supabase, { itemType: t.itemType as 'P' | 'M', itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: CACHE_TTL_DAYS });
+      calls += 4;
       tuplesFetched++;
-      const avg = parseFloat(sold.avg_price);
-      const soldQty = sold.total_quantity ?? 0;
-      const stockQty = stock.total_quantity ?? 0;
-      const partType = t.itemType === 'P' ? 'PART' : 'MINIFIG';
-      if (avg > 0) {
-        out.set(key, { ukSoldAvg: avg, ukSoldQty: soldQty, ukStockQty: stockQty, source: 'api' });
-        forUpsert.push({ partNumber: t.itemNo, partType, colourId: t.colourId, condition: t.condition, price: avg, stockQty, soldQty });
-      } else {
-        // No UK sold data — record as null-result so the cache learns and skips next time.
-        out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: stockQty, source: 'none' });
-        forUpsert.push({ partNumber: t.itemNo, partType, colourId: t.colourId, condition: t.condition, price: null, stockQty, soldQty: 0 });
+      for (const cond of t.conditions) {
+        const key = `${t.itemType}:${t.itemNo}:${t.colourId}:${cond}`;
+        applySide(key, cond === 'N' ? view.new : view.used, 'api', 'none');
+        if (!out.has(key)) out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: 0, source: 'none' });
       }
-      if (calls % 20 === 0) console.log(`  fetched ${calls} calls (${Math.ceil(calls / 2)}/${needed.size} tuples)`);
+      if (calls % 20 === 0) console.log(`  fetched ${calls} calls (${tuplesFetched}/${neededTuples.size} items)`);
 
       // Mid-loop checkpoint: every CHECKPOINT_TUPLES freshly-fetched tuples, recompute
       // median ratio across all data so far. If priced above market, stop spending API.
@@ -714,7 +668,7 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
           console.log(`  checkpoint after ${tuplesFetched} fresh tuples: median=${cp.medianRatio.toFixed(2)} P25/P75=${cp.p25?.toFixed(2)}/${cp.p75?.toFixed(2)} bombs=${cp.bargainBombs}${above ? '  ⚠ ABOVE MARKET' : '  ✓ ok'}`);
           if (above) {
             if (AUTO_YES) {
-              console.warn(`  store priced above market (median ${cp.medianRatio.toFixed(2)} ≥ ${CHECKPOINT_MAX_RATIO}) — auto-aborting API loop (${calls} calls used, ${needed.size - tuplesFetched} tuples skipped)`);
+              console.warn(`  store priced above market (median ${cp.medianRatio.toFixed(2)} ≥ ${CHECKPOINT_MAX_RATIO}) — auto-aborting API loop (${calls} calls used, ${neededTuples.size - tuplesFetched} items skipped)`);
               break fetchLoop;
             } else {
               const resp = (await rl.question(`\n⚠ checkpoint: median ratio ${cp.medianRatio.toFixed(2)} ≥ ${CHECKPOINT_MAX_RATIO}. Continue API spend? (y/N): `)).trim().toLowerCase();
@@ -728,39 +682,17 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
         }
       }
     } catch (err) {
+      if (err instanceof RateLimitError) { console.error('  rate limit, stopping'); break; }
       if (err instanceof BrickLinkApiError && err.code === 429) { console.error('  rate limit, stopping'); break; }
-      out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: 0, source: 'none' });
-      // Don't cache transient errors — leave the row uncached so we retry next run.
+      for (const cond of t.conditions) {
+        const key = `${t.itemType}:${t.itemNo}:${t.colourId}:${cond}`;
+        if (!out.has(key)) out.set(key, { ukSoldAvg: null, ukSoldQty: 0, ukStockQty: 0, source: 'none' });
+      }
+      // Don't cache transient errors — ensurePriceGuide only captures on success, so
+      // the tuple stays uncached and we retry next run.
     }
   }
-
-  // Upsert to cache
-  if (forUpsert.length > 0) {
-    // Aggregate by (partNumber, colourId) across conditions. Prices may be null for null-result rows.
-    const byPartColour = new Map<string, { partNumber: string; partType: string; colourId: number; price_new: number | null; price_used: number | null; stock_new: number | null; stock_used: number | null; sold_new: number | null; sold_used: number | null }>();
-    for (const u of forUpsert) {
-      const k = `${u.partNumber}:${u.colourId}`;
-      const existing = byPartColour.get(k) ?? { partNumber: u.partNumber, partType: u.partType, colourId: u.colourId, price_new: null, price_used: null, stock_new: null, stock_used: null, sold_new: null, sold_used: null };
-      if (u.condition === 'N') { existing.price_new = u.price; existing.stock_new = u.stockQty; existing.sold_new = u.soldQty; }
-      else { existing.price_used = u.price; existing.stock_used = u.stockQty; existing.sold_used = u.soldQty; }
-      byPartColour.set(k, existing);
-    }
-    const rows = [...byPartColour.values()].map((r) => ({
-      part_number: r.partNumber, part_type: r.partType, colour_id: r.colourId,
-      price_new: r.price_new, price_used: r.price_used,
-      stock_available_new: r.stock_new, stock_available_used: r.stock_used,
-      times_sold_new: r.sold_new, times_sold_used: r.sold_used,
-      fetched_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }));
-    const CHUNK2 = 100;
-    for (let i = 0; i < rows.length; i += CHUNK2) {
-      const batch = rows.slice(i, i + CHUNK2);
-      const { error } = await supabase.from('bricklink_part_price_cache').upsert(batch, { onConflict: 'part_number,colour_id', ignoreDuplicates: false });
-      if (error) console.error('  upsert error:', error.message);
-    }
-    const nullCount = forUpsert.filter((u) => u.price === null).length;
-    console.log(`  upserted ${rows.length} fresh rows to cache${nullCount > 0 ? ` (${nullCount} null-result tuples cached so we skip them next run)` : ''}`);
-  }
+  // Capture happens inside ensurePriceGuide — no write-back needed here.
   return out;
 }
 
@@ -773,6 +705,9 @@ function scoreAll(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: numbe
   const filtered = items.filter((it) => {
     if (it.unitPriceGBP < inputs.minAsk) return false;
     if (hasDamageNote(it.description).flag) return false;
+    // Incomplete sets must not be benchmarked against complete-set sold prices
+    // (Gibbo0o lesson, 2026-07-07: "no figure or box" lots carried phantom profit).
+    if (it.itemType === 'S' && isIncompleteSetListing(it.invComplete, it.description)) return false;
     return true;
   });
   // Total list value for allocation of postage
@@ -783,8 +718,7 @@ function scoreAll(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: numbe
     const entry = priceMap.get(key);
     if (!entry?.ukSoldAvg) { preList.push({ it, listPrice: 0, sellThru: 0, entry }); continue; }
     const sellThru = entry.ukStockQty > 0 ? entry.ukSoldQty / entry.ukStockQty : 0;
-    const multiplier = bricqerMultiplier(cond, sellThru);
-    const listPrice = entry.ukSoldAvg * multiplier;
+    const listPrice = bricqerListPrice(entry.ukSoldAvg, cond, sellThru) ?? 0;
     preList.push({ it, listPrice, sellThru, entry });
   }
   const totalListForAlloc = preList.reduce((s, p) => s + p.listPrice * p.it.invQty, 0);

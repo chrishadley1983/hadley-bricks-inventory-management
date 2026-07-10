@@ -523,6 +523,137 @@ describe('AmazonReportsClient', () => {
 
       expect(clientModule).toHaveProperty('AmazonReportsClient');
       expect(clientModule).toHaveProperty('createAmazonReportsClient');
+      expect(clientModule).toHaveProperty('ReportTimeoutError');
     });
+  });
+
+  // ==========================================================================
+  // RETRY ON TIMEOUT
+  // ==========================================================================
+
+  describe('retry on timeout', () => {
+    /** Routes SP-API fetches by URL; report-1 stays IN_PROGRESS, later reports are DONE. */
+    function makeRetryMock() {
+      let created = 0;
+      return (url: string, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        if (url.includes('/auth/o2/token')) return Promise.resolve(createTokenResponse());
+        if (method === 'POST' && url.endsWith('/reports/2021-06-30/reports')) {
+          created++;
+          return Promise.resolve(createApiResponse({ reportId: `report-${created}` }));
+        }
+        const statusMatch = url.match(/\/reports\/(report-\d+)$/);
+        if (statusMatch) {
+          const id = statusMatch[1];
+          return Promise.resolve(
+            id === 'report-1'
+              ? createApiResponse({ reportId: id, processingStatus: 'IN_PROGRESS' })
+              : createApiResponse({
+                  reportId: id,
+                  processingStatus: 'DONE',
+                  reportDocumentId: 'doc-1',
+                })
+          );
+        }
+        if (url.includes('/documents/')) {
+          return Promise.resolve(
+            createApiResponse({ reportDocumentId: 'doc-1', url: 'https://example.com/dl' })
+          );
+        }
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('seller-sku\tquantity\nSKU-1\t3') });
+      };
+    }
+
+    it('throws a ReportTimeoutError instance on timeout', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValueOnce(createTokenResponse());
+      mockFetch.mockResolvedValue(
+        createApiResponse({ reportId: 'report-123', processingStatus: 'IN_PROGRESS' })
+      );
+
+      const { AmazonReportsClient, ReportTimeoutError } = await import('../amazon-reports.client');
+      const client = new AmazonReportsClient(credentials);
+
+      await expect(client.waitForReport('report-123', 50, 10)).rejects.toBeInstanceOf(
+        ReportTimeoutError
+      );
+    }, 10000);
+
+    it('retries with a fresh report after a timeout and returns content', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation(makeRetryMock());
+
+      const { AmazonReportsClient } = await import('../amazon-reports.client');
+      const client = new AmazonReportsClient(credentials);
+
+      const content = await client.fetchMerchantListingsReport(undefined, {
+        maxWaitMs: 30,
+        pollIntervalMs: 10,
+        retryBackoffMs: 10,
+        maxAttempts: 2,
+      });
+
+      expect(content).toContain('SKU-1');
+      // Two reports were requested: the first timed out, the second succeeded.
+      const createCalls = mockFetch.mock.calls.filter((call: unknown[]) => {
+        const [u, o] = call as [string, { method?: string } | undefined];
+        return o?.method === 'POST' && String(u).endsWith('/reports/2021-06-30/reports');
+      });
+      expect(createCalls).toHaveLength(2);
+    }, 10000);
+
+    it('rethrows ReportTimeoutError after exhausting attempts', async () => {
+      mockFetch.mockReset();
+      mockFetch.mockImplementation((url: string, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        if (url.includes('/auth/o2/token')) return Promise.resolve(createTokenResponse());
+        if (method === 'POST' && url.endsWith('/reports/2021-06-30/reports')) {
+          return Promise.resolve(createApiResponse({ reportId: 'report-x' }));
+        }
+        return Promise.resolve(
+          createApiResponse({ reportId: 'report-x', processingStatus: 'IN_PROGRESS' })
+        );
+      });
+
+      const { AmazonReportsClient, ReportTimeoutError } = await import('../amazon-reports.client');
+      const client = new AmazonReportsClient(credentials);
+
+      await expect(
+        client.fetchReport('GET_MERCHANT_LISTINGS_ALL_DATA', undefined, {
+          maxWaitMs: 20,
+          pollIntervalMs: 5,
+          retryBackoffMs: 5,
+          maxAttempts: 2,
+        })
+      ).rejects.toBeInstanceOf(ReportTimeoutError);
+    }, 10000);
+
+    it('does not retry on CANCELLED/FATAL (genuine failures)', async () => {
+      mockFetch.mockReset();
+      let created = 0;
+      mockFetch.mockImplementation((url: string, opts?: { method?: string }) => {
+        const method = opts?.method ?? 'GET';
+        if (url.includes('/auth/o2/token')) return Promise.resolve(createTokenResponse());
+        if (method === 'POST' && url.endsWith('/reports/2021-06-30/reports')) {
+          created++;
+          return Promise.resolve(createApiResponse({ reportId: 'report-f' }));
+        }
+        return Promise.resolve(createApiResponse({ reportId: 'report-f', processingStatus: 'FATAL' }));
+      });
+
+      const { AmazonReportsClient } = await import('../amazon-reports.client');
+      const client = new AmazonReportsClient(credentials);
+
+      await expect(
+        client.fetchReport('GET_MERCHANT_LISTINGS_ALL_DATA', undefined, {
+          maxWaitMs: 50,
+          pollIntervalMs: 10,
+          retryBackoffMs: 5,
+          maxAttempts: 2,
+        })
+      ).rejects.toThrow('Report generation failed with status: FATAL');
+      // Only one report created — FATAL is not retried.
+      expect(created).toBe(1);
+    }, 10000);
   });
 });

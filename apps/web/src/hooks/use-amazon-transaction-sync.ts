@@ -92,6 +92,7 @@ export function useAmazonTransactionSync(options: { enabled?: boolean } = {}) {
       }
       return 60 * 1000; // 1 minute
     },
+    refetchIntervalInBackground: false, // stop polling when the tab is hidden
     enabled,
   });
 

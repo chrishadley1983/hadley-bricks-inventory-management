@@ -29,6 +29,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck scripts (apps/web/scripts/pg)
+        run: npm run typecheck:scripts --workspace=apps/web
+
       - name: Lint
         run: npm run lint
 

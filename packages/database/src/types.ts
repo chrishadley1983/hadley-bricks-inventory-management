@@ -298,6 +298,7 @@ export type Database = {
           buy_box_price: number | null
           competitive_price: number | null
           created_at: string
+          high_365d: number | null
           id: string
           lowest_offer_is_fba: boolean | null
           lowest_offer_is_prime: boolean | null
@@ -308,9 +309,12 @@ export type Database = {
           price_is_lowest_offer: boolean | null
           sales_rank: number | null
           sales_rank_category: string | null
+          sales_rank_drops_90d: number | null
           snapshot_date: string
           total_offer_count: number | null
           user_id: string
+          was_price_180d: number | null
+          was_price_365d: number | null
           was_price_90d: number | null
           your_price: number | null
           your_qty: number | null
@@ -321,6 +325,7 @@ export type Database = {
           buy_box_price?: number | null
           competitive_price?: number | null
           created_at?: string
+          high_365d?: number | null
           id?: string
           lowest_offer_is_fba?: boolean | null
           lowest_offer_is_prime?: boolean | null
@@ -331,9 +336,12 @@ export type Database = {
           price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
+          sales_rank_drops_90d?: number | null
           snapshot_date: string
           total_offer_count?: number | null
           user_id: string
+          was_price_180d?: number | null
+          was_price_365d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -344,6 +352,7 @@ export type Database = {
           buy_box_price?: number | null
           competitive_price?: number | null
           created_at?: string
+          high_365d?: number | null
           id?: string
           lowest_offer_is_fba?: boolean | null
           lowest_offer_is_prime?: boolean | null
@@ -354,9 +363,12 @@ export type Database = {
           price_is_lowest_offer?: boolean | null
           sales_rank?: number | null
           sales_rank_category?: string | null
+          sales_rank_drops_90d?: number | null
           snapshot_date?: string
           total_offer_count?: number | null
           user_id?: string
+          was_price_180d?: number | null
+          was_price_365d?: number | null
           was_price_90d?: number | null
           your_price?: number | null
           your_qty?: number | null
@@ -1442,6 +1454,216 @@ export type Database = {
           },
         ]
       }
+      bl_catalog_names: {
+        Row: {
+          fetched_at: string
+          item_no: string
+          item_type: string
+          name: string
+          source: string
+        }
+        Insert: {
+          fetched_at?: string
+          item_no: string
+          item_type: string
+          name: string
+          source?: string
+        }
+        Update: {
+          fetched_at?: string
+          item_no?: string
+          item_type?: string
+          name?: string
+          source?: string
+        }
+        Relationships: []
+      }
+      bl_pg_lane_telemetry: {
+        Row: {
+          ended_at: string | null
+          failed: number
+          first_block_at_request: number | null
+          id: number
+          lane: string
+          notes: string | null
+          ok: number
+          requests: number
+          run_date: string
+          session_no: number
+          started_at: string
+        }
+        Insert: {
+          ended_at?: string | null
+          failed?: number
+          first_block_at_request?: number | null
+          id?: never
+          lane: string
+          notes?: string | null
+          ok?: number
+          requests?: number
+          run_date?: string
+          session_no?: number
+          started_at?: string
+        }
+        Update: {
+          ended_at?: string | null
+          failed?: number
+          first_block_at_request?: number | null
+          id?: never
+          lane?: string
+          notes?: string | null
+          ok?: number
+          requests?: number
+          run_date?: string
+          session_no?: number
+          started_at?: string
+        }
+        Relationships: []
+      }
+      bl_pg_refresh_queue: {
+        Row: {
+          attempts: number
+          colour_id: number
+          created_at: string
+          grace_until: string | null
+          item_no: string
+          item_type: string
+          last_error: string | null
+          last_refreshed_at: string | null
+          locked_at: string | null
+          locked_by: string | null
+          next_due_at: string
+          rank_floor: string | null
+          rank_score: number
+          tier: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          colour_id?: number
+          created_at?: string
+          grace_until?: string | null
+          item_no: string
+          item_type: string
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_due_at?: string
+          rank_floor?: string | null
+          rank_score?: number
+          tier?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          colour_id?: number
+          created_at?: string
+          grace_until?: string | null
+          item_no?: string
+          item_type?: string
+          last_error?: string | null
+          last_refreshed_at?: string | null
+          locked_at?: string | null
+          locked_by?: string | null
+          next_due_at?: string
+          rank_floor?: string | null
+          rank_score?: number
+          tier?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      bl_pg_reports: {
+        Row: {
+          created_at: string
+          generated_at: string
+          id: number
+          kind: string
+          report_md: string
+          subject: string | null
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          generated_at?: string
+          id?: never
+          kind: string
+          report_md: string
+          subject?: string | null
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          generated_at?: string
+          id?: never
+          kind?: string
+          report_md?: string
+          subject?: string | null
+          summary?: Json
+        }
+        Relationships: []
+      }
+      bl_pg_scan_reports: {
+        Row: {
+          created_at: string
+          floor_unviable: number | null
+          id: number
+          identity_ambiguous: number | null
+          lots_passing: number | null
+          lots_total: number | null
+          outlay_gbp: number | null
+          price_source_uk: number | null
+          price_source_uncovered: number | null
+          price_source_world: number | null
+          raw_net_gbp: number | null
+          realisable_net_gbp: number | null
+          report_md: string
+          scanned_at: string
+          store_slug: string
+          variant_recovered: number | null
+          verdict: string | null
+        }
+        Insert: {
+          created_at?: string
+          floor_unviable?: number | null
+          id?: never
+          identity_ambiguous?: number | null
+          lots_passing?: number | null
+          lots_total?: number | null
+          outlay_gbp?: number | null
+          price_source_uk?: number | null
+          price_source_uncovered?: number | null
+          price_source_world?: number | null
+          raw_net_gbp?: number | null
+          realisable_net_gbp?: number | null
+          report_md: string
+          scanned_at?: string
+          store_slug: string
+          variant_recovered?: number | null
+          verdict?: string | null
+        }
+        Update: {
+          created_at?: string
+          floor_unviable?: number | null
+          id?: never
+          identity_ambiguous?: number | null
+          lots_passing?: number | null
+          lots_total?: number | null
+          outlay_gbp?: number | null
+          price_source_uk?: number | null
+          price_source_uncovered?: number | null
+          price_source_world?: number | null
+          raw_net_gbp?: number | null
+          realisable_net_gbp?: number | null
+          report_md?: string
+          scanned_at?: string
+          store_slug?: string
+          variant_recovered?: number | null
+          verdict?: string | null
+        }
+        Relationships: []
+      }
       bricklink_api_calls_daily: {
         Row: {
           by_caller: Json
@@ -1525,10 +1747,41 @@ export type Database = {
           },
         ]
       }
+      bricklink_colour_map: {
+        Row: {
+          bl_colour_id: number
+          bl_colour_name: string
+          bricqer_colour_id: number | null
+          bricqer_colour_name: string | null
+          created_at: string
+          rgb: string | null
+          updated_at: string
+        }
+        Insert: {
+          bl_colour_id: number
+          bl_colour_name: string
+          bricqer_colour_id?: number | null
+          bricqer_colour_name?: string | null
+          created_at?: string
+          rgb?: string | null
+          updated_at?: string
+        }
+        Update: {
+          bl_colour_id?: number
+          bl_colour_name?: string
+          bricqer_colour_id?: number | null
+          bricqer_colour_name?: string | null
+          created_at?: string
+          rgb?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_part_out_value_cache: {
         Row: {
           break_type: string
           condition: string
+          consecutive_empty_count: number
           created_at: string
           fetched_at: string
           for_sale_avg_gbp: number | null
@@ -1542,10 +1795,12 @@ export type Database = {
           inc_instructions: boolean
           is_aggregate_listing: boolean | null
           item_seq: number
+          last_changed_at: string | null
           my_inv_items: number | null
           my_inv_lots: number | null
           my_inv_native: number | null
           native_currency: string | null
+          no_data_reason: string | null
           not_included_items: number | null
           not_included_lots: number | null
           partout_multiple: number | null
@@ -1564,6 +1819,7 @@ export type Database = {
         Insert: {
           break_type?: string
           condition?: string
+          consecutive_empty_count?: number
           created_at?: string
           fetched_at?: string
           for_sale_avg_gbp?: number | null
@@ -1577,10 +1833,12 @@ export type Database = {
           inc_instructions?: boolean
           is_aggregate_listing?: boolean | null
           item_seq?: number
+          last_changed_at?: string | null
           my_inv_items?: number | null
           my_inv_lots?: number | null
           my_inv_native?: number | null
           native_currency?: string | null
+          no_data_reason?: string | null
           not_included_items?: number | null
           not_included_lots?: number | null
           partout_multiple?: number | null
@@ -1599,6 +1857,7 @@ export type Database = {
         Update: {
           break_type?: string
           condition?: string
+          consecutive_empty_count?: number
           created_at?: string
           fetched_at?: string
           for_sale_avg_gbp?: number | null
@@ -1612,10 +1871,12 @@ export type Database = {
           inc_instructions?: boolean
           is_aggregate_listing?: boolean | null
           item_seq?: number
+          last_changed_at?: string | null
           my_inv_items?: number | null
           my_inv_lots?: number | null
           my_inv_native?: number | null
           native_currency?: string | null
+          no_data_reason?: string | null
           not_included_items?: number | null
           not_included_lots?: number | null
           partout_multiple?: number | null
@@ -1633,7 +1894,7 @@ export type Database = {
         }
         Relationships: []
       }
-      bricklink_part_price_cache: {
+      bricklink_part_price_cache_deprecated: {
         Row: {
           colour_id: number
           colour_name: string | null
@@ -1690,10 +1951,219 @@ export type Database = {
         }
         Relationships: []
       }
+      bricklink_pg_snapshots: {
+        Row: {
+          colour_id: number
+          created_at: string
+          currency: string
+          fetch_identity: string | null
+          item_no: string
+          item_type: string
+          snapshot_date: string
+          sold6m_new_avg: number | null
+          sold6m_new_lots: number
+          sold6m_new_qavg: number | null
+          sold6m_new_qty: number
+          sold6m_used_avg: number | null
+          sold6m_used_lots: number
+          sold6m_used_qavg: number | null
+          sold6m_used_qty: number
+          source: string
+          stock_new_avg: number | null
+          stock_new_lots: number
+          stock_new_qty: number
+          stock_used_avg: number | null
+          stock_used_lots: number
+          stock_used_qty: number
+          str_new: number | null
+          str_used: number | null
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          fetch_identity?: string | null
+          item_no: string
+          item_type: string
+          snapshot_date: string
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          fetch_identity?: string | null
+          item_no?: string
+          item_type?: string
+          snapshot_date?: string
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+        }
+        Relationships: []
+      }
+      bricklink_pg_summary_cache: {
+        Row: {
+          colour_id: number
+          created_at: string
+          currency: string
+          demand_rank: number | null
+          fetch_identity: string | null
+          fetched_at: string
+          fx_rate: number | null
+          id: number
+          item_no: string
+          item_type: string
+          no_data: boolean
+          sold6m_new_avg: number | null
+          sold6m_new_lots: number
+          sold6m_new_max: number | null
+          sold6m_new_min: number | null
+          sold6m_new_qavg: number | null
+          sold6m_new_qty: number
+          sold6m_used_avg: number | null
+          sold6m_used_lots: number
+          sold6m_used_max: number | null
+          sold6m_used_min: number | null
+          sold6m_used_qavg: number | null
+          sold6m_used_qty: number
+          source: string
+          stock_new_avg: number | null
+          stock_new_lots: number
+          stock_new_max: number | null
+          stock_new_min: number | null
+          stock_new_qavg: number | null
+          stock_new_qty: number
+          stock_used_avg: number | null
+          stock_used_lots: number
+          stock_used_max: number | null
+          stock_used_min: number | null
+          stock_used_qavg: number | null
+          stock_used_qty: number
+          str_new: number | null
+          str_used: number | null
+          updated_at: string
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          demand_rank?: number | null
+          fetch_identity?: string | null
+          fetched_at?: string
+          fx_rate?: number | null
+          id?: never
+          item_no: string
+          item_type?: string
+          no_data?: boolean
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_max?: number | null
+          sold6m_new_min?: number | null
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_max?: number | null
+          sold6m_used_min?: number | null
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_max?: number | null
+          stock_new_min?: number | null
+          stock_new_qavg?: number | null
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_max?: number | null
+          stock_used_min?: number | null
+          stock_used_qavg?: number | null
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+          updated_at?: string
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          currency?: string
+          demand_rank?: number | null
+          fetch_identity?: string | null
+          fetched_at?: string
+          fx_rate?: number | null
+          id?: never
+          item_no?: string
+          item_type?: string
+          no_data?: boolean
+          sold6m_new_avg?: number | null
+          sold6m_new_lots?: number
+          sold6m_new_max?: number | null
+          sold6m_new_min?: number | null
+          sold6m_new_qavg?: number | null
+          sold6m_new_qty?: number
+          sold6m_used_avg?: number | null
+          sold6m_used_lots?: number
+          sold6m_used_max?: number | null
+          sold6m_used_min?: number | null
+          sold6m_used_qavg?: number | null
+          sold6m_used_qty?: number
+          source?: string
+          stock_new_avg?: number | null
+          stock_new_lots?: number
+          stock_new_max?: number | null
+          stock_new_min?: number | null
+          stock_new_qavg?: number | null
+          stock_new_qty?: number
+          stock_used_avg?: number | null
+          stock_used_lots?: number
+          stock_used_max?: number | null
+          stock_used_min?: number | null
+          stock_used_qavg?: number | null
+          stock_used_qty?: number
+          str_new?: number | null
+          str_used?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       bricklink_pov_config: {
         Row: {
           backfill_batch_size: number
           backfill_delay_ms: number
+          backoff_after: number
+          backoff_cap: number
           default_break_type: string
           default_condition: string
           default_inc_box: boolean
@@ -1702,12 +2172,19 @@ export type Database = {
           default_inc_instructions: boolean
           freshness_days: number
           id: number
+          not_partable_recheck_days: number
+          refresh_daily_budget: number
+          tier1_days: number
+          tier2_days: number
+          tier3_days: number
           updated_at: string
           usd_to_gbp_rate: number | null
         }
         Insert: {
           backfill_batch_size?: number
           backfill_delay_ms?: number
+          backoff_after?: number
+          backoff_cap?: number
           default_break_type?: string
           default_condition?: string
           default_inc_box?: boolean
@@ -1716,12 +2193,19 @@ export type Database = {
           default_inc_instructions?: boolean
           freshness_days?: number
           id?: number
+          not_partable_recheck_days?: number
+          refresh_daily_budget?: number
+          tier1_days?: number
+          tier2_days?: number
+          tier3_days?: number
           updated_at?: string
           usd_to_gbp_rate?: number | null
         }
         Update: {
           backfill_batch_size?: number
           backfill_delay_ms?: number
+          backoff_after?: number
+          backoff_cap?: number
           default_break_type?: string
           default_condition?: string
           default_inc_box?: boolean
@@ -1730,8 +2214,109 @@ export type Database = {
           default_inc_instructions?: boolean
           freshness_days?: number
           id?: number
+          not_partable_recheck_days?: number
+          refresh_daily_budget?: number
+          tier1_days?: number
+          tier2_days?: number
+          tier3_days?: number
           updated_at?: string
           usd_to_gbp_rate?: number | null
+        }
+        Relationships: []
+      }
+      bricklink_price_guide_cache: {
+        Row: {
+          colour_id: number
+          created_at: string
+          fetched_at: string
+          id: string
+          item_name: string | null
+          item_no: string
+          item_type: string
+          parse_version: number
+          uk_detail: Json | null
+          uk_sold_avg_new: number | null
+          uk_sold_avg_used: number | null
+          uk_sold_last2mo_qty_new: number
+          uk_sold_last2mo_qty_used: number
+          uk_sold_lots_new: number
+          uk_sold_lots_used: number
+          uk_sold_median_new: number | null
+          uk_sold_median_used: number | null
+          uk_sold_qty_avg_new: number | null
+          uk_sold_qty_avg_used: number | null
+          uk_sold_qty_new: number
+          uk_sold_qty_used: number
+          uk_stock_lots_new: number
+          uk_stock_lots_used: number
+          uk_stock_min_new: number | null
+          uk_stock_min_used: number | null
+          uk_stock_qty_new: number
+          uk_stock_qty_used: number
+          updated_at: string
+          world_detail: Json | null
+        }
+        Insert: {
+          colour_id?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          item_name?: string | null
+          item_no: string
+          item_type: string
+          parse_version?: number
+          uk_detail?: Json | null
+          uk_sold_avg_new?: number | null
+          uk_sold_avg_used?: number | null
+          uk_sold_last2mo_qty_new?: number
+          uk_sold_last2mo_qty_used?: number
+          uk_sold_lots_new?: number
+          uk_sold_lots_used?: number
+          uk_sold_median_new?: number | null
+          uk_sold_median_used?: number | null
+          uk_sold_qty_avg_new?: number | null
+          uk_sold_qty_avg_used?: number | null
+          uk_sold_qty_new?: number
+          uk_sold_qty_used?: number
+          uk_stock_lots_new?: number
+          uk_stock_lots_used?: number
+          uk_stock_min_new?: number | null
+          uk_stock_min_used?: number | null
+          uk_stock_qty_new?: number
+          uk_stock_qty_used?: number
+          updated_at?: string
+          world_detail?: Json | null
+        }
+        Update: {
+          colour_id?: number
+          created_at?: string
+          fetched_at?: string
+          id?: string
+          item_name?: string | null
+          item_no?: string
+          item_type?: string
+          parse_version?: number
+          uk_detail?: Json | null
+          uk_sold_avg_new?: number | null
+          uk_sold_avg_used?: number | null
+          uk_sold_last2mo_qty_new?: number
+          uk_sold_last2mo_qty_used?: number
+          uk_sold_lots_new?: number
+          uk_sold_lots_used?: number
+          uk_sold_median_new?: number | null
+          uk_sold_median_used?: number | null
+          uk_sold_qty_avg_new?: number | null
+          uk_sold_qty_avg_used?: number | null
+          uk_sold_qty_new?: number
+          uk_sold_qty_used?: number
+          uk_stock_lots_new?: number
+          uk_stock_lots_used?: number
+          uk_stock_min_new?: number | null
+          uk_stock_min_used?: number | null
+          uk_stock_qty_new?: number
+          uk_stock_qty_used?: number
+          updated_at?: string
+          world_detail?: Json | null
         }
         Relationships: []
       }
@@ -3455,6 +4040,7 @@ export type Database = {
           amazon_sales_rank: number | null
           auction_end_time: string | null
           bid_count: number
+          buy_signal: string | null
           created_at: string
           current_bid_gbp: number
           discord_sent: boolean
@@ -3463,12 +4049,19 @@ export type Database = {
           ebay_item_id: string
           ebay_title: string
           ebay_url: string | null
+          flags: string | null
           id: string
           is_joblot: boolean
           joblot_sets: Json | null
+          listing_type: string
           margin_percent: number | null
+          offer_suggestion_gbp: number | null
           postage_gbp: number
+          pov_condition: string | null
+          pov_multiple: number | null
+          pov_sold_gbp: number | null
           profit_gbp: number | null
+          ratio_to_rrp: number | null
           roi_percent: number | null
           set_name: string | null
           set_number: string | null
@@ -3483,6 +4076,7 @@ export type Database = {
           amazon_sales_rank?: number | null
           auction_end_time?: string | null
           bid_count?: number
+          buy_signal?: string | null
           created_at?: string
           current_bid_gbp: number
           discord_sent?: boolean
@@ -3491,12 +4085,19 @@ export type Database = {
           ebay_item_id: string
           ebay_title: string
           ebay_url?: string | null
+          flags?: string | null
           id?: string
           is_joblot?: boolean
           joblot_sets?: Json | null
+          listing_type?: string
           margin_percent?: number | null
+          offer_suggestion_gbp?: number | null
           postage_gbp?: number
+          pov_condition?: string | null
+          pov_multiple?: number | null
+          pov_sold_gbp?: number | null
           profit_gbp?: number | null
+          ratio_to_rrp?: number | null
           roi_percent?: number | null
           set_name?: string | null
           set_number?: string | null
@@ -3511,6 +4112,7 @@ export type Database = {
           amazon_sales_rank?: number | null
           auction_end_time?: string | null
           bid_count?: number
+          buy_signal?: string | null
           created_at?: string
           current_bid_gbp?: number
           discord_sent?: boolean
@@ -3519,12 +4121,19 @@ export type Database = {
           ebay_item_id?: string
           ebay_title?: string
           ebay_url?: string | null
+          flags?: string | null
           id?: string
           is_joblot?: boolean
           joblot_sets?: Json | null
+          listing_type?: string
           margin_percent?: number | null
+          offer_suggestion_gbp?: number | null
           postage_gbp?: number
+          pov_condition?: string | null
+          pov_multiple?: number | null
+          pov_sold_gbp?: number | null
           profit_gbp?: number | null
+          ratio_to_rrp?: number | null
           roi_percent?: number | null
           set_name?: string | null
           set_number?: string | null
@@ -3548,11 +4157,15 @@ export type Database = {
           min_bids: number
           min_margin_percent: number
           min_profit_gbp: number
+          pov_buy_enabled: boolean
+          pov_great_multiple: number
+          pov_multiple: number
           quiet_hours_enabled: boolean
           quiet_hours_end: number
           quiet_hours_start: number
           scan_window_minutes: number
           updated_at: string
+          used_pov_mode_enabled: boolean
           user_id: string
         }
         Insert: {
@@ -3569,11 +4182,15 @@ export type Database = {
           min_bids?: number
           min_margin_percent?: number
           min_profit_gbp?: number
+          pov_buy_enabled?: boolean
+          pov_great_multiple?: number
+          pov_multiple?: number
           quiet_hours_enabled?: boolean
           quiet_hours_end?: number
           quiet_hours_start?: number
           scan_window_minutes?: number
           updated_at?: string
+          used_pov_mode_enabled?: boolean
           user_id: string
         }
         Update: {
@@ -3590,11 +4207,15 @@ export type Database = {
           min_bids?: number
           min_margin_percent?: number
           min_profit_gbp?: number
+          pov_buy_enabled?: boolean
+          pov_great_multiple?: number
+          pov_multiple?: number
           quiet_hours_enabled?: boolean
           quiet_hours_end?: number
           quiet_hours_start?: number
           scan_window_minutes?: number
           updated_at?: string
+          used_pov_mode_enabled?: boolean
           user_id?: string
         }
         Relationships: []
@@ -3647,6 +4268,120 @@ export type Database = {
           opportunities_found?: number
           skipped_reason?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      ebay_bin_config: {
+        Row: {
+          amazon_great_margin_pct: number
+          amazon_min_margin_pct: number
+          created_at: string
+          enabled: boolean
+          great_multiple: number
+          hitlist_max_age_hours: number
+          id: string
+          last_scan_cursor: string | null
+          last_scan_cursor_new: string | null
+          max_price_gbp: number
+          min_multiple: number
+          min_ratio: number
+          min_used_pov_gbp: number
+          new_scan_enabled: boolean
+          price_floor_pct: number
+          quiet_hours_end: number
+          quiet_hours_start: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amazon_great_margin_pct?: number
+          amazon_min_margin_pct?: number
+          created_at?: string
+          enabled?: boolean
+          great_multiple?: number
+          hitlist_max_age_hours?: number
+          id?: string
+          last_scan_cursor?: string | null
+          last_scan_cursor_new?: string | null
+          max_price_gbp?: number
+          min_multiple?: number
+          min_ratio?: number
+          min_used_pov_gbp?: number
+          new_scan_enabled?: boolean
+          price_floor_pct?: number
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amazon_great_margin_pct?: number
+          amazon_min_margin_pct?: number
+          created_at?: string
+          enabled?: boolean
+          great_multiple?: number
+          hitlist_max_age_hours?: number
+          id?: string
+          last_scan_cursor?: string | null
+          last_scan_cursor_new?: string | null
+          max_price_gbp?: number
+          min_multiple?: number
+          min_ratio?: number
+          min_used_pov_gbp?: number
+          new_scan_enabled?: boolean
+          price_floor_pct?: number
+          quiet_hours_end?: number
+          quiet_hours_start?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ebay_bin_hitlist: {
+        Row: {
+          ebay_floor_gbp: number | null
+          ebay_floor_seen_at: string | null
+          fig_share_pct: number | null
+          new_pov_gbp: number | null
+          pieces: number | null
+          ratio: number | null
+          refreshed_at: string
+          rrp_gbp: number | null
+          set_name: string | null
+          set_number: string
+          theme: string | null
+          used_pov_gbp: number
+          year_from: number | null
+        }
+        Insert: {
+          ebay_floor_gbp?: number | null
+          ebay_floor_seen_at?: string | null
+          fig_share_pct?: number | null
+          new_pov_gbp?: number | null
+          pieces?: number | null
+          ratio?: number | null
+          refreshed_at?: string
+          rrp_gbp?: number | null
+          set_name?: string | null
+          set_number: string
+          theme?: string | null
+          used_pov_gbp: number
+          year_from?: number | null
+        }
+        Update: {
+          ebay_floor_gbp?: number | null
+          ebay_floor_seen_at?: string | null
+          fig_share_pct?: number | null
+          new_pov_gbp?: number | null
+          pieces?: number | null
+          ratio?: number | null
+          refreshed_at?: string
+          rrp_gbp?: number | null
+          set_name?: string | null
+          set_number?: string
+          theme?: string | null
+          used_pov_gbp?: number
+          year_from?: number | null
         }
         Relationships: []
       }
@@ -5378,11 +6113,14 @@ export type Database = {
           daily_calorie_target: number
           daily_protein_g: number
           daily_steps_target: number
+          deficit_kcal: number
           duration_weeks: number
           end_date: string
+          goal_config: Json | null
           id: string
           name: string
           notes: string | null
+          protein_g_per_kg: number
           split: string
           start_date: string
           start_weight_kg: number
@@ -5398,11 +6136,14 @@ export type Database = {
           daily_calorie_target: number
           daily_protein_g: number
           daily_steps_target?: number
+          deficit_kcal?: number
           duration_weeks?: number
           end_date: string
+          goal_config?: Json | null
           id?: string
           name: string
           notes?: string | null
+          protein_g_per_kg?: number
           split?: string
           start_date: string
           start_weight_kg: number
@@ -5418,11 +6159,14 @@ export type Database = {
           daily_calorie_target?: number
           daily_protein_g?: number
           daily_steps_target?: number
+          deficit_kcal?: number
           duration_weeks?: number
           end_date?: string
+          goal_config?: Json | null
           id?: string
           name?: string
           notes?: string | null
+          protein_g_per_kg?: number
           split?: string
           start_date?: string
           start_weight_kg?: number
@@ -6099,23 +6843,29 @@ export type Database = {
       }
       group_results: {
         Row: {
+          eliminated: boolean
           final_position: number
           group_id: string
           id: string
+          position_certain: boolean
           qualified: boolean | null
           team_id: string
         }
         Insert: {
+          eliminated?: boolean
           final_position: number
           group_id: string
           id?: string
+          position_certain?: boolean
           qualified?: boolean | null
           team_id: string
         }
         Update: {
+          eliminated?: boolean
           final_position?: number
           group_id?: string
           id?: string
+          position_certain?: boolean
           qualified?: boolean | null
           team_id?: string
         }
@@ -6892,13 +7642,18 @@ export type Database = {
           data_quality: string
           had_amazon_listing: boolean | null
           id: string
+          label_method: string | null
           price_1yr_post: number | null
           price_3yr_post: number | null
           price_at_retirement: number | null
           raw_data: Json | null
           retired_date: string | null
+          retired_date_estimated: boolean
           rrp_gbp: number | null
           set_num: string
+          snapshots_1yr: number | null
+          snapshots_3yr: number | null
+          snapshots_at_retirement: number | null
           updated_at: string
         }
         Insert: {
@@ -6909,13 +7664,18 @@ export type Database = {
           data_quality?: string
           had_amazon_listing?: boolean | null
           id?: string
+          label_method?: string | null
           price_1yr_post?: number | null
           price_3yr_post?: number | null
           price_at_retirement?: number | null
           raw_data?: Json | null
           retired_date?: string | null
+          retired_date_estimated?: boolean
           rrp_gbp?: number | null
           set_num: string
+          snapshots_1yr?: number | null
+          snapshots_3yr?: number | null
+          snapshots_at_retirement?: number | null
           updated_at?: string
         }
         Update: {
@@ -6926,13 +7686,18 @@ export type Database = {
           data_quality?: string
           had_amazon_listing?: boolean | null
           id?: string
+          label_method?: string | null
           price_1yr_post?: number | null
           price_3yr_post?: number | null
           price_at_retirement?: number | null
           raw_data?: Json | null
           retired_date?: string | null
+          retired_date_estimated?: boolean
           rrp_gbp?: number | null
           set_num?: string
+          snapshots_1yr?: number | null
+          snapshots_3yr?: number | null
+          snapshots_at_retirement?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -7175,6 +7940,13 @@ export type Database = {
             columns: ["set_num"]
             isOneToOne: false
             referencedRelation: "brickset_sets"
+            referencedColumns: ["set_number"]
+          },
+          {
+            foreignKeyName: "investment_training_data_set_num_fkey"
+            columns: ["set_num"]
+            isOneToOne: false
+            referencedRelation: "keepa_refresh_candidates"
             referencedColumns: ["set_number"]
           },
           {
@@ -8234,7 +9006,18 @@ export type Database = {
       }
       markdown_config: {
         Row: {
+          amazon_decay_floor_pct: number
+          amazon_decay_interval_days: number
+          amazon_decay_start_days: number
+          amazon_decay_step_pct: number
+          amazon_exit_days: number
           amazon_fee_rate: number
+          amazon_healthy_drops_90d: number
+          amazon_min_drops_90d: number
+          amazon_persistence_min_pct: number
+          amazon_persistence_window_days: number
+          amazon_postage_cost: number
+          amazon_reference_window_days: number
           amazon_step1_days: number
           amazon_step2_days: number
           amazon_step2_undercut_pct: number
@@ -8246,6 +9029,7 @@ export type Database = {
           auction_max_per_day: number
           created_at: string
           ebay_fee_rate: number
+          ebay_postage_cost: number
           ebay_step1_days: number
           ebay_step1_reduction_pct: number
           ebay_step2_days: number
@@ -8264,7 +9048,18 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          amazon_decay_floor_pct?: number
+          amazon_decay_interval_days?: number
+          amazon_decay_start_days?: number
+          amazon_decay_step_pct?: number
+          amazon_exit_days?: number
           amazon_fee_rate?: number
+          amazon_healthy_drops_90d?: number
+          amazon_min_drops_90d?: number
+          amazon_persistence_min_pct?: number
+          amazon_persistence_window_days?: number
+          amazon_postage_cost?: number
+          amazon_reference_window_days?: number
           amazon_step1_days?: number
           amazon_step2_days?: number
           amazon_step2_undercut_pct?: number
@@ -8276,6 +9071,7 @@ export type Database = {
           auction_max_per_day?: number
           created_at?: string
           ebay_fee_rate?: number
+          ebay_postage_cost?: number
           ebay_step1_days?: number
           ebay_step1_reduction_pct?: number
           ebay_step2_days?: number
@@ -8294,7 +9090,18 @@ export type Database = {
           user_id: string
         }
         Update: {
+          amazon_decay_floor_pct?: number
+          amazon_decay_interval_days?: number
+          amazon_decay_start_days?: number
+          amazon_decay_step_pct?: number
+          amazon_exit_days?: number
           amazon_fee_rate?: number
+          amazon_healthy_drops_90d?: number
+          amazon_min_drops_90d?: number
+          amazon_persistence_min_pct?: number
+          amazon_persistence_window_days?: number
+          amazon_postage_cost?: number
+          amazon_reference_window_days?: number
           amazon_step1_days?: number
           amazon_step2_days?: number
           amazon_step2_undercut_pct?: number
@@ -8306,6 +9113,7 @@ export type Database = {
           auction_max_per_day?: number
           created_at?: string
           ebay_fee_rate?: number
+          ebay_postage_cost?: number
           ebay_step1_days?: number
           ebay_step1_reduction_pct?: number
           ebay_step2_days?: number
@@ -8349,6 +9157,7 @@ export type Database = {
           sales_rank: number | null
           set_number: string | null
           status: string
+          units: number
           updated_at: string
           user_id: string
         }
@@ -8375,6 +9184,7 @@ export type Database = {
           sales_rank?: number | null
           set_number?: string | null
           status?: string
+          units?: number
           updated_at?: string
           user_id: string
         }
@@ -8401,6 +9211,7 @@ export type Database = {
           sales_rank?: number | null
           set_number?: string | null
           status?: string
+          units?: number
           updated_at?: string
           user_id?: string
         }
@@ -10670,6 +11481,69 @@ export type Database = {
           },
         ]
       }
+      pov_refresh_runs: {
+        Row: {
+          attempted: number
+          backlog_after: number | null
+          backlog_before: number | null
+          breathers: number
+          budget: number
+          candidates: number
+          created_at: string
+          duration_ms: number | null
+          errors: number
+          finished_at: string | null
+          id: string
+          newly_empty: number
+          no_data: number
+          recoveries: number
+          refreshed: number
+          started_at: string
+          stop_reason: string | null
+          stopped_early: boolean
+        }
+        Insert: {
+          attempted?: number
+          backlog_after?: number | null
+          backlog_before?: number | null
+          breathers?: number
+          budget: number
+          candidates?: number
+          created_at?: string
+          duration_ms?: number | null
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          newly_empty?: number
+          no_data?: number
+          recoveries?: number
+          refreshed?: number
+          started_at?: string
+          stop_reason?: string | null
+          stopped_early?: boolean
+        }
+        Update: {
+          attempted?: number
+          backlog_after?: number | null
+          backlog_before?: number | null
+          breathers?: number
+          budget?: number
+          candidates?: number
+          created_at?: string
+          duration_ms?: number | null
+          errors?: number
+          finished_at?: string | null
+          id?: string
+          newly_empty?: number
+          no_data?: number
+          recoveries?: number
+          refreshed?: number
+          started_at?: string
+          stop_reason?: string | null
+          stopped_early?: boolean
+        }
+        Relationships: []
+      }
       price_snapshots: {
         Row: {
           buy_box_winner: string | null
@@ -10706,6 +11580,45 @@ export type Database = {
           seller_count?: number | null
           set_num?: string
           source?: string
+        }
+        Relationships: []
+      }
+      price_snapshots_keepa_backup_20260702: {
+        Row: {
+          buy_box_winner: string | null
+          created_at: string | null
+          date: string | null
+          id: string | null
+          price_gbp: number | null
+          raw_data: Json | null
+          sales_rank: number | null
+          seller_count: number | null
+          set_num: string | null
+          source: string | null
+        }
+        Insert: {
+          buy_box_winner?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string | null
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num?: string | null
+          source?: string | null
+        }
+        Update: {
+          buy_box_winner?: string | null
+          created_at?: string | null
+          date?: string | null
+          id?: string | null
+          price_gbp?: number | null
+          raw_data?: Json | null
+          sales_rank?: number | null
+          seller_count?: number | null
+          set_num?: string | null
+          source?: string | null
         }
         Relationships: []
       }
@@ -12709,10 +13622,12 @@ export type Database = {
           duration_ms: number | null
           errors: Json | null
           id: string
+          items_added_to_group: number
           items_archived: number | null
           items_created: number | null
           items_failed: number | null
           items_processed: number | null
+          items_reactivated: number
           items_updated: number | null
           started_at: string
           sync_type: string
@@ -12723,10 +13638,12 @@ export type Database = {
           duration_ms?: number | null
           errors?: Json | null
           id?: string
+          items_added_to_group?: number
           items_archived?: number | null
           items_created?: number | null
           items_failed?: number | null
           items_processed?: number | null
+          items_reactivated?: number
           items_updated?: number | null
           started_at?: string
           sync_type: string
@@ -12737,10 +13654,12 @@ export type Database = {
           duration_ms?: number | null
           errors?: Json | null
           id?: string
+          items_added_to_group?: number
           items_archived?: number | null
           items_created?: number | null
           items_failed?: number | null
           items_processed?: number | null
+          items_reactivated?: number
           items_updated?: number | null
           started_at?: string
           sync_type?: string
@@ -13045,6 +13964,116 @@ export type Database = {
           },
           {
             foreignKeyName: "stock_pickups_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_assessments: {
+        Row: {
+          assessment: Json | null
+          avg_value_per_lot: number | null
+          blended_margin_pct: number | null
+          buyable_fresh_lots: number | null
+          buyable_lots: number | null
+          buyable_net_gbp: number | null
+          buyable_outlay_gbp: number | null
+          created_at: string
+          engine_version: number
+          feedback_score: number | null
+          grade: number | null
+          high_str_lots: number | null
+          id: string
+          magnet_lots: number | null
+          median_ask_vs_market: number | null
+          mode: string
+          orders_per_month: number | null
+          positive_pct: number | null
+          price_coverage: number | null
+          report_md: string | null
+          scan_truncated: boolean
+          scanned_at: string
+          store_country: string | null
+          store_id: number | null
+          store_name: string | null
+          store_slug: string
+          total_lots: number | null
+          total_pieces: number | null
+          total_value: number | null
+          user_id: string
+          verdict: string | null
+        }
+        Insert: {
+          assessment?: Json | null
+          avg_value_per_lot?: number | null
+          blended_margin_pct?: number | null
+          buyable_fresh_lots?: number | null
+          buyable_lots?: number | null
+          buyable_net_gbp?: number | null
+          buyable_outlay_gbp?: number | null
+          created_at?: string
+          engine_version?: number
+          feedback_score?: number | null
+          grade?: number | null
+          high_str_lots?: number | null
+          id?: string
+          magnet_lots?: number | null
+          median_ask_vs_market?: number | null
+          mode?: string
+          orders_per_month?: number | null
+          positive_pct?: number | null
+          price_coverage?: number | null
+          report_md?: string | null
+          scan_truncated?: boolean
+          scanned_at?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_name?: string | null
+          store_slug: string
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          user_id: string
+          verdict?: string | null
+        }
+        Update: {
+          assessment?: Json | null
+          avg_value_per_lot?: number | null
+          blended_margin_pct?: number | null
+          buyable_fresh_lots?: number | null
+          buyable_lots?: number | null
+          buyable_net_gbp?: number | null
+          buyable_outlay_gbp?: number | null
+          created_at?: string
+          engine_version?: number
+          feedback_score?: number | null
+          grade?: number | null
+          high_str_lots?: number | null
+          id?: string
+          magnet_lots?: number | null
+          median_ask_vs_market?: number | null
+          mode?: string
+          orders_per_month?: number | null
+          positive_pct?: number | null
+          price_coverage?: number | null
+          report_md?: string | null
+          scan_truncated?: boolean
+          scanned_at?: string
+          store_country?: string | null
+          store_id?: number | null
+          store_name?: string | null
+          store_slug?: string
+          total_lots?: number | null
+          total_pieces?: number | null
+          total_value?: number | null
+          user_id?: string
+          verdict?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_assessments_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -13920,6 +14949,8 @@ export type Database = {
           group_stage_rank: number | null
           id: string
           knockout_points: number | null
+          knockout_tiebreaker_diff: number | null
+          knockout_tiebreaker_goals: number | null
           overall_rank: number | null
           payment_status: string | null
           player_id: string
@@ -13934,6 +14965,8 @@ export type Database = {
           group_stage_rank?: number | null
           id?: string
           knockout_points?: number | null
+          knockout_tiebreaker_diff?: number | null
+          knockout_tiebreaker_goals?: number | null
           overall_rank?: number | null
           payment_status?: string | null
           player_id: string
@@ -13948,6 +14981,8 @@ export type Database = {
           group_stage_rank?: number | null
           id?: string
           knockout_points?: number | null
+          knockout_tiebreaker_diff?: number | null
+          knockout_tiebreaker_goals?: number | null
           overall_rank?: number | null
           payment_status?: string | null
           player_id?: string
@@ -13984,16 +15019,19 @@ export type Database = {
         Row: {
           id: string
           total_group_stage_goals: number | null
+          total_knockout_goals: number | null
           tournament_id: string | null
         }
         Insert: {
           id?: string
           total_group_stage_goals?: number | null
+          total_knockout_goals?: number | null
           tournament_id?: string | null
         }
         Update: {
           id?: string
           total_group_stage_goals?: number | null
+          total_knockout_goals?: number | null
           tournament_id?: string | null
         }
         Relationships: [
@@ -14745,6 +15783,7 @@ export type Database = {
           catalog_name: string | null
           catalog_theme: string | null
           cog: number | null
+          condition_class: string | null
           condition_text: string | null
           decision: string
           decision_reason: string | null
@@ -14753,7 +15792,13 @@ export type Database = {
           listing_id: string
           listing_url: string | null
           margin_pct: number | null
+          mode: string | null
           name_match: boolean | null
+          pov_multiple_new: number | null
+          pov_multiple_used: number | null
+          pov_new_sold_gbp: number | null
+          pov_signal: string | null
+          pov_used_sold_gbp: number | null
           price_incl_num: number | null
           price_num: number | null
           profit: number | null
@@ -14778,6 +15823,7 @@ export type Database = {
           catalog_name?: string | null
           catalog_theme?: string | null
           cog?: number | null
+          condition_class?: string | null
           condition_text?: string | null
           decision: string
           decision_reason?: string | null
@@ -14786,7 +15832,13 @@ export type Database = {
           listing_id: string
           listing_url?: string | null
           margin_pct?: number | null
+          mode?: string | null
           name_match?: boolean | null
+          pov_multiple_new?: number | null
+          pov_multiple_used?: number | null
+          pov_new_sold_gbp?: number | null
+          pov_signal?: string | null
+          pov_used_sold_gbp?: number | null
           price_incl_num?: number | null
           price_num?: number | null
           profit?: number | null
@@ -14811,6 +15863,7 @@ export type Database = {
           catalog_name?: string | null
           catalog_theme?: string | null
           cog?: number | null
+          condition_class?: string | null
           condition_text?: string | null
           decision?: string
           decision_reason?: string | null
@@ -14819,7 +15872,13 @@ export type Database = {
           listing_id?: string
           listing_url?: string | null
           margin_pct?: number | null
+          mode?: string | null
           name_match?: boolean | null
+          pov_multiple_new?: number | null
+          pov_multiple_used?: number | null
+          pov_new_sold_gbp?: number | null
+          pov_signal?: string | null
+          pov_used_sold_gbp?: number | null
           price_incl_num?: number | null
           price_num?: number | null
           profit?: number | null
@@ -15369,6 +16428,33 @@ export type Database = {
           },
         ]
       }
+      bricklink_pov_refresh_status: {
+        Row: {
+          age_tier: number | null
+          backoff_mult: number | null
+          base_cadence_days: number | null
+          condition: string | null
+          consecutive_empty_count: number | null
+          due_at: string | null
+          due_date: string | null
+          effective_cadence_days: number | null
+          fetched_at: string | null
+          for_sale_avg_gbp: number | null
+          id: string | null
+          is_no_data: boolean | null
+          is_stale: boolean | null
+          item_seq: number | null
+          jitter_days: number | null
+          last_changed_at: string | null
+          no_data_reason: string | null
+          overdue_ratio: number | null
+          set_name: string | null
+          set_number: string | null
+          sold_6mo_avg_gbp: number | null
+          year_from: number | null
+        }
+        Relationships: []
+      }
       daily_platform_activity: {
         Row: {
           activity_date: string | null
@@ -15527,6 +16613,15 @@ export type Database = {
           },
         ]
       }
+      keepa_refresh_candidates: {
+        Row: {
+          amazon_asin: string | null
+          last_keepa_date: string | null
+          retirement_status: string | null
+          set_number: string | null
+        }
+        Relationships: []
+      }
       monthly_platform_summary: {
         Row: {
           items_listed: number | null
@@ -15537,6 +16632,67 @@ export type Database = {
           platform: string | null
           sold_value: number | null
           user_id: string | null
+        }
+        Relationships: []
+      }
+      pg_screen_fig_radar: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          new_used_spread: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_high_str: {
+        Row: {
+          colour_id: number | null
+          fetched_at: string | null
+          item_no: string | null
+          item_type: string | null
+          months_of_stock: number | null
+          sold_value_gbp: number | null
+          sold6m_new_avg: number | null
+          sold6m_new_qty: number | null
+          sold6m_used_avg: number | null
+          sold6m_used_qty: number | null
+          stock_qty: number | null
+          str_new: number | null
+          str_used: number | null
+        }
+        Relationships: []
+      }
+      pg_screen_trend_movers: {
+        Row: {
+          colour_id: number | null
+          item_no: string | null
+          item_type: string | null
+          latest_date: string | null
+          latest_new_avg: number | null
+          latest_new_qty: number | null
+          latest_str_new: number | null
+          latest_str_used: number | null
+          latest_used_avg: number | null
+          latest_used_qty: number | null
+          new_avg_delta: number | null
+          new_qty_delta: number | null
+          prior_date: string | null
+          prior_new_avg: number | null
+          prior_new_qty: number | null
+          prior_used_avg: number | null
+          prior_used_qty: number | null
+          used_avg_delta: number | null
+          used_qty_delta: number | null
         }
         Relationships: []
       }
@@ -15697,6 +16853,8 @@ export type Database = {
           group_stage_points: number | null
           group_stage_rank: number | null
           knockout_points: number | null
+          knockout_tiebreaker_diff: number | null
+          knockout_tiebreaker_goals: number | null
           nickname: string | null
           overall_rank: number | null
           player_id: string | null
@@ -16476,6 +17634,18 @@ export type Database = {
           adjusted_total_listings: number
         }[]
       }
+      get_amazon_pricing_public: {
+        Args: { p_set_number: string }
+        Returns: {
+          amazon_price: number
+          asin: string
+          sales_rank: number
+          set_name: string
+          set_number: string
+          uk_retail_price: number
+          was_price_90d: number
+        }[]
+      }
       get_arbitrage_adjusted_count: {
         Args: {
           p_max_cog?: number
@@ -16555,6 +17725,15 @@ export type Database = {
           was_price_90d: number
           your_price: number
           your_qty: number
+        }[]
+      }
+      get_bricqer_snapshot_stats: {
+        Args: { p_user_id: string }
+        Returns: {
+          inventory_value: number
+          last_synced: string
+          lot_count: number
+          piece_count: number
         }[]
       }
       get_connection_coverage: {
@@ -16727,6 +17906,23 @@ export type Database = {
       }
       get_player_id: { Args: never; Returns: string }
       get_pomodoro_streak: { Args: { p_user_id: string }; Returns: number }
+      get_pov_freshness_report: { Args: never; Returns: Json }
+      get_pov_public: {
+        Args: { p_set_number: string }
+        Returns: {
+          condition: string
+          fetched_at: string
+          for_sale_avg_gbp: number
+          item_seq: number
+          no_data_reason: string
+          partout_multiple: number
+          set_name: string
+          set_number: string
+          sold_6mo_avg_gbp: number
+          sold_6mo_lots: number
+          uk_retail_gbp: number
+        }[]
+      }
       get_profit_per_sale: {
         Args: { from_date?: string }
         Returns: {
@@ -16825,6 +18021,10 @@ export type Database = {
           latest_transaction_at: string
           transaction_count: number
         }[]
+      }
+      refresh_ebay_bin_hitlist: {
+        Args: { p_min_pov?: number; p_min_ratio?: number }
+        Returns: number
       }
       search_inventory_excluding_linked: {
         Args: {

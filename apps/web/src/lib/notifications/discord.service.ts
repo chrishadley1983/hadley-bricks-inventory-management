@@ -46,18 +46,133 @@ export interface EbayAuctionAlertParams {
   totalCost: number;
   bidCount: number;
   minutesRemaining: number;
-  amazonPrice: number;
-  amazon90dAvg: number | null;
-  amazonAsin: string;
-  salesRank: number | null;
-  profit: number;
-  marginPercent: number;
-  roiPercent: number;
+  // Amazon resale leg — null/absent for used-POV opportunities.
+  amazonPrice?: number | null;
+  amazon90dAvg?: number | null;
+  amazonAsin?: string | null;
+  salesRank?: number | null;
+  profit?: number | null;
+  marginPercent?: number | null;
+  roiPercent?: number | null;
   alertTier: 'great' | 'good';
   ebayUrl: string;
   imageUrl: string | null;
-  ukRrp: number | null;
-  maxBid: number | null;
+  ukRrp?: number | null;
+  maxBid?: number | null;
+  // Part-Out-Value (condition-matched)
+  conditionMode?: 'new' | 'used';
+  povSoldGbp?: number | null;
+  povForSaleGbp?: number | null;
+  povMultiple?: number | null;
+  povLots?: number | null;
+  signals?: string[];
+  flags?: string[];
+  altNewPovSoldGbp?: number | null;
+}
+
+export interface EbayBinPartoutAlertParams {
+  conditionMode?: 'used' | 'new';
+  sets: Array<{
+    setNumber: string;
+    setName: string | null;
+    theme: string | null;
+    yearFrom: number | null;
+    rrpGbp: number | null;
+    usedPovGbp: number;
+    newPovGbp?: number | null;
+    figSharePct: number | null;
+    ebayFloorGbp: number | null;
+  }>;
+  title: string;
+  priceGbp: number;
+  postageGbp: number;
+  totalCostGbp: number;
+  povTotal: number;
+  multiple: number | null;
+  /** Liquidity-adjusted ("realisable") POV — spec §3 F4. null when no set-level STR
+   *  signal was available (cache coverage is thin); do not treat as "no data = £0". */
+  realisablePovGbp?: number | null;
+  povCaptureRate?: number | null; // 0..1
+  amazonPriceGbp?: number | null;
+  amazonProfitGbp?: number | null;
+  amazonMarginPct?: number | null;
+  amazon90dGbp?: number | null;
+  salesRank?: number | null;
+  asin?: string | null;
+  signals?: string[];
+  tier: 'great' | 'good';
+  bestOfferEnabled: boolean;
+  offerSuggestionGbp: number | null;
+  flags: string[];
+  sellerUsername: string | null;
+  sellerScore: number | null;
+  itemUrl: string | undefined;
+  imageUrl: string | undefined;
+  condition: string | undefined;
+}
+
+export interface PgCanaryDivergence {
+  /** e.g. "P 3001 c11" */
+  label: string;
+  /** lane name -> UK sold-new average GBP (null if that lane had no data this run) */
+  lanes: Record<string, number | null>;
+  maxDivergencePct: number;
+}
+
+export interface PgCanaryAlertParams {
+  runDate: string;
+  divergentCount: number;
+  totalTuples: number;
+  divergences: PgCanaryDivergence[];
+}
+
+/** One row of the digest's STR-mover / fig-radar-mover lists (spec §5.3). */
+export interface PgDigestMoverRow {
+  /** e.g. "P 3001 c11" */
+  label: string;
+  /** Combined sold6m qty delta (new+used) between the two most recent snapshots. */
+  qtyDelta: number;
+  latestStrNew?: number | null;
+  latestStrUsed?: number | null;
+}
+
+/** Per-lane 7-day telemetry rollup for the digest's coverage/freshness section. */
+export interface PgDigestLaneTelemetry {
+  lane: string;
+  requests7d: number;
+  ok7d: number;
+  failed7d: number;
+  /** Short human summary of the sessions-to-first-403 trend, e.g. "flat ~410" or "tightening 430→370". */
+  firstBlockTrend: string;
+}
+
+/** Coverage/freshness health block (spec §5.3/§5.4). */
+export interface PgDigestCoverageHealth {
+  l1Total: number;
+  activeTierCount: number;
+  /** % of the active tier refreshed within the last 28 days. */
+  activeWithin28dPct: number;
+  /** Active-tier tuples whose next_due_at has already passed. */
+  pastDueCount: number;
+  laneTelemetry: PgDigestLaneTelemetry[];
+}
+
+/** A markdown report's top-N lines for one section, carried into the digest verbatim. */
+export interface PgDigestReportExcerpt {
+  title: string;
+  lines: string[];
+}
+
+export interface PgDigestAlertParams {
+  runDate: string;
+  strRisers: PgDigestMoverRow[];
+  strFallers: PgDigestMoverRow[];
+  figMovers: PgDigestMoverRow[];
+  coverage: PgDigestCoverageHealth;
+  /** Top-5-per-section excerpts from the most recent own-store-audit report (last 7 days), if any. */
+  ownStoreAuditExcerpts: PgDigestReportExcerpt[];
+  /** Path to the full markdown digest report on disk, for reference in the embed. */
+  reportPath: string;
 }
 
 export interface EbayJoblotAlertParams {
@@ -158,34 +273,26 @@ export interface SendDailySummaryParams {
 }
 
 export class DiscordService {
-  private readonly webhooks: Record<DiscordChannel, string | undefined>;
-  private readonly appUrl: string;
   private readonly timeout = 5000; // 5 second timeout
 
-  constructor() {
-    this.webhooks = {
+  // Read webhook config lazily on each access rather than caching it in the constructor.
+  // The exported singleton is instantiated at module-import time — which, in tsx scripts,
+  // runs BEFORE the script calls dotenv.config() to load .env.local. Caching the webhooks
+  // in the constructor captured an empty env and made every channel silently "not
+  // configured", so local alerts never posted. A getter re-reads process.env after env
+  // has loaded (no effect on Next.js/Vercel, where env is present before any read).
+  private get webhooks(): Record<DiscordChannel, string | undefined> {
+    return {
       alerts: process.env.DISCORD_WEBHOOK_ALERTS,
       opportunities: process.env.DISCORD_WEBHOOK_OPPORTUNITIES,
       'sync-status': process.env.DISCORD_WEBHOOK_SYNC_STATUS,
       'daily-summary': process.env.DISCORD_WEBHOOK_DAILY_SUMMARY,
       'peter-chat': process.env.DISCORD_WEBHOOK_PETER_CHAT,
     };
-    this.appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  }
 
-    // Log configuration status on instantiation
-    const configuredChannels = Object.entries(this.webhooks)
-      .filter(([, url]) => !!url)
-      .map(([channel]) => channel);
-    const missingChannels = Object.entries(this.webhooks)
-      .filter(([, url]) => !url)
-      .map(([channel]) => channel);
-
-    if (configuredChannels.length > 0) {
-      console.log(`[DiscordService] Configured channels: ${configuredChannels.join(', ')}`);
-    }
-    if (missingChannels.length > 0) {
-      console.log(`[DiscordService] Missing channels: ${missingChannels.join(', ')}`);
-    }
+  private get appUrl(): string {
+    return process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
   }
 
   /**
@@ -423,73 +530,111 @@ export class DiscordService {
       bidCount, minutesRemaining, amazonPrice, amazon90dAvg, amazonAsin,
       salesRank, profit, marginPercent, roiPercent, alertTier,
       ebayUrl, imageUrl, ukRrp, maxBid,
+      conditionMode = 'new', povSoldGbp, povForSaleGbp, povMultiple, povLots, signals = [], flags = [], altNewPovSoldGbp,
     } = params;
 
     const color = alertTier === 'great' ? 0x2ecc71 : 0xf1c40f; // Green or amber
     const tierEmoji = alertTier === 'great' ? '🟢' : '🟠';
-    const tierLabel = alertTier === 'great' ? 'GREAT DEAL' : 'GOOD DEAL';
+    // BL-cache-sourced set names embed the set number — strip to avoid "75137 75137 …".
+    const cleanSetName = setName ? setName.replace(new RegExp(`^${setNumber}\\s*`), '') : null;
+    const setLabel = `${setNumber}${cleanSetName ? ` ${cleanSetName}` : ''}`;
 
-    const keepaUrl = `https://keepa.com/#!product/2-${amazonAsin}`;
-    const amazonUrl = `https://www.amazon.co.uk/dp/${amazonAsin}`;
+    const amazonFired = marginPercent != null && signals.some((s) => s.startsWith('Amazon'));
+    const povFired = povMultiple != null && signals.some((s) => s.toLowerCase().includes('pov'));
 
-    const fields: DiscordEmbedField[] = [
-      {
-        name: '🏷️ eBay (COG)',
-        value: `Bid: £${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
-        inline: true,
-      },
-      {
-        name: '🛒 Amazon',
-        value: `Buy Box: [£${amazonPrice.toFixed(2)}](${amazonUrl})\n[Keepa](${keepaUrl})`,
-        inline: true,
-      },
-      {
-        name: '📊 90d Avg',
-        value: amazon90dAvg ? `£${amazon90dAvg.toFixed(2)}` : '—',
-        inline: true,
-      },
-      {
-        name: '💰 Profit / Margin',
-        value: `**£${profit.toFixed(2)}** · ${marginPercent.toFixed(1)}% margin · ${roiPercent.toFixed(0)}% ROI`,
-        inline: false,
-      },
-      {
-        name: `${tierEmoji} ${tierLabel}`,
-        value: `${marginPercent.toFixed(1)}% profit margin`,
-        inline: true,
-      },
-      {
-        name: '🎯 Max Bid (25%)',
-        value: maxBid != null ? `£${maxBid.toFixed(2)}` : '—',
-        inline: true,
-      },
-      {
-        name: '⏰ Time Left',
-        value: `${minutesRemaining} min · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
-        inline: true,
-      },
-    ];
+    // Verdict title: "🔨 {tier} ends Xm - {set} - Bid £X (n bids) - {metric}, {PLAY}"
+    let titleMetric: string;
+    if (conditionMode === 'used') {
+      titleMetric = `COG: ${povMultiple != null ? povMultiple.toFixed(1) : '?'}X, USED PART OUT`;
+    } else if (amazonFired) {
+      titleMetric = `Profit %: ${marginPercent!.toFixed(1)}, AMAZON SELL${povFired ? ' + PART OUT' : ''}`;
+    } else {
+      titleMetric = `COG: ${povMultiple != null ? povMultiple.toFixed(1) : '?'}X, NEW PART OUT`;
+    }
+    const embedTitle = `🔨 ${tierEmoji} ends ${minutesRemaining}m - ${setLabel} - Bid £${currentBid.toFixed(2)} (${bidCount} bid${bidCount !== 1 ? 's' : ''}) - ${titleMetric}`.substring(0, 256);
 
-    if (ukRrp) {
+    // Auctions are time-critical: bid ceiling up front.
+    const usedMaxBid =
+      conditionMode === 'used' && maxBid == null && povSoldGbp != null
+        ? Math.max(0, povSoldGbp / 3 - postage)
+        : null;
+    const actionBid = maxBid ?? usedMaxBid;
+
+    const fields: DiscordEmbedField[] = [];
+
+    fields.push({
+      name: '⏰ Auction',
+      value: `ends **${minutesRemaining} min** · ${bidCount} bid${bidCount !== 1 ? 's' : ''}`,
+      inline: true,
+    });
+    if (actionBid != null) {
+      fields.push({ name: '🎯 Max Bid', value: `**£${actionBid.toFixed(2)}**`, inline: true });
+    }
+    fields.push({
+      name: '🏷️ eBay (COG)',
+      value: `£${currentBid.toFixed(2)} + £${postage.toFixed(2)} post\n**Total: £${totalCost.toFixed(2)}**`,
+      inline: true,
+    });
+
+    if (amazonPrice != null) {
+      const amazonUrl = amazonAsin ? `https://www.amazon.co.uk/dp/${amazonAsin}` : null;
+      const keepaUrl = amazonAsin ? `https://keepa.com/#!product/2-${amazonAsin}` : null;
+      fields.push({
+        name: '🛒 Amazon BB',
+        value: `${amazonUrl ? `[£${amazonPrice.toFixed(2)}](${amazonUrl})` : `£${amazonPrice.toFixed(2)}`}${keepaUrl ? `\n[Keepa](${keepaUrl})` : ''}`,
+        inline: true,
+      });
+      if (ukRrp) fields.push({ name: '🏷️ UK RRP', value: `£${ukRrp.toFixed(2)}`, inline: true });
+      if (amazon90dAvg) fields.push({ name: '📊 90d Avg', value: `£${amazon90dAvg.toFixed(2)}`, inline: true });
+      if (salesRank) fields.push({ name: '📈 BSR', value: formatSalesRank(salesRank), inline: true });
+      if (profit != null && marginPercent != null) {
+        fields.push({
+          name: `${amazonFired ? '→ ' : ''}💰 Amazon Profit / Margin`,
+          value: `Profit: **£${profit.toFixed(2)}** (${marginPercent.toFixed(1)}%)${roiPercent != null ? ` · ${roiPercent.toFixed(0)}% ROI` : ''}\nCOG: ${((totalCost / amazonPrice) * 100).toFixed(1)}%`,
+          inline: false,
+        });
+      }
+    } else if (ukRrp) {
       fields.push({ name: '🏷️ UK RRP', value: `£${ukRrp.toFixed(2)}`, inline: true });
     }
 
-    if (salesRank) {
+    const povLabel = conditionMode === 'used' ? 'Part-Out (Used)' : 'Part-Out (New)';
+    if (povSoldGbp != null) {
+      const meta: string[] = [];
+      if (povMultiple != null) meta.push(`**${povMultiple.toFixed(1)}× cost**${!povFired ? ' (below the part-out bar)' : ''}`);
+      if (povLots != null) meta.push(`${povLots} lots`);
+      const povValueLines = [
+        `6mo sold: **£${povSoldGbp.toFixed(2)}**${povForSaleGbp != null ? ` · for-sale: £${povForSaleGbp.toFixed(2)}` : ''}${meta.length ? `\n${meta.join(' · ')}` : ''}`,
+      ];
+      // Thin used history — show the deep NEW figure as the sanity anchor.
+      if (conditionMode === 'used' && altNewPovSoldGbp != null && flags.some((f) => f.includes('thin used-parts history'))) {
+        povValueLines.push(`New part-out (deeper data): £${altNewPovSoldGbp.toFixed(2)} · ${(altNewPovSoldGbp / totalCost).toFixed(1)}× cost`);
+      }
       fields.push({
-        name: '📈 Sales Rank',
-        value: formatSalesRank(salesRank),
-        inline: true,
+        name: `${povFired ? '→ ' : ''}🧩 ${povLabel}`,
+        value: povValueLines.join('\n'),
+        inline: false,
+      });
+    } else {
+      fields.push({ name: `🧩 ${povLabel}`, value: 'no BL part-out data', inline: false });
+    }
+
+    if (flags.length > 0) {
+      fields.push({
+        name: '⚠️ Check before bidding',
+        value: flags.map((f) => `• ${f}`).join('\n').slice(0, 1000),
+        inline: false,
       });
     }
 
     fields.push({
-      name: '🧱 Set',
-      value: `${setNumber}${setName ? `: ${setName}` : ''}`,
+      name: '🧱 Listing',
+      value: `${ebayTitle.substring(0, 150)}`,
       inline: false,
     });
 
     const embed: DiscordEmbed = {
-      title: `🔨 ${setNumber}: ${ebayTitle.substring(0, 80)}`,
+      title: embedTitle,
       url: ebayUrl,
       color,
       fields,
@@ -500,6 +645,274 @@ export class DiscordService {
     }
 
     return this.send('opportunities', embed);
+  }
+
+  /**
+   * Send an eBay BIN part-out opportunity alert.
+   *
+   * Card contract (explicitness): every card answers WHAT is the play,
+   * WHERE is the value, and WHAT to do — before any supporting detail.
+   */
+  async sendEbayBinPartoutAlert(params: EbayBinPartoutAlertParams): Promise<DiscordSendResult> {
+    const {
+      conditionMode = 'used',
+      sets, title, priceGbp, postageGbp, totalCostGbp, povTotal, multiple, tier,
+      realisablePovGbp = null, povCaptureRate = null,
+      amazonPriceGbp, amazonProfitGbp, amazonMarginPct, amazon90dGbp, salesRank, asin, signals = [],
+      bestOfferEnabled, offerSuggestionGbp, flags, sellerUsername, sellerScore,
+      itemUrl, imageUrl, condition,
+    } = params;
+
+    const color = tier === 'great' ? 0x2ecc71 : 0xf1c40f;
+    const tierEmoji = tier === 'great' ? '🟢' : '🟠';
+    const primary = sets[0];
+    // BL cache set names usually embed the set number ("75137 Carbon-Freezing
+    // Chamber") — strip it so the label doesn't read "75137 75137 …".
+    const primaryName = primary.setName
+      ? primary.setName.replace(new RegExp(`^${primary.setNumber}\\s*`), '')
+      : null;
+    const setLabel =
+      sets.length === 1
+        ? `${primary.setNumber}${primaryName ? ` ${primaryName}` : ''}`
+        : sets.map((s) => s.setNumber).join(' + ');
+
+    const amazonFired = amazonMarginPct != null && signals.some((s) => s.startsWith('Amazon'));
+    const povFired = multiple != null && signals.some((s) => s.includes('part-out'));
+
+    // Verdict title: "{emoji} {tier} BIN {set} - {condition} - Price: £X - {metric}, {PLAY}"
+    let titleMetric: string;
+    if (amazonFired) {
+      titleMetric = `Profit %: ${amazonMarginPct!.toFixed(1)}, AMAZON SELL${povFired ? ' + PART OUT' : ''}`;
+    } else {
+      titleMetric = `COG: ${multiple != null ? multiple.toFixed(1) : '?'}X, ${conditionMode === 'new' ? 'NEW' : 'USED'} PART OUT`;
+    }
+    const playEmoji = amazonFired ? '🛒' : '🧩';
+    const embedTitle = `${playEmoji} ${tierEmoji} BIN ${setLabel} - ${condition ?? (conditionMode === 'new' ? 'New' : 'Used')} - Price: £${totalCostGbp.toFixed(2)} - ${titleMetric}`.substring(0, 256);
+
+    const fields: DiscordEmbedField[] = [];
+
+    fields.push({
+      name: '🏷️ eBay (COG)',
+      value: `£${priceGbp.toFixed(2)} + £${postageGbp.toFixed(2)} post\n**Total: £${totalCostGbp.toFixed(2)}**`,
+      inline: true,
+    });
+    if (amazonPriceGbp != null) {
+      const amazonUrl = asin ? `https://www.amazon.co.uk/dp/${asin}` : null;
+      const keepaUrl = asin ? `https://keepa.com/#!product/2-${asin}` : null;
+      fields.push({
+        name: '🛒 Amazon BB',
+        value: `${amazonUrl ? `[£${amazonPriceGbp.toFixed(2)}](${amazonUrl})` : `£${amazonPriceGbp.toFixed(2)}`}${keepaUrl ? `\n[Keepa](${keepaUrl})` : ''}`,
+        inline: true,
+      });
+    }
+    if (primary.rrpGbp) fields.push({ name: '🏷️ UK RRP', value: `£${primary.rrpGbp.toFixed(2)}`, inline: true });
+    if (amazon90dGbp != null) fields.push({ name: '📊 90d Avg', value: `£${amazon90dGbp.toFixed(2)}`, inline: true });
+    if (salesRank != null) fields.push({ name: '📈 BSR', value: salesRank.toLocaleString(), inline: true });
+
+    if (amazonPriceGbp != null && amazonMarginPct != null) {
+      const fees = amazonPriceGbp * 0.1836;
+      const ship = amazonPriceGbp < 20 ? 3 : 4;
+      fields.push({
+        name: `${amazonFired ? '→ ' : ''}💰 Amazon Profit / Margin`,
+        value: `Profit: **£${(amazonProfitGbp ?? 0).toFixed(2)}** (${amazonMarginPct.toFixed(1)}%)\nCOG: ${((totalCostGbp / amazonPriceGbp) * 100).toFixed(1)}% | Fees: £${fees.toFixed(2)} | Ship: £${ship}`,
+        inline: false,
+      });
+    }
+
+    if (povTotal > 0) {
+      const povLines = [
+        `6mo sold: **£${povTotal.toFixed(2)}**${multiple != null ? ` · **${multiple.toFixed(1)}× cost**${!povFired ? ' (below the part-out bar)' : ''}` : ''}`,
+      ];
+      const ctx: string[] = [];
+      if (sets.length === 1) {
+        if (primary.rrpGbp) ctx.push(`${((conditionMode === 'used' ? primary.usedPovGbp : (primary.newPovGbp ?? povTotal)) / primary.rrpGbp).toFixed(1)}× RRP`);
+        if (conditionMode === 'used' && primary.figSharePct != null) ctx.push(`figs ≈ ${primary.figSharePct.toFixed(0)}%`);
+        if (conditionMode === 'used' && primary.ebayFloorGbp != null) ctx.push(`typical eBay used ask: £${primary.ebayFloorGbp.toFixed(2)}`);
+      }
+      if (ctx.length) povLines.push(ctx.join(' · '));
+      // Realisable (liquidity-adjusted) POV — only shown when we have a genuine
+      // set-level STR signal (spec §3 F4); flag-don't-suppress means add the honest
+      // number when we have one, never fabricate one when the signal is absent.
+      if (realisablePovGbp != null) {
+        const capturePct = povCaptureRate != null ? Math.round(povCaptureRate * 100) : null;
+        povLines.push(
+          `Realisable (est): **£${realisablePovGbp.toFixed(2)}**${capturePct != null ? ` · ${capturePct}% capture` : ''}`
+        );
+      }
+      // Thin used history -> the deep NEW figure is the sanity anchor; show both.
+      const thinFlagged = flags.some((f) => f.includes('thin used-parts history'));
+      if (conditionMode === 'used' && thinFlagged) {
+        const newTotal = sets.reduce((a, st) => a + (st.newPovGbp ?? 0), 0);
+        if (newTotal > 0) {
+          povLines.push(`New part-out (deeper data): £${newTotal.toFixed(2)} · ${(newTotal / totalCostGbp).toFixed(1)}× cost`);
+        }
+      }
+      fields.push({
+        name: `${povFired ? '→ ' : ''}🧩 Part-Out (${conditionMode === 'new' ? 'New' : 'Used'})`,
+        value: povLines.join('\n'),
+        inline: false,
+      });
+    }
+
+    if (bestOfferEnabled) {
+      fields.push({
+        name: '🤝 Best Offer',
+        value: offerSuggestionGbp != null
+          ? `offer **£${offerSuggestionGbp.toFixed(2)}** → hits the bar`
+          : 'enabled — already over the bar at asking',
+        inline: true,
+      });
+    }
+
+    if (flags.length > 0) {
+      fields.push({
+        name: '⚠️ Check before buying',
+        value: flags.map((f) => `• ${f}`).join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+
+    fields.push({
+      name: '🧱 Listing',
+      value:
+        `${title.slice(0, 150)}\n` +
+        `Condition: ${condition ?? 'Used'} · Seller: ${sellerUsername ?? '?'}${sellerScore != null ? ` (${sellerScore})` : ''}`,
+      inline: false,
+    });
+
+    const embed: DiscordEmbed = {
+      title: embedTitle,
+      url: itemUrl,
+      color,
+      fields,
+    };
+    if (imageUrl) {
+      (embed as Record<string, unknown>).thumbnail = { url: imageUrl };
+    }
+
+    return this.send('opportunities', embed);
+  }
+
+  /**
+   * Send a PG canary cross-lane divergence alert (spec §4.4: golden-tuple canary set
+   * fetched via every active lane daily; alert on >5% divergence between lanes — the
+   * defence against parse drift, FX drift, and BL format changes going unnoticed).
+   */
+  async sendPgCanaryAlert(params: PgCanaryAlertParams): Promise<DiscordSendResult> {
+    const { runDate, divergentCount, totalTuples, divergences } = params;
+
+    const fields: DiscordEmbedField[] = [
+      {
+        name: '📊 Summary',
+        value: `**${divergentCount}/${totalTuples}** golden tuples diverged >5% between lanes on ${runDate}`,
+        inline: false,
+      },
+    ];
+
+    const shown = divergences.slice(0, 10);
+    if (shown.length > 0) {
+      const lines = shown.map((d) => {
+        const laneStr = Object.entries(d.lanes)
+          .map(([lane, val]) => `${lane}=${val != null ? `£${val.toFixed(3)}` : 'n/a'}`)
+          .join(' · ');
+        return `• **${d.label}**: ${laneStr} (${d.maxDivergencePct.toFixed(1)}%)`;
+      });
+      fields.push({
+        name: `⚠️ Divergent tuples (top ${shown.length})`,
+        value: lines.join('\n').slice(0, 1000),
+        inline: false,
+      });
+    }
+
+    const embed: DiscordEmbed = {
+      title: '🐤 PG Canary: cross-lane price divergence',
+      description: 'Golden-tuple prices disagree by more than 5% between two or more BrickLink acquisition lanes — check for parse drift, FX drift, or a BL page/API format change.',
+      color: DiscordColors.RED,
+      fields,
+    };
+
+    return this.send('alerts', embed);
+  }
+
+  /**
+   * PG ops threshold alert (spec §5.4): fired by the nightly refresh cycle when a
+   * lane trips its rate-discipline thresholds (e.g. >=2 blocked lane D sessions in
+   * one night). Incident-shaped -> alerts channel.
+   */
+  async sendPgOpsAlert(params: { title: string; lines: string[] }): Promise<DiscordSendResult> {
+    const embed: DiscordEmbed = {
+      title: `🛠️ PG ops: ${params.title}`,
+      description: params.lines.join('\n').slice(0, 4000),
+      color: DiscordColors.RED,
+    };
+    return this.send('alerts', embed);
+  }
+
+  /**
+   * Send the weekly PG market intelligence digest (spec §5.3): top STR risers/fallers,
+   * fig-radar movers, own-store audit top-5s, and coverage/freshness health. Reuses the
+   * daily-summary channel — this is a scheduled report, not an incident alert.
+   *
+   * Discord embed `description` has a hard 4096-char limit; the digest body is built as
+   * one markdown blob and truncated gracefully (with a visible "…truncated" marker) if a
+   * busy week's content would overflow it, rather than erroring or dropping sections
+   * silently.
+   */
+  async sendPgDigest(params: PgDigestAlertParams): Promise<DiscordSendResult> {
+    const { runDate, strRisers, strFallers, figMovers, coverage, ownStoreAuditExcerpts, reportPath } = params;
+
+    const moverLine = (m: PgDigestMoverRow) =>
+      `• **${m.label}**: ${m.qtyDelta > 0 ? '+' : ''}${m.qtyDelta} qty (STR ${m.latestStrNew?.toFixed(2) ?? '—'}/${m.latestStrUsed?.toFixed(2) ?? '—'})`;
+
+    const sections: string[] = [];
+
+    sections.push(`**📈 STR risers (top ${Math.min(10, strRisers.length)})**`);
+    sections.push(strRisers.length > 0 ? strRisers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push('', `**📉 STR fallers (top ${Math.min(10, strFallers.length)})**`);
+    sections.push(strFallers.length > 0 ? strFallers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push('', `**🧍 Fig radar movers (top ${Math.min(10, figMovers.length)})**`);
+    sections.push(figMovers.length > 0 ? figMovers.slice(0, 10).map(moverLine).join('\n') : '_None this week._');
+
+    sections.push(
+      '',
+      '**🩺 Coverage & freshness**',
+      `L1 total: **${coverage.l1Total.toLocaleString()}** · Active tier: **${coverage.activeTierCount.toLocaleString()}** · within 28d cycle: **${coverage.activeWithin28dPct.toFixed(1)}%** · past due: **${coverage.pastDueCount.toLocaleString()}**`,
+    );
+    if (coverage.laneTelemetry.length > 0) {
+      sections.push(
+        ...coverage.laneTelemetry.map(
+          (l) => `• **${l.lane}** (7d): ${l.requests7d} req, ${l.ok7d} ok / ${l.failed7d} failed — first-403 trend: ${l.firstBlockTrend}`,
+        ),
+      );
+    }
+
+    if (ownStoreAuditExcerpts.length > 0) {
+      sections.push('', '**🏪 Own-store audit (most recent, last 7d)**');
+      for (const excerpt of ownStoreAuditExcerpts) {
+        sections.push(`_${excerpt.title}_`, ...(excerpt.lines.length > 0 ? excerpt.lines.slice(0, 5) : ['_None._']));
+      }
+    } else {
+      sections.push('', '**🏪 Own-store audit**', '_No audit report from the last 7 days._');
+    }
+
+    sections.push('', `Full report: \`${reportPath}\``);
+
+    let description = sections.join('\n');
+    const DESCRIPTION_LIMIT = 4096;
+    if (description.length > DESCRIPTION_LIMIT) {
+      const marker = '\n\n_…truncated — see full report on disk._';
+      description = description.slice(0, DESCRIPTION_LIMIT - marker.length) + marker;
+    }
+
+    const embed: DiscordEmbed = {
+      title: `📊 PG weekly market digest — ${runDate}`,
+      description,
+      color: DiscordColors.BLUE,
+    };
+
+    return this.send('daily-summary', embed);
   }
 
   /**

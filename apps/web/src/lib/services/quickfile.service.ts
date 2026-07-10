@@ -44,17 +44,20 @@ interface QuickFileApiResponse {
       PurchaseID?: number;
     };
   };
-  System_Authenticate?: {
+  Client_Search?: {
     Header: {
       MessageType: string;
     };
     Body?: {
-      IsValid?: boolean;
+      RecordsetCount?: number;
     };
   };
   Error?: {
     Code: string;
     Message: string;
+  };
+  Errors?: {
+    Error: string[];
   };
 }
 
@@ -63,11 +66,15 @@ interface QuickFileApiResponse {
  */
 export class QuickFileService {
   private baseUrl = 'https://api.quickfile.co.uk/1_2';
-  private applicationId = 'hadley-bricks-mtd';
+  private applicationId: string;
   private credentials: QuickFileCredentials;
 
   constructor(credentials: QuickFileCredentials) {
     this.credentials = credentials;
+    // QuickFile requires the App ID GUID of a registered app (Account Settings
+    // → My Apps). The legacy literal is kept only as a fallback for stored
+    // credentials that predate the applicationId field.
+    this.applicationId = credentials.applicationId || 'hadley-bricks-mtd';
   }
 
   /**
@@ -124,33 +131,45 @@ export class QuickFileService {
     });
 
     if (!response.ok) {
-      throw new Error(`QuickFile API error: ${response.status} ${response.statusText}`);
+      // QuickFile returns schema-validation detail in the body — surface it
+      const errorBody = await response.text().catch(() => '');
+      throw new Error(
+        `QuickFile API error: ${response.status} ${response.statusText}${errorBody ? ` — ${errorBody.slice(0, 500)}` : ''}`
+      );
     }
 
     const data = await response.json();
 
-    // Check for QuickFile error response
+    // Check for QuickFile error responses (both shapes the API uses)
     if (data.Error) {
       throw new Error(`QuickFile error: ${data.Error.Message}`);
+    }
+    if (data.Errors?.Error?.length) {
+      throw new Error(`QuickFile error: ${data.Errors.Error.join('; ')}`);
     }
 
     return data as T;
   }
 
   /**
-   * Test connection with credentials
+   * Test connection with credentials.
+   * Uses a 1-row client/search — the cheapest authenticated read-only call the
+   * API offers (there is no dedicated authenticate endpoint; the previous
+   * system/authenticate path 404s).
    */
   async testConnection(): Promise<boolean> {
     try {
-      const response = await this.makeRequest<QuickFileApiResponse>('system/authenticate', {});
+      const response = await this.makeRequest<QuickFileApiResponse>('client/search', {
+        SearchParameters: {
+          ReturnCount: '1',
+          Offset: '0',
+          OrderResultsBy: 'CompanyName',
+          OrderDirection: 'ASC',
+        },
+      });
 
-      // Check if response indicates valid authentication
-      if (response.System_Authenticate?.Body?.IsValid === true) {
-        return true;
-      }
-
-      // Also consider successful API call as valid (no error thrown)
-      return true;
+      // Any well-formed Client_Search response means authentication succeeded
+      return response.Client_Search?.Header?.MessageType === 'Response';
     } catch (error) {
       console.error('[QuickFileService] Connection test failed:', error);
       return false;
@@ -158,29 +177,143 @@ export class QuickFileService {
   }
 
   /**
-   * Create a sales invoice in QuickFile
+   * Truncate a string to QuickFile's schema limits (which 400 on overflow).
+   */
+  private clip(value: string, maxLength: number): string {
+    return value.length <= maxLength ? value : value.slice(0, maxLength);
+  }
+
+  /**
+   * Find-or-create the ledger client used for consolidated marketplace sales
+   * invoices. Invoice_Create requires a real ClientID (0 is rejected by the
+   * schema). Cached per service instance.
+   */
+  private ensuredClientId: number | null = null;
+
+  async ensureLedgerClient(): Promise<number> {
+    if (this.ensuredClientId) return this.ensuredClientId;
+
+    const name = 'Marketplace Sales';
+    const search = await this.makeRequest<{
+      Client_Search?: { Body?: { RecordsetCount?: number; Record?: Array<{ ClientID?: number }> } };
+    }>('client/search', {
+      SearchParameters: {
+        ReturnCount: '1',
+        Offset: '0',
+        OrderResultsBy: 'CompanyName',
+        OrderDirection: 'ASC',
+        CompanyName: name,
+      },
+    });
+
+    const found = search.Client_Search?.Body?.Record?.[0]?.ClientID;
+    if (found) {
+      this.ensuredClientId = found;
+      return found;
+    }
+
+    const created = await this.makeRequest<{
+      Client_Create?: { Body?: { ClientID?: number } };
+    }>('client/create', {
+      ClientDetails: {
+        CompanyName: name,
+      },
+      ClientContacts: {
+        DefaultContact: {
+          FirstName: 'Hadley',
+          Surname: 'Bricks',
+          Email: 'chris@hadleybricks.co.uk',
+          // Client-portal password for this placeholder ledger client —
+          // random, never used to log in anywhere.
+          Password: crypto.randomBytes(9).toString('base64url'),
+          TelephoneNumbers: {},
+        },
+      },
+    });
+
+    const clientId = created.Client_Create?.Body?.ClientID;
+    if (!clientId) throw new Error('QuickFile client/create returned no ClientID');
+    this.ensuredClientId = clientId;
+    return clientId;
+  }
+
+  /**
+   * Find-or-create the generic supplier for consolidated expense entries.
+   * Purchase_Create requires a real SupplierID. Cached per service instance.
+   */
+  private ensuredSupplierId: number | null = null;
+
+  async ensureLedgerSupplier(): Promise<number> {
+    if (this.ensuredSupplierId) return this.ensuredSupplierId;
+
+    const name = 'Marketplace & Sundry Suppliers';
+    const search = await this.makeRequest<{
+      Supplier_Search?: {
+        Body?: { RecordsetCount?: number; Record?: Array<{ SupplierID?: number }> };
+      };
+    }>('supplier/search', {
+      SearchParameters: {
+        ReturnCount: '1',
+        Offset: '0',
+        OrderResultsBy: 'CompanyName',
+        OrderDirection: 'ASC',
+        CompanyName: name,
+      },
+    });
+
+    const found = search.Supplier_Search?.Body?.Record?.[0]?.SupplierID;
+    if (found) {
+      this.ensuredSupplierId = found;
+      return found;
+    }
+
+    const created = await this.makeRequest<{
+      Supplier_Create?: { Body?: { SupplierID?: number } };
+    }>('supplier/create', {
+      SupplierDetails: {
+        CompanyName: name,
+        CountryISO: 'GB',
+      },
+    });
+
+    const supplierId = created.Supplier_Create?.Body?.SupplierID;
+    if (!supplierId) throw new Error('QuickFile supplier/create returned no SupplierID');
+    this.ensuredSupplierId = supplierId;
+    return supplierId;
+  }
+
+  /**
+   * Create a sales invoice in QuickFile.
+   * Body shape per the v1_2 Invoice_Create schema: lines nest as
+   * InvoiceLines → ItemLines → ItemLine[]; InvoiceDescription max 35 chars;
+   * ItemName max 25; no Tax element = no VAT.
    */
   async createSalesInvoice(row: MtdSalesRow): Promise<{ success: boolean; invoiceId?: number }> {
     try {
+      const clientId = await this.ensureLedgerClient();
+
       const body = {
         InvoiceData: {
           InvoiceType: 'INVOICE',
-          ClientID: 0, // Cash sale, no client
+          ClientID: clientId,
           Currency: 'GBP',
           TermDays: 0,
           Language: 'en',
-          InvoiceDescription: row.description,
-          InvoiceLines: [
-            {
-              ItemID: 0,
-              ItemName: row.description,
-              ItemDescription: row.description,
-              ItemNominalCode: row.nominalCode,
-              Tax1ID: 0, // No VAT
-              UnitCost: row.netAmount,
-              Qty: 1,
+          InvoiceDescription: this.clip(row.description, 35),
+          InvoiceLines: {
+            ItemLines: {
+              ItemLine: [
+                {
+                  ItemID: 0,
+                  ItemName: this.clip(row.reference, 25),
+                  ItemDescription: row.description,
+                  ItemNominalCode: row.nominalCode,
+                  UnitCost: row.netAmount,
+                  Qty: 1,
+                },
+              ],
             },
-          ],
+          },
           Scheduling: {
             SingleInvoiceData: {
               IssueDate: row.date,
@@ -202,29 +335,30 @@ export class QuickFileService {
   }
 
   /**
-   * Create a purchase entry in QuickFile
+   * Create a purchase entry in QuickFile.
+   * Body shape per the v1_2 Purchase_Create schema: requires SupplierID,
+   * ReceiptDate, and InvoiceLines with SubTotal/VatRate line items.
    */
   async createPurchase(row: MtdExpenseRow): Promise<{ success: boolean; purchaseId?: number }> {
     try {
+      const supplierId = await this.ensureLedgerSupplier();
+
       const body = {
         PurchaseData: {
-          SupplierID: 0, // Generic supplier
-          SupplierName: row.supplier,
+          SupplierID: supplierId,
           Currency: 'GBP',
-          PurchaseDescription: row.description,
-          PurchaseLines: [
-            {
-              ItemID: 0,
-              ItemName: row.description,
-              ItemDescription: row.description,
-              ItemNominalCode: row.nominalCode,
-              Tax1ID: 0, // No VAT
-              UnitCost: row.netAmount,
-              Qty: 1,
-            },
-          ],
-          Scheduling: {
-            IssueDate: row.date,
+          InvoiceDescription: this.clip(row.description, 35),
+          ReceiptDate: row.date,
+          TermDays: 0,
+          InvoiceLines: {
+            ItemLine: [
+              {
+                ItemNominalCode: row.nominalCode,
+                ItemDescription: row.description,
+                SubTotal: row.netAmount,
+                VatRate: 0,
+              },
+            ],
           },
         },
       };
