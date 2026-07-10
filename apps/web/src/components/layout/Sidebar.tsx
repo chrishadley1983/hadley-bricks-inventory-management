@@ -29,13 +29,13 @@ import {
   Calculator,
   PenLine,
   ClipboardList,
-  Camera,
+  // Camera, // Commented out - used by Scanner (parked, hidden from sidebar)
   ChevronDown,
   LineChart,
   Gavel,
   TrendingDown,
   Megaphone,
-  AlertTriangle,
+  // AlertTriangle, // Commented out - used by Order Issues (parked, hidden from sidebar)
   Radar,
 } from 'lucide-react';
 
@@ -53,24 +53,34 @@ interface NavSection {
   defaultOpen?: boolean;
 }
 
-const mainNavItems: NavItem[] = [
-  { href: '/workflow', label: 'Workflow', icon: ClipboardList },
-  { href: '/dashboard', label: 'Dashboard', icon: Home },
-  { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
-  { href: '/inventory', label: 'Inventory', icon: Package },
-  { href: '/inventory/explorer', label: 'Inventory Explorer', icon: Search },
-  { href: '/inventory/markdown', label: 'Smart Markdown', icon: TrendingDown },
-  { href: '/orders', label: 'Orders', icon: FileText },
-  { href: '/order-issues', label: 'Order Issues', icon: AlertTriangle },
-  { href: '/transactions', label: 'Transactions', icon: Landmark },
-  { href: '/set-lookup', label: 'Set Lookup', icon: Search },
-  { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
-  { href: '/listing-assistant', label: 'Listing Assistant', icon: PenLine },
-  { href: '/scanner', label: 'Scanner', icon: Camera },
-  { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
-];
+// Always visible above the collapsible sections
+const mainNavItems: NavItem[] = [{ href: '/workflow', label: 'Workflow', icon: ClipboardList }];
 
 const navSections: NavSection[] = [
+  {
+    id: 'operations',
+    title: 'Operations',
+    defaultOpen: true,
+    items: [
+      { href: '/dashboard', label: 'Dashboard', icon: Home },
+      { href: '/purchases', label: 'Purchases', icon: ShoppingCart },
+      { href: '/inventory', label: 'Inventory', icon: Package },
+      { href: '/inventory/explorer', label: 'Inventory Explorer', icon: Search },
+      { href: '/inventory/markdown', label: 'Smart Markdown', icon: TrendingDown },
+      { href: '/orders', label: 'Orders', icon: FileText },
+      // Parked for future dev (2026-07-10): Order Issues not in active use — page still
+      // reachable at /order-issues, just hidden from nav. Restore icon import when re-enabling.
+      // { href: '/order-issues', label: 'Order Issues', icon: AlertTriangle },
+      { href: '/transactions', label: 'Transactions', icon: Landmark },
+      { href: '/set-lookup', label: 'Set Lookup', icon: Search },
+      { href: '/purchase-evaluator', label: 'Purchase Evaluator', icon: Calculator },
+      { href: '/listing-assistant', label: 'Listing Assistant', icon: PenLine },
+      // Parked for future dev (2026-07-10): piece-scanner rig (PRs #319/#321) not in active use —
+      // pages still reachable at /scanner, /scanner/live, /scanner/set-check. Restore icon import when re-enabling.
+      // { href: '/scanner', label: 'Scanner', icon: Camera },
+      { href: '/bricklink-uploads', label: 'BrickLink Uploads', icon: Upload },
+    ],
+  },
   {
     id: 'reports',
     title: 'Reports',
