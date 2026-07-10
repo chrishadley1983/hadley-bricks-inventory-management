@@ -99,3 +99,9 @@ __pycache__/
 _tmp_*.txt
 _launch_*.ps1
 tmp/
+
+# Local analysis outputs and session artifacts (2026-07-10 repo sync)
+analysis/
+/.playwright/
+.claude/backup-stale-wip/
+memcheck*.ps1

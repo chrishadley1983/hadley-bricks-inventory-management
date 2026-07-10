@@ -1,12 +1,12 @@
 {
-  "commit": "198e0770",
-  "branch": "feature/vinted-pov-modes",
-  "prNumber": 477,
-  "mergedAt": "2026-07-02T08:45:00Z",
-  "previousCommit": "ca42bdd4",
+  "commit": "57318312",
+  "branch": "feature/investment-pages-redesign",
+  "prNumber": 559,
+  "mergedAt": "2026-07-10T09:20:00Z",
+  "previousCommit": "96bacc0a",
   "deploymentVerified": true,
-  "verifiedAt": "2026-07-02T10:05:00+01:00",
-  "testsRun": ["site-health-307-dashboard", "login-page-200", "ebay-auctions-cron-401-gated", "ebay-auctions-config-401-gated", "vercel-deploy-success", "ci-typecheck-lint-test-pass", "local-full-suite-3154-pass"],
+  "verifiedAt": "2026-07-10T10:25:00+01:00",
+  "testsRun": ["typecheck", "eslint-clean", "vitest-3490-of-3490", "ci-typecheck-lint-test-pass", "prod-critical-paths-4-of-4", "prod-investment-smoke-4-of-4"],
   "testsPassed": true,
-  "notes": "Part-Out-Value buy modes for the Vinted sniper + eBay auction cron. Server side: get_pov_public anon RPC (migration 20260622144833, applied to prod 2026-06-22 via MCP, verified present 2026-07-02); eBay cron hybrid signal (Amazon margin OR New POV >= pov_multiple x cost, pov_buy_enabled=true so ACTIVE immediately on this deploy); opt-in used-auction scan behind used_pov_mode_enabled (false at deploy time, flipped later per F5); POV audit columns on ebay_auction_alerts (pov_condition/pov_sold_gbp/pov_multiple/buy_signal). Discord embeds gained condition-matched POV block; Amazon leg now nullable. Extension client changes live in extensions/vinted-sniper (PR #478, separate). Code review docs/reviews/2026-07-02-feature-vinted-pov-modes.md (READY, 0 critical/major); adversarial validation 2026-06-22 SHIP-WITH-FIXES. Local server rebuild required (apps/web changed) - scripts/redeploy-local.ps1 run post-verify. Verify next cron run writes buy_signal on new ebay_auction_alerts rows."
+  "notes": "Investment pages redesign: /investment dashboard (model-status strip w/ honest holdout metrics, top-picks preview w/ max buy, 12-month retirement radar, pattern charts), /investment/top-picks deal sheet (max buy green/amber, tier, rationale chips, filters), /investment/sets browser, sidebar Dashboard/Top Picks/All Sets. Max-buy formula shared in lib/investment/max-buy.ts. Fixed /api/investment/predictions filter-totals bug (filters now applied before pagination; verified on prod: filtered.total <= all.total). New APIs: model-status, patterns, retirement-radar. Rollback: revert 57318312 (no schema changes)."
 }
