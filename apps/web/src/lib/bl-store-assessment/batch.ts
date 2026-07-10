@@ -17,14 +17,14 @@ export interface WatchlistCandidate {
 }
 
 /**
- * Re-check cadence by last verdict. Attractive stores get watched closely; SKIPs
- * still come round often enough to catch repricing events. With ~1,400 England
- * stores mostly SKIP, steady state is ~23 stores/night at 60d — inside the
- * default budget of 25, so the sweep never has to rush.
+ * Re-check cadence by last verdict. BUY/REVIEW stores come round monthly (Chris,
+ * 2026-07-10 — a week was too hot); SKIPs every two months still catch repricing
+ * events. With ~1,400 England stores mostly SKIP, steady state is ~23 stores/night
+ * — inside the default budget of 25, so the sweep never has to rush.
  */
 export const CADENCE_DAYS: Record<string, number> = {
-  BUY: 7,
-  REVIEW: 14,
+  BUY: 30,
+  REVIEW: 30,
   SKIP: 60,
 };
 /** Assessed but verdict missing/unknown (old rows, errors). */
