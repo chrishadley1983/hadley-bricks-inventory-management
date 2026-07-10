@@ -3,7 +3,7 @@
  */
 
 export { BrickOwlClient, BrickOwlApiError, BrickOwlRateLimitError } from './client';
-export { normalizeOrder, normalizeOrders, calculateOrderStats } from './adapter';
+export { normalizeOrder, normalizeOrders, normalizeStatus, parseBrickOwlTime, calculateOrderStats } from './adapter';
 // Note: BrickOwlTransactionSyncService is server-only (uses next/headers)
 // Import directly from './brickowl-transaction-sync.service' in API routes
 export {

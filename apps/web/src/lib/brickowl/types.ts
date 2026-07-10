@@ -53,8 +53,11 @@ export interface BrickOwlOrder {
   order_id: string;
   store_id?: string;
   status: BrickOwlOrderStatus;
-  order_time: string;
-  iso_order_time: string;
+  /** Detail payloads only — the /order/list summary does NOT include these */
+  order_time?: string;
+  iso_order_time?: string;
+  /** List payloads: unix SECONDS as a string (e.g. "1783529823") */
+  order_date?: string;
   processed_time?: string;
   shipped_time?: string;
   received_time?: string;
