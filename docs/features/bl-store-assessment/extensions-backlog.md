@@ -34,11 +34,17 @@ listings; restock matters differently (only worth it if we're sold out or thin).
 
 ## 2. Nightly-cron scale-out on the STR/pg_summary cache — *Chris priority*
 
-The 80k-tuple worldwide `pg_summary` layer + `bricklink_price_guide_cache` means a
-store can now be assessed **without any live price lookups** — the only network step
-is the inventory scrape itself. That makes a nightly batch feasible at real scale.
+**✅ SHIPPED (phase 2, 2026-07-10):** `store_assessment_watchlist` table (seeded from
+assessed stores + arbitrage-purchase sellers via `--seed`), batch runner
+`scripts/store-assessment-batch.ts` (stalest-first selection, never-assessed priority,
+min-age skip, child-process isolation per store, jittered pacing), run-over-run delta
+alerts (BUY verdict / net jump ≥£20 / price drop ≥10pts / promising first assessment)
+to Discord #opportunities + a sweep summary to #sync-status, and a nightly 02:15
+Task Scheduler job (`register-store-assessment-batch-task.ps1`). This also delivers
+items 5 (batch sweep) and 7 (Discord hook). Remaining ideas below (trend UI columns,
+alternative candidate feeds like BrickRadar lanes) stay open.
 
-Things to explore:
+Original exploration notes:
 - **Candidate feed:** where does the store list come from? Options: stores seen in
   bl-basket/store-quality history, sellers behind magnet/POV hits, BrickRadar lane
   discoveries, manual watchlist in a table.
