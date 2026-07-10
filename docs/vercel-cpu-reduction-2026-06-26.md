@@ -128,3 +128,53 @@ Unregister-ScheduledTask -TaskName "HadleyBricks-Ebay-Auctions-Local" -Confirm:$
 each, ~100–300 wall-s/day) on top of the ebay-pricing win, while the 6× cadence
 increase (288 runs/day) costs Vercel nothing. E2E validation workflow:
 `.claude/workflows/validate-ebay-auctions-local.js`.
+
+---
+
+## Addendum — 10 Jul 2026: amazon-pricing migrated local (the last big Vercel cron)
+
+**Trigger:** Vercel "Fluid Active CPU 100%" alert fired 4 Jul. Investigation showed
+the rolling-30d metric peaked 28,980s (201%) on 26 Jun and has fallen every day
+since 1 Jul (24,660s / 171% on 10 Jul) as pre-reduction days roll off — the 26 Jun
+changes are working. But two problems remained, both `amazon-pricing`:
+
+1. **Steady burn:** still the #1 Vercel cron consumer (~210 wall-s/day at `0 */3`
+   via the pricing-sync-driver → Vercel route).
+2. **Storm risk:** 21:00 2 Jul – 12:00 3 Jul the route wedged — six consecutive
+   runs marked timeout at 894s each (~89 min of max-duration Fluid burn overnight),
+   which is what tipped the rolling window into the 4 Jul alert. Self-recovered
+   at 15:00 3 Jul.
+
+**Change (mirrors the ebay-pricing pattern):**
+- `scripts/run-amazon-pricing.ps1` — single POST to
+  `http://localhost:3000/api/cron/amazon-pricing` (route is self-contained,
+  driver used maxIterations=1). Logs to `logs/amazon-pricing-local.log`.
+- `scripts/register-amazon-pricing-task.ps1` — Windows task
+  `HadleyBricks-Amazon-Pricing-Local`, every 3h. Registered 10 Jul
+  (interactive-only; re-run elevated for S4U run-while-logged-out).
+- GCP `amazon-pricing-sync` Cloud Scheduler job **PAUSED** (was `0 */3 * * *`).
+- Gate passed before cutover: two local runs completed (57 ASINs each, 19–27s),
+  rows verified in `job_execution_history`.
+
+**Rollback:**
+```
+gcloud scheduler jobs resume amazon-pricing-sync --location=europe-west2 --project=gen-lang-client-0823893317
+Unregister-ScheduledTask -TaskName "HadleyBricks-Amazon-Pricing-Local" -Confirm:$false
+```
+
+**Projected effect:** removes ~210 wall-s/day plus all storm exposure from Vercel.
+Remaining Vercel cron load is `spapi-buybox-overlay` (~80 wall-s/day via the
+driver at 06:00) and ~25 small direct GCP pollers/dailies (~230 wall-s/day
+combined). Watch the daily `vercel-usage` report slope; if the rolling-30d does
+not clear 14,400s by ~26 Jul (when the window is fully post-reduction),
+`spapi-buybox-overlay` is the next candidate — same runner pattern, loop-until-
+complete like ebay-pricing.
+
+**Incident note (same morning):** `apps/web/.env.local` was lost when apps/web
+was re-materialized from git by an unrelated session (~08:22); the every-5-min
+auction sniper failed for 2 ticks and all local runners + jobs/hb_crons.py were
+at risk (they read CRON_SECRET from that file), as was any HadleyBricks NSSM
+restart. Recovered via `vercel env pull` (production), Vercel-injected vars
+stripped, values de-quoted (the PS runners don't strip quotes). If this recurs:
+the file is gitignored — treat it as precious, and consider keeping the SOPS-
+encrypted backup current.

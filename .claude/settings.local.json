@@ -38,7 +38,13 @@
       "Bash(python -c \"from domains.second_brain.conversation import capture_conversation; print\\(''Import OK''\\)\")",
       "Bash(python -c \"from domains.peterbot import config; print\\(getattr\\(config, ''CAPTURE_STORE_DB'', ''NOT FOUND''\\)\\)\")",
       "Bash(python scripts/migrate_peterbot_mem.py --dry-run --limit 5)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "mcp__plugin_supabase_supabase__execute_sql",
+      "mcp__plugin_supabase_supabase__apply_migration",
+      "Bash(head -80 \"app/api/transactions/[id]/route.ts\")",
+      "Bash(ls tests/unit tests/api)",
+      "Bash(grep -rln \"monthly_report\" --include=\"*.ts\" --include=\"*.tsx\" --include=\"*.mjs\" app lib scripts)",
+      "Bash(ls app/api/reports lib/reports)"
     ]
   },
   "hooks": {

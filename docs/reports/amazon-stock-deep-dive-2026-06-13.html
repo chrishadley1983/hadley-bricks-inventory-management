@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Amazon Stock Deep-Dive — 13 Jun 2026</title>
+<style>
+  @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1f2733; line-height: 1.5; font-size: 11px; margin: 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  header { border-bottom: 4px solid #d11a2a; padding-bottom: 14px; margin-bottom: 20px; }
+  header .kicker { color: #d11a2a; font-weight: 700; letter-spacing: .12em; font-size: 10px; text-transform: uppercase; }
+  header h1 { font-size: 25px; margin: 4px 0 6px; color: #11161f; letter-spacing: -.01em; }
+  header .meta { color: #5b6675; font-size: 10.5px; }
+  h2 { font-size: 15px; margin: 26px 0 8px; color: #11161f; border-left: 4px solid #f5b301; padding-left: 9px; }
+  p { margin: 6px 0; }
+  .lede { font-size: 12px; color: #2c3644; background: #fbfbf7; border: 1px solid #ece7d6; border-radius: 8px; padding: 12px 14px; }
+  table { width: 100%; border-collapse: collapse; margin: 8px 0 4px; font-size: 10px; }
+  th, td { text-align: left; padding: 5px 7px; border-bottom: 1px solid #e6e9ee; vertical-align: top; }
+  th { background: #11161f; color: #fff; font-weight: 600; font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; }
+  tr:nth-child(even) td { background: #f7f8fa; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .setname { font-weight: 600; color: #11161f; }
+  .setnum { color: #8a93a1; font-size: 9px; }
+  .scorecard { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 10px 0; }
+  .card { border: 1px solid #e6e9ee; border-radius: 8px; padding: 9px 11px; background: #fff; }
+  .card .v { font-size: 18px; font-weight: 700; color: #11161f; }
+  .card .l { font-size: 9px; color: #5b6675; text-transform: uppercase; letter-spacing: .05em; margin-top: 2px; }
+  .card.red .v { color: #d11a2a; }
+  .card.green .v { color: #1a8a4a; }
+  .verdict td:first-child { width: 42%; }
+  .pill { display: inline-block; font-size: 9px; font-weight: 700; padding: 1px 7px; border-radius: 10px; }
+  .ok { background: #e3f5ea; color: #1a8a4a; }
+  .bad { background: #fde7e9; color: #d11a2a; }
+  .seg td.cap { font-weight: 700; color: #11161f; }
+  ol.rec { margin: 6px 0; padding-left: 18px; }
+  ol.rec li { margin: 6px 0; }
+  .win { color: #1a8a4a; font-weight: 700; }
+  .note { color: #5b6675; font-size: 9.5px; }
+  .footer { margin-top: 24px; padding-top: 10px; border-top: 1px solid #e6e9ee; color: #8a93a1; font-size: 9px; }
+  .plan { display: grid; grid-template-columns: repeat(2,1fr); gap: 8px; }
+  .week { border: 1px solid #e6e9ee; border-left: 3px solid #d11a2a; border-radius: 6px; padding: 8px 10px; }
+  .week b { color: #11161f; }
+  .avoid-break { break-inside: avoid; }
+  strong.k { color: #d11a2a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Hadley Bricks · Inventory Intelligence</div>
+  <h1>Amazon Stock Deep-Dive &amp; Q4 Readiness</h1>
+  <div class="meta">13 June 2026 &nbsp;·&nbsp; Live Amazon (FBM) catalogue &nbsp;·&nbsp; 596 copies / 242 ASINs / £7,672 capital</div>
+</header>
+
+<p class="lede"><strong>Bottom line:</strong> margin and pricing are healthy and <em>not</em> holding you back.
+The single issue is <strong class="k">dead capital</strong> — 56% of your Amazon stock value (£4,326) sits in
+ASINs that have never sold. Two causes: genuinely <strong>dead-demand</strong> sets, and good-demand sets where
+your merchant-fulfilled offer is <strong>buried under 15–47 competitors</strong>. The Q4 lever is
+visibility (FBA / winning the buy box) and clearing the dead tail — not cutting prices.</p>
+
+<h2>Scorecard</h2>
+<div class="scorecard">
+  <div class="card"><div class="v">242</div><div class="l">Live ASINs (596 copies)</div></div>
+  <div class="card"><div class="v">£7,672</div><div class="l">Cost capital tied up</div></div>
+  <div class="card red"><div class="v">136</div><div class="l">Never-sold ASINs · £4,326</div></div>
+  <div class="card red"><div class="v">~195k</div><div class="l">Median BSR (slow)</div></div>
+  <div class="card"><div class="v">26%</div><div class="l">Buy-box win rate</div></div>
+  <div class="card red"><div class="v">55%</div><div class="l">Listings losing the buy box</div></div>
+  <div class="card green"><div class="v">£18,274</div><div class="l">Net profit, last 12 months</div></div>
+  <div class="card green"><div class="v">29.5%</div><div class="l">Avg margin (39 losses, −£124)</div></div>
+</div>
+<p class="note">“Never sold” measured over your full Amazon order history (since 31 Jan 2025, ~17 months) — see <em>Data window</em> below.</p>
+
+<h2>The reframe — two focus areas are non-issues</h2>
+<table class="verdict avoid-break">
+  <tr><th>Focus area</th><th>Verdict</th><th>Evidence</th></tr>
+  <tr><td>Stock selling at <strong>poor margin</strong></td><td><span class="pill ok">NOT A PROBLEM</span></td><td>29.5% avg margin; only £124 of losses across 1,459 sales</td></tr>
+  <tr><td>Stock <strong>close to but not winning buy box</strong></td><td><span class="pill ok">NOT A PROBLEM</span></td><td><strong>Zero</strong> listings priced above buy box — when your offer is seen, you're at/below it</td></tr>
+  <tr><td>Stock <strong>listed but never sold</strong></td><td><span class="pill bad">THE CORE PROBLEM</span></td><td>136 ASINs / £4,326 = 56% of capital, never sold</td></tr>
+</table>
+<p class="note">Most never-sold ASINs have never sold on <em>any</em> channel; a small number sell on eBay/BrickLink but not via Amazon — genuine channel-specific failures.</p>
+
+<h2>Why it doesn't sell — and where the £4,326 sits</h2>
+<table class="seg avoid-break">
+  <tr><th>Segment</th><th class="num">ASINs</th><th class="num">Capital</th><th>What it is</th><th>Action</th></tr>
+  <tr><td class="cap">A · Buried (has demand, BSR ≤50k)</td><td class="num">~19</td><td class="num">~£848</td><td>Good sellers, but you lose the buy box / sit under 15–47 offers</td><td>Win where winnable; else route to eBay/BL or FBA</td></tr>
+  <tr><td class="cap">B · Slow (BSR 50–300k)</td><td class="num">~46</td><td class="num">~£1,030</td><td>Weak demand</td><td>Light markdown; don't reorder</td></tr>
+  <tr><td class="cap">C · Dead (BSR &gt;300k)</td><td class="num">59</td><td class="num">£1,828</td><td>You match buy box but nobody buys</td><td><strong>Liquidate</strong> to free Q4 cash</td></tr>
+  <tr><td class="cap">D · Junk / non-LEGO</td><td class="num">1</td><td class="num">£482</td><td><em>Strictly Briks</em> generic bricks (B01K37SXH6), 82 copies, 0 sales</td><td>Dump / bundle; stop buying non-LEGO</td></tr>
+</table>
+
+<h2>Quick-win list — real demand, not selling (BSR ≤ 50k)</h2>
+<p class="note">“Buy box = none” means no buy-box holder exists → a sharp FBM price can <span class="win">win it</span>. Very high offer counts = clear off-Amazon instead.</p>
+<table>
+  <tr><th>Set</th><th class="num">Copies</th><th class="num">Cost</th><th class="num">Days</th><th class="num">BSR</th><th class="num">Buy box</th><th class="num">Offers</th><th>Read</th></tr>
+  <tr><td><span class="setname">ARC-170 Starfighter</span><br><span class="setnum">75402 · Star Wars</span></td><td class="num">1</td><td class="num">£30</td><td class="num">450</td><td class="num">1,833</td><td class="num">£44.99</td><td class="num">38</td><td>Hot, buried 15mo (sold just 1 in Mar '25) — relist competitively / clear</td></tr>
+  <tr><td><span class="setname">Karaoke Music Party</span><br><span class="setnum">42610 · Friends</span></td><td class="num">1</td><td class="num">£6</td><td class="num">103</td><td class="num">1,970</td><td class="num">£20.74</td><td class="num">27</td><td>bb &gt; 90-day avg; undercut to ~£18</td></tr>
+  <tr><td><span class="setname">Road Plates</span><br><span class="setnum">60304 · City</span></td><td class="num">1</td><td class="num">£0</td><td class="num">150</td><td class="num">2,713</td><td class="num">£14.39</td><td class="num">26</td><td>Perennial seller — win it</td></tr>
+  <tr><td><span class="setname">Disney Frozen Advent Calendar 2025</span><br><span class="setnum">43273 · Advent</span></td><td class="num">5</td><td class="num">£79</td><td class="num">175</td><td class="num">5,380</td><td class="num">£21.99</td><td class="num">43</td><td>Seasonal — push hard pre-Christmas or route to eBay</td></tr>
+  <tr><td><span class="setname">Off-Road Race Buggy</span><br><span class="setnum">42164 · Technic</span></td><td class="num">1</td><td class="num">£8</td><td class="num">80</td><td class="num">7,747</td><td class="num"><span class="win">none</span></td><td class="num">23</td><td><span class="win">No buy box → winnable</span></td></tr>
+  <tr><td><span class="setname">Santa's Sleigh</span><br><span class="setnum">40499 · Seasonal</span></td><td class="num">5</td><td class="num">£120</td><td class="num">488</td><td class="num">8,269</td><td class="num">£37.84</td><td class="num">47</td><td>16mo unsold, 47 sellers — clear elsewhere</td></tr>
+  <tr><td><span class="setname">Luke Skywalker X-Wing Mech</span><br><span class="setnum">75390 · Star Wars</span></td><td class="num">2</td><td class="num">£15</td><td class="num">108</td><td class="num">18,700</td><td class="num"><span class="win">none</span></td><td class="num">15</td><td><span class="win">No buy box → winnable</span></td></tr>
+  <tr><td><span class="setname">Captain Toad's Camp</span><br><span class="setnum">72040 · Super Mario</span></td><td class="num">1</td><td class="num">£13</td><td class="num">116</td><td class="num">22,396</td><td class="num"><span class="win">none</span></td><td class="num">7</td><td><span class="win">Low comp + no bb → easy win</span> (1 sold Apr '26)</td></tr>
+  <tr><td><span class="setname">Dragonian Storm Village</span><br><span class="setnum">71841 · Ninjago</span></td><td class="num">5</td><td class="num">£89</td><td class="num">175</td><td class="num">34,240</td><td class="num">£40.99</td><td class="num">19</td><td>Price to contend</td></tr>
+  <tr><td><span class="setname">Truck &amp; Tracked Excavator</span><br><span class="setnum">10931 · Duplo</span></td><td class="num">1</td><td class="num">£8</td><td class="num">114</td><td class="num">36,180</td><td class="num"><span class="win">none</span></td><td class="num">17</td><td><span class="win">No buy box → winnable</span></td></tr>
+  <tr><td><span class="setname">Coruscant Guard Gunship</span><br><span class="setnum">75354 · Star Wars</span></td><td class="num">4</td><td class="num"><strong>£383</strong></td><td class="num">198</td><td class="num">46,304</td><td class="num">£177.89</td><td class="num">23</td><td><strong>Biggest capital here</strong> — high-value; FBA candidate for Q4</td></tr>
+</table>
+
+<h2>Liquidate list — dead demand, capital frozen (BSR &gt; 300k, zero all-time sales)</h2>
+<table>
+  <tr><th>Set</th><th class="num">Copies</th><th class="num">Cost</th><th class="num">Days</th><th class="num">BSR</th><th class="num">Buy box</th><th>Note</th></tr>
+  <tr><td><span class="setname">United Nations Headquarters</span><br><span class="setnum">21018 · Architecture</span></td><td class="num">5</td><td class="num"><strong>£325</strong></td><td class="num">459</td><td class="num">641k</td><td class="num">£139.99</td><td>15mo frozen</td></tr>
+  <tr><td><span class="setname">Dragon of the East Palace</span><br><span class="setnum">80049 · Monkie Kid</span></td><td class="num">2</td><td class="num"><strong>£237</strong></td><td class="num">494</td><td class="num">581k</td><td class="num">£229.99</td><td>bb above 90d — holding air</td></tr>
+  <tr><td><span class="setname">The Windmill Farm</span><br><span class="setnum">21262 · Minecraft</span></td><td class="num">5</td><td class="num">£140</td><td class="num">115</td><td class="num">303k</td><td class="num">£68.99</td><td>—</td></tr>
+  <tr><td><span class="setname">Solomon R. Guggenheim Museum</span><br><span class="setnum">21004 · Architecture</span></td><td class="num">2</td><td class="num">£111</td><td class="num">554</td><td class="num">328k</td><td class="num">£158.99</td><td>18 months</td></tr>
+  <tr><td><span class="setname">Adidas Originals Superstar Bundle</span><br><span class="setnum">10282 · Icons</span></td><td class="num">1</td><td class="num">£57</td><td class="num">95</td><td class="num">376k</td><td class="num">£124.99</td><td>—</td></tr>
+  <tr><td><span class="setname">Captain America's Avenging Cycle</span><br><span class="setnum">6865 · Marvel</span></td><td class="num">3</td><td class="num">£56</td><td class="num">443</td><td class="num">450k</td><td class="num">£43.49</td><td>—</td></tr>
+  <tr><td><span class="setname">The Phantom</span><br><span class="setnum">75048 · Star Wars</span></td><td class="num">1</td><td class="num">£49</td><td class="num">94</td><td class="num">872k</td><td class="num">£118.99</td><td>—</td></tr>
+  <tr><td><span class="setname">Monkie Kid's Staff Creations</span><br><span class="setnum">80030 · Monkie Kid</span></td><td class="num">2</td><td class="num">£37</td><td class="num">445</td><td class="num">388k</td><td class="num">£46.99</td><td>—</td></tr>
+</table>
+<p class="note">~£1,000 in just these 8. Clearing the full BSR&gt;300k tail recovers <strong>~£1,828</strong> for Q4 reinvestment.</p>
+
+<h2>Q4 restock signal — proven velocity (last 180 days)</h2>
+<table>
+  <tr><th>Set</th><th class="num">Sales</th><th class="num">Avg sale</th><th class="num">Profit/unit</th><th class="num">180d profit</th></tr>
+  <tr><td><span class="setname">Miles Morales' Mask</span><br><span class="setnum">76329 · Marvel</span></td><td class="num">24</td><td class="num">£47.56</td><td class="num">£22.06</td><td class="num">£529</td></tr>
+  <tr><td><span class="setname">The Eiffel Tower ★</span><br><span class="setnum">21019 · Architecture</span></td><td class="num">11</td><td class="num">£120.10</td><td class="num"><strong>£58.45</strong></td><td class="num">£643</td></tr>
+  <tr><td><span class="setname">Darth Vader (buildable) ★</span><br><span class="setnum">75111 · Star Wars</span></td><td class="num">12</td><td class="num">£70.23</td><td class="num">£27.70</td><td class="num">£332</td></tr>
+  <tr><td><span class="setname">Jane Goodall Tribute</span><br><span class="setnum">40530 · Promotional</span></td><td class="num">13</td><td class="num">£39.38</td><td class="num">£17.25</td><td class="num">£224</td></tr>
+  <tr><td><span class="setname">Valentine's Day Box</span><br><span class="setnum">40759 · Seasonal</span></td><td class="num">20</td><td class="num">£25.16</td><td class="num">£7.47</td><td class="num">£149</td></tr>
+  <tr><td><span class="setname">Winter Holiday Train</span><br><span class="setnum">40700 · Seasonal</span></td><td class="num">14</td><td class="num">£34.65</td><td class="num">£10.06</td><td class="num">£141</td></tr>
+  <tr><td><span class="setname">Monster Jam Dragon / Monster Mutt</span><br><span class="setnum">42149 / 42150 · Technic</span></td><td class="num">12 / 13</td><td class="num">~£26</td><td class="num">~£9</td><td class="num">£132 / £85</td></tr>
+</table>
+<p class="note">Pattern: <strong>40xxx seasonal/promo</strong> = volume (thin margin, good cash-flow); <strong>marquee sets</strong> (Eiffel Tower, Darth Vader) = the profit. Stock both ahead of October.</p>
+
+<h2>Strategic recommendations for Q4</h2>
+<ol class="rec">
+  <li><strong>Decide on FBA for a curated range.</strong> 55% of listings lose the buy box and saturated FBM offers won't convert in a Prime-heavy Q4. Send proven sellers (Miles Morales' Mask, Eiffel Tower, Darth Vader, Jane Goodall) plus the buried high-value Coruscant Guard Gunship (75354) to FBA to win the Prime buy box — only where margin absorbs FBA fees + storage.</li>
+  <li><strong>Clear the dead tail now (~£2.3k).</strong> Liquidate the BSR&gt;300k stock (£1,828) and the Strictly Briks junk (£482) via eBay/BL/Vinted/bundles. Recovers cash to reinvest in Q4 winners.</li>
+  <li><strong>Win the free wins.</strong> ~44 listings have <em>no buy-box holder</em> and ~36 have ≤3 competitors — audit and price these to win. No FBA needed; pure upside (e.g. 42164, 75390, 72040, 10931 above).</li>
+  <li><strong>Restock velocity before October.</strong> Depth on 40xxx seasonals for volume; Eiffel/Darth Vader class for margin.</li>
+  <li><strong>Don't chase price.</strong> Margins are healthy (29.5%) and you're never above buy box. Reflexive markdowns would erode the one thing that's working.</li>
+  <li><strong>Purchasing discipline.</strong> The £700+ frozen in dead Architecture sets (UN HQ 21018, Guggenheim 21004) and the £482 non-LEGO bricks were avoidable — check BSR before buying high-value or non-LEGO.</li>
+  <li><strong>Data fix (repeatability).</strong> The pricer never captures live quantity and only samples your price; ASINs aren't yet on historical order lines' fee data. Capture quantity, FBM/FBA channel and the buy-box holder daily so a dashboard can auto-flag “buried” and “dead” stock.</li>
+</ol>
+
+<h2>Suggested 4-week run-up</h2>
+<div class="plan">
+  <div class="week"><b>Week 1</b> — List the liquidation tail on eBay/BL; dump Strictly Briks. Free ~£2.3k.</div>
+  <div class="week"><b>Week 2</b> — Audit the 44 no-buy-box + 36 low-comp listings; reprice to win. Decide FBA shortlist.</div>
+  <div class="week"><b>Week 3</b> — Ship FBA shortlist; route saturated items to secondary channels.</div>
+  <div class="week"><b>Week 4</b> — Place Q4 restock orders on velocity + margin sets.</div>
+</div>
+
+<h2>How “never sold” was measured · Data window</h2>
+<p>At the <strong>ASIN level</strong> from <code>inventory_items</code> (one row = one physical copy):
+currently-listed Amazon ASINs (<code>status='LISTED'</code> + <code>amazon_asin</code> + <code>listing_platform='amazon'</code>)
+matched against every ASIN that has <strong>ever appeared in your Amazon order history</strong>
+(<code>order_items.item_number</code>, which carries the ASIN, joined to <code>platform_orders</code>).
+“Never sold” = a listed ASIN that never appears in that order history.</p>
+<p class="note">The first pass used the inventory-linked sales window (from ~9 Jan 2026 only). Extending to the
+<strong>full raw Amazon order history already in the system (back to 31 Jan 2025, ~17 months)</strong> reclassified
+just <strong>8 ASINs</strong> from “never sold” to “sold” (139 → 136) and barely moved the dead-stock capital
+(£1,863 → £1,828) — so the conclusions are unchanged. Data before Jan 2025 (and beyond Amazon SP-API's
+~24-month retention) isn't retrievable, but given the negligible shift it would not change the picture.</p>
+
+<h2>Caveats</h2>
+<p class="note">
+• It's Amazon-specific; a few never-sold-on-Amazon sets do sell on eBay/BrickLink.<br>
+• BSR is a point-in-time rank — treat bands as demand tiers, not exact velocity.<br>
+• Margin uses a flat £3/£4 postage estimate; large/heavy sets cost more.<br>
+• Competitive data is fresh (234/246 live ASINs priced ≤2 days ago); <code>platform_listings</code> is a March snapshot used only for cross-checks (21 live ASINs showed “Inactive” there — worth a Seller-Central listing-health pass).</p>
+
+<div class="footer">
+  Generated 13 June 2026 from cloud Supabase (project modjoikyuhqzouxvieua). Figures are point-in-time and exclude VAT.
+  Set names from Brickset. Source tables: inventory_items, order_items, platform_orders, amazon_arbitrage_pricing, arbitrage_current_view, brickset_sets.
+</div>
+
+</div>
+</body>
+</html>
