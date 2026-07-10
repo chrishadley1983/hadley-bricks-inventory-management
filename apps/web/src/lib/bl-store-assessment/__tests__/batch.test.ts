@@ -44,9 +44,12 @@ describe('planSweep (verdict-tiered cadence)', () => {
   });
 
   it('minAgeDays is a hard floor even for BUY stores', () => {
-    // BUY cadence 7d, but minAgeDays 10 → a 8d-old BUY store is NOT due.
-    const plan = planSweep([cand('buy-8d', daysAgo(8), 'BUY')], { budget: 10, minAgeDays: 10, now: NOW });
-    expect(plan).toHaveLength(0);
+    // Store is past its BUY cadence, but a larger minAgeDays floor keeps it out.
+    const age = CADENCE_DAYS.BUY + 1;
+    const due = planSweep([cand('buy-overdue', daysAgo(age), 'BUY')], { budget: 10, minAgeDays: 5, now: NOW });
+    expect(due).toHaveLength(1);
+    const floored = planSweep([cand('buy-overdue', daysAgo(age), 'BUY')], { budget: 10, minAgeDays: age + 10, now: NOW });
+    expect(floored).toHaveLength(0);
   });
 
   it('unknown verdicts fall back to the default cadence', () => {

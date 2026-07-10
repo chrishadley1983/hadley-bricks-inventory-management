@@ -2,7 +2,7 @@
  * store-assessment-batch.ts — nightly sweep over the store watchlist.
  *
  * Picks due `store_assessment_watchlist` entries — never-assessed first, then by
- * verdict cadence (BUY 7d / REVIEW 14d / SKIP 60d, most overdue first) — runs the
+ * verdict cadence (BUY/REVIEW 30d, SKIP 60d, most overdue first) — runs the
  * single-store assess CLI for each (light mode — caches only, one polite scrape per
  * store), then Discord-alerts anything card-worthy: BUY verdicts, buyable-net jumps,
  * price drops, or promising first assessments. Each store runs in a CHILD PROCESS so
@@ -30,7 +30,7 @@ import { spawnSync } from 'child_process';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {
-  planSweep, classifyDelta, type WatchlistCandidate, type RunSnapshot, type DeltaAlert,
+  planSweep, classifyDelta, CADENCE_DAYS, type WatchlistCandidate, type RunSnapshot, type DeltaAlert,
 } from '../src/lib/bl-store-assessment/batch';
 import { connectCdp } from './lib/store-scrape';
 import { scrapeEnglandStores } from './lib/store-directory';
@@ -316,7 +316,7 @@ async function main() {
     const candidates = await loadCandidates(userId);
     plan = planSweep(candidates, { budget: BUDGET, minAgeDays: MIN_AGE_DAYS, now: new Date() });
     const never = plan.filter((p) => p.lastScannedAt == null).length;
-    console.log(`[plan] ${candidates.length} watchlist stores → ${plan.length} selected (${never} never assessed; budget ${BUDGET}, cadence BUY 7d / REVIEW 14d / SKIP 60d)`);
+    console.log(`[plan] ${candidates.length} watchlist stores → ${plan.length} selected (${never} never assessed; budget ${BUDGET}, cadence BUY/REVIEW ${CADENCE_DAYS.BUY}d, SKIP ${CADENCE_DAYS.SKIP}d)`);
   }
   for (const p of plan) console.log(`  - ${p.storeSlug}${p.lastScannedAt ? ` (last ${p.lastScannedAt.slice(0, 10)}, ${p.lastVerdict ?? '?'})` : ' (never assessed)'}`);
   if (DRY_RUN) return;
