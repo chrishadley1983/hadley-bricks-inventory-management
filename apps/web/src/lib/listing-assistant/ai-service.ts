@@ -116,6 +116,7 @@ Please generate the eBay listing now.`;
     model: 'claude-opus-4-20250514',
     maxTokens: 4096,
     temperature: 0.3,
+    feature: 'listing_assistant',
   });
 
   return {

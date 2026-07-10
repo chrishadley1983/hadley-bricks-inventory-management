@@ -476,6 +476,7 @@ Only include fields that need changes. Omit fields that are already optimal.`;
         model: 'claude-sonnet-4-20250514', // Use Sonnet for speed
         maxTokens: 4096,
         temperature: 0.3,
+        feature: 'ebay_listing_improvement',
       });
 
       // Get improved description, defaulting to the version without boilerplate

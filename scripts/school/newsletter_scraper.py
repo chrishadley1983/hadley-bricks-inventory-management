@@ -106,7 +106,11 @@ def extract_text_from_pdf(pdf_bytes: bytes) -> str:
 
 def extract_events_with_claude(newsletter_text: str, newsletter_date: str) -> list[dict]:
     """Use Claude to extract key dates and events from newsletter text."""
+    import time
+
     import anthropic
+
+    from ai_usage_audit import log_ai_usage
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -133,10 +137,29 @@ Return ONLY a JSON array of events. Return [] if no specific events found. No ot
 Newsletter text:
 {newsletter_text[:8000]}"""
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}],
+    started = time.time()
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as exc:
+        log_ai_usage(
+            feature="school_newsletter",
+            model="claude-sonnet-4-6",
+            status="error",
+            error=str(exc),
+            request_ms=int((time.time() - started) * 1000),
+        )
+        raise
+
+    log_ai_usage(
+        feature="school_newsletter",
+        model=response.model,
+        usage=response.usage,
+        request_ms=int((time.time() - started) * 1000),
+        anthropic_message_id=response.id,
     )
 
     text = response.content[0].text.strip()

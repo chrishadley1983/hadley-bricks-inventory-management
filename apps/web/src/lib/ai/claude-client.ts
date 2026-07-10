@@ -1,6 +1,72 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { logAiUsage } from './ai-usage-audit';
 
 let client: Anthropic | null = null;
+
+/**
+ * Common options accepted by every Claude helper. `feature` is a label for the
+ * shared AI-usage audit log (e.g. "ebay_listing_generation"); it has no effect
+ * on the API call itself.
+ */
+interface ClaudeCallOptions {
+  model?: string;
+  maxTokens?: number;
+  temperature?: number;
+  /** Audit-log feature label. */
+  feature?: string;
+}
+
+/**
+ * Fire-and-forget audit log for a successful Claude response.
+ *
+ * Reads usage/model/id off the response and records the call in
+ * `public.ai_api_usage`. Never awaited, never throws — `logAiUsage` swallows
+ * all errors internally, and this wrapper adds a defensive try/catch.
+ */
+function auditClaudeSuccess(
+  response: Anthropic.Message,
+  feature: string | undefined,
+  startedAt: number
+): void {
+  try {
+    const usage = response.usage;
+    logAiUsage({
+      feature,
+      model: response.model,
+      status: 'success',
+      anthropic_message_id: response.id,
+      request_ms: Date.now() - startedAt,
+      input_tokens: usage?.input_tokens,
+      output_tokens: usage?.output_tokens,
+      cache_creation_input_tokens: usage?.cache_creation_input_tokens ?? undefined,
+      cache_read_input_tokens: usage?.cache_read_input_tokens ?? undefined,
+    });
+  } catch {
+    // Audit logging must never affect the user request.
+  }
+}
+
+/**
+ * Fire-and-forget audit log for a failed Claude call.
+ */
+function auditClaudeError(
+  err: unknown,
+  feature: string | undefined,
+  model: string,
+  startedAt: number
+): void {
+  try {
+    logAiUsage({
+      feature,
+      model,
+      status: 'error',
+      request_ms: Date.now() - startedAt,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } catch {
+    // Audit logging must never affect the user request.
+  }
+}
 
 /**
  * Get the Anthropic client instance (singleton)
@@ -22,28 +88,38 @@ export function getClaudeClient(): Anthropic {
 export async function sendMessage(
   systemPrompt: string,
   userMessage: string,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<string> {
-  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.3 } = options;
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 1024,
+    temperature = 0.3,
+    feature,
+  } = options;
 
   const anthropic = getClaudeClient();
+  const startedAt = Date.now();
 
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: userMessage,
-      },
-    ],
-  });
+  let response: Anthropic.Message;
+  try {
+    response = await anthropic.messages.create({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: userMessage,
+        },
+      ],
+    });
+  } catch (err) {
+    auditClaudeError(err, feature, model, startedAt);
+    throw err;
+  }
+
+  auditClaudeSuccess(response, feature, startedAt);
 
   // Extract text from the response
   const textBlock = response.content.find((block) => block.type === 'text');
@@ -68,41 +144,51 @@ export async function sendMessageWithImage(
   systemPrompt: string,
   userMessage: string,
   image: ImageInput,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<string> {
-  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.3 } = options;
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 1024,
+    temperature = 0.3,
+    feature,
+  } = options;
 
   const anthropic = getClaudeClient();
+  const startedAt = Date.now();
 
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: image.mediaType,
-              data: image.base64,
+  let response: Anthropic.Message;
+  try {
+    response = await anthropic.messages.create({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: image.mediaType,
+                data: image.base64,
+              },
             },
-          },
-          {
-            type: 'text',
-            text: userMessage,
-          },
-        ],
-      },
-    ],
-  });
+            {
+              type: 'text',
+              text: userMessage,
+            },
+          ],
+        },
+      ],
+    });
+  } catch (err) {
+    auditClaudeError(err, feature, model, startedAt);
+    throw err;
+  }
+
+  auditClaudeSuccess(response, feature, startedAt);
 
   const textBlock = response.content.find((block) => block.type === 'text');
   if (!textBlock || textBlock.type !== 'text') {
@@ -119,15 +205,17 @@ export async function sendMessageWithImages(
   systemPrompt: string,
   userMessage: string,
   images: ImageInput[],
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<string> {
-  const { model = 'claude-sonnet-4-20250514', maxTokens = 2048, temperature = 0.3 } = options;
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 2048,
+    temperature = 0.3,
+    feature,
+  } = options;
 
   const anthropic = getClaudeClient();
+  const startedAt = Date.now();
 
   const imageContent = images.map((img) => ({
     type: 'image' as const,
@@ -138,24 +226,32 @@ export async function sendMessageWithImages(
     },
   }));
 
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          ...imageContent,
-          {
-            type: 'text',
-            text: userMessage,
-          },
-        ],
-      },
-    ],
-  });
+  let response: Anthropic.Message;
+  try {
+    response = await anthropic.messages.create({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            ...imageContent,
+            {
+              type: 'text',
+              text: userMessage,
+            },
+          ],
+        },
+      ],
+    });
+  } catch (err) {
+    auditClaudeError(err, feature, model, startedAt);
+    throw err;
+  }
+
+  auditClaudeSuccess(response, feature, startedAt);
 
   const textBlock = response.content.find((block) => block.type === 'text');
   if (!textBlock || textBlock.type !== 'text') {
@@ -172,11 +268,7 @@ export async function sendMessageWithImagesForJSON<T>(
   systemPrompt: string,
   userMessage: string,
   images: ImageInput[],
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<T> {
   const response = await sendMessageWithImages(systemPrompt, userMessage, images, options);
 
@@ -201,11 +293,7 @@ export async function sendMessageWithImagesForJSON<T>(
 export async function sendMessageForJSON<T>(
   systemPrompt: string,
   userMessage: string,
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<T> {
   const response = await sendMessage(systemPrompt, userMessage, options);
 
@@ -239,26 +327,36 @@ export interface ChatMessage {
 export async function sendConversation(
   systemPrompt: string,
   messages: ChatMessage[],
-  options: {
-    model?: string;
-    maxTokens?: number;
-    temperature?: number;
-  } = {}
+  options: ClaudeCallOptions = {}
 ): Promise<string> {
-  const { model = 'claude-sonnet-4-20250514', maxTokens = 1024, temperature = 0.5 } = options;
+  const {
+    model = 'claude-sonnet-4-20250514',
+    maxTokens = 1024,
+    temperature = 0.5,
+    feature,
+  } = options;
 
   const anthropic = getClaudeClient();
+  const startedAt = Date.now();
 
-  const response = await anthropic.messages.create({
-    model,
-    max_tokens: maxTokens,
-    temperature,
-    system: systemPrompt,
-    messages: messages.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    })),
-  });
+  let response: Anthropic.Message;
+  try {
+    response = await anthropic.messages.create({
+      model,
+      max_tokens: maxTokens,
+      temperature,
+      system: systemPrompt,
+      messages: messages.map((msg) => ({
+        role: msg.role,
+        content: msg.content,
+      })),
+    });
+  } catch (err) {
+    auditClaudeError(err, feature, model, startedAt);
+    throw err;
+  }
+
+  auditClaudeSuccess(response, feature, startedAt);
 
   // Extract text from the response
   const textBlock = response.content.find((block) => block.type === 'text');

@@ -68,6 +68,7 @@ export class ListingGenerationService {
         model: CLAUDE_OPUS_MODEL,
         maxTokens: 4096,
         temperature: 0.4, // Slightly creative but mostly consistent
+        feature: 'ebay_listing_generation',
       }
     );
 
