@@ -14081,6 +14081,91 @@ export type Database = {
           },
         ]
       }
+      store_assessment_watchlist: {
+        Row: {
+          created_at: string
+          directory_items: number | null
+          enabled: boolean
+          id: string
+          notes: string | null
+          region: string | null
+          source: string | null
+          store_name: string | null
+          store_slug: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          directory_items?: number | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          region?: string | null
+          source?: string | null
+          store_name?: string | null
+          store_slug: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          directory_items?: number | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          region?: string | null
+          source?: string | null
+          store_name?: string | null
+          store_slug?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_assessment_watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_directory_scans: {
+        Row: {
+          id: string
+          region: string
+          scanned_at: string
+          stores_added: number
+          stores_found: number
+          stores_skipped_small: number
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          region?: string
+          scanned_at?: string
+          stores_added: number
+          stores_found: number
+          stores_skipped_small?: number
+          user_id: string
+        }
+        Update: {
+          id?: string
+          region?: string
+          scanned_at?: string
+          stores_added?: number
+          stores_found?: number
+          stores_skipped_small?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_directory_scans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_quality_runs: {
         Row: {
           ageing_score: number | null
