@@ -37,6 +37,13 @@ New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 $log = Join-Path $logDir "store-assessment-batch-last-run.log"
 "=== sweep started $(Get-Date -Format o) ===" | Out-File -FilePath $log -Encoding utf8
 
+# npx writes a benign "npm warn config ignoring workspace config" line to stderr on
+# every call; under ErrorActionPreference=Stop that stderr write is promoted to a
+# terminating error and kills the runner BEFORE tsx starts (log ends after the header,
+# exit 1, nothing swept). Same failure mode already documented and fixed in
+# pg-refresh-cycle.ps1 — drop to Continue around the native call; $LASTEXITCODE is the
+# real pass/fail signal.
+$ErrorActionPreference = "Continue"
 npx tsx scripts/store-assessment-batch.ts --budget=25 --min-age-days=5 2>&1 |
     Tee-Object -FilePath $log -Append
 
