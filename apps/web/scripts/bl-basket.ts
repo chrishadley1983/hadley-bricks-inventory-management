@@ -945,7 +945,9 @@ function generateWantedXml(passed: EnrichedItem[]): string {
     // each item is click-through-able to its catalog page / price guide — the cart isn't.
     const netPerUnit = e.listPrice > 0 ? e.totalLotProfit / e.totalQty : null;
     const parts = [
-      netPerUnit != null ? `net ${netPerUnit.toFixed(2)}/u ${e.marginPct != null ? Math.round(e.marginPct * 100) + '%' : ''}`.trim() : null,
+      // marginPct here is already a percentage (bl-basket convention, e.g. 37.87 — unlike
+      // the assessment engine's 0..1 fraction).
+      netPerUnit != null ? `net ${netPerUnit.toFixed(2)}/u ${e.marginPct != null ? Math.round(e.marginPct) + '%' : ''}`.trim() : null,
       `STR ${e.sellThru.toFixed(2)}`,
       e.ukSoldAvg != null ? `6MA ${e.ukSoldAvg.toFixed(2)}` : null,
       e.mos != null ? `~${Math.round(e.mos)}mo` : null,
@@ -1702,7 +1704,9 @@ async function main() {
   if (RESUME_FROM_WANTED) {
     wantedMoreID = RESUME_FROM_WANTED;
   } else if (!RESUME_FROM_CART) {
-    const listName = `${meta.storeName} basket ${new Date().toISOString().slice(0, 10)}`;
+    // HH:MM suffix: same-day reruns (e.g. a --stop-after-wanted review pass after an
+    // earlier build) otherwise die on BL's "Wanted List name already exists".
+    const listName = `${meta.storeName} basket ${new Date().toISOString().slice(0, 10)} ${new Date().toTimeString().slice(0, 5)}`;
     const xml = generateWantedXml(passed);
     // Interim artifact: the XWL itself, reviewable/re-importable independently of the upload.
     const xwlFile = path.join(OUT_DIR, `wanted-${new Date().toISOString().slice(0, 10)}.xml`);
