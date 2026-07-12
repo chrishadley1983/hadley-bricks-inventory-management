@@ -36,6 +36,9 @@
  *   --inventory-ttl-days=<n>  Reuse tmp/stores/<slug>/inventory.json if <N days old. Default 7.
  *   --force-rescrape        Force a fresh scrape even when cached inventory is fresh.
  *   --skip-cart             Stop after report (no cart build).
+ *   --stop-after-wanted     Upload the wanted list (rich STR/margin remarks), print its
+ *                           review URL, and stop BEFORE cart build — review market depth
+ *                           per item on BL, then resume with --resume-from-wanted=<id>.
  *   --skip-purchases-row    Skip inserting a linked `purchases` row after persist.
  *   --resume-from-wanted=<wantedMoreID>  Skip phases 1-6 and jump to buildCart with given wantedMoreID.
  *   --resume-from-cart      Skip cart build, jump to validate+persist (cart already built on BL).
@@ -99,6 +102,7 @@ const CHECKPOINT_MIN_DATA = parseInt(argv['checkpoint-min-data'] ?? '15', 10); /
 const INVENTORY_TTL_DAYS = parseFloat(argv['inventory-ttl-days'] ?? '7');
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const SKIP_CART = argv['skip-cart'] === 'true';
+const STOP_AFTER_WANTED = argv['stop-after-wanted'] === 'true';
 const SKIP_PURCHASES_ROW = argv['skip-purchases-row'] === 'true';
 const RESUME_FROM_WANTED = argv['resume-from-wanted'] && argv['resume-from-wanted'] !== 'true' ? parseInt(argv['resume-from-wanted'], 10) : null;
 const RESUME_FROM_CART = argv['resume-from-cart'] === 'true';
@@ -877,6 +881,11 @@ export interface WantedEntry {
   totalLotProfit: number;
   mergedFrom: number;
   highestAsk: number;
+  // Decision context for the wanted-list REMARKS (same tuple ⇒ same values across merged rows).
+  sellThru: number;
+  marginPct: number | null;
+  ukSoldAvg: number | null;
+  mos: number | null;
 }
 
 export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
@@ -905,6 +914,10 @@ export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
         totalLotProfit: l.lotProfit ?? 0,
         mergedFrom: 1,
         highestAsk: l.unitPriceGBP,
+        sellThru: l.sellThru,
+        marginPct: l.marginPct,
+        ukSoldAvg: l.ukSoldAvg,
+        mos: l.mos,
       });
     }
   }
@@ -928,10 +941,18 @@ function generateWantedXml(passed: EnrichedItem[]): string {
     xml.push(`    <MINQTY>${e.totalQty}</MINQTY>`);
     xml.push(`    <CONDITION>${e.condition}</CONDITION>`);
     xml.push('    <NOTIFY>N</NOTIFY>');
-    const remarks = e.mergedFrom > 1
-      ? `ask≤${e.highestAsk.toFixed(2)} list ${e.listPrice.toFixed(2)} lot ${e.totalLotProfit.toFixed(2)} (merged ${e.mergedFrom} rows)`
-      : `ask ${e.highestAsk.toFixed(2)} list ${e.listPrice.toFixed(2)} lot ${e.totalLotProfit.toFixed(2)}`;
-    xml.push(`    <REMARKS>${remarks}</REMARKS>`);
+    // Decision context inline: reviewing the wanted list on BL is the last point where
+    // each item is click-through-able to its catalog page / price guide — the cart isn't.
+    const netPerUnit = e.listPrice > 0 ? e.totalLotProfit / e.totalQty : null;
+    const parts = [
+      netPerUnit != null ? `net ${netPerUnit.toFixed(2)}/u ${e.marginPct != null ? Math.round(e.marginPct * 100) + '%' : ''}`.trim() : null,
+      `STR ${e.sellThru.toFixed(2)}`,
+      e.ukSoldAvg != null ? `6MA ${e.ukSoldAvg.toFixed(2)}` : null,
+      e.mos != null ? `~${Math.round(e.mos)}mo` : null,
+      `lot ${e.totalLotProfit.toFixed(2)}`,
+      e.mergedFrom > 1 ? `ask<=${e.highestAsk.toFixed(2)} merged ${e.mergedFrom}` : `ask ${e.highestAsk.toFixed(2)}`,
+    ].filter(Boolean);
+    xml.push(`    <REMARKS>${escXml(parts.join(' | '))}</REMARKS>`);
     xml.push('  </ITEM>');
   }
   xml.push('</INVENTORY>');
@@ -1683,7 +1704,17 @@ async function main() {
   } else if (!RESUME_FROM_CART) {
     const listName = `${meta.storeName} basket ${new Date().toISOString().slice(0, 10)}`;
     const xml = generateWantedXml(passed);
+    // Interim artifact: the XWL itself, reviewable/re-importable independently of the upload.
+    const xwlFile = path.join(OUT_DIR, `wanted-${new Date().toISOString().slice(0, 10)}.xml`);
+    fs.writeFileSync(xwlFile, xml);
+    console.log(`  XWL saved → ${xwlFile}`);
     wantedMoreID = await uploadWantedList(cdp, listName, xml);
+    if (STOP_AFTER_WANTED) {
+      console.log('\n--stop-after-wanted set. Review each item (market depth / STR click-throughs) here:');
+      console.log(`  https://www.bricklink.com/v2/wanted/edit.page?wantedMoreID=${wantedMoreID}`);
+      console.log(`  Then resume: npx tsx scripts/bl-basket.ts --store-slug=${argv['store-slug']} --resume-from-wanted=${wantedMoreID} --yes`);
+      cdp.close(); rl.close(); return;
+    }
   } else {
     wantedMoreID = -1; // unused on resume-from-cart
   }
