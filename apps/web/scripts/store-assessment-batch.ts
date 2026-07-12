@@ -32,6 +32,8 @@ import * as path from 'path';
 import {
   planSweep, classifyDelta, CADENCE_DAYS, type WatchlistCandidate, type RunSnapshot, type DeltaAlert,
 } from '../src/lib/bl-store-assessment/batch';
+import { buildStoreAlertCard } from '../src/lib/bl-store-assessment/discord-card';
+import type { StoreAssessment } from '../src/lib/bl-store-assessment/types';
 import { connectCdp } from './lib/store-scrape';
 import { scrapeEnglandStores } from './lib/store-directory';
 
@@ -230,6 +232,16 @@ async function latestSnapshot(userId: string, slug: string): Promise<(RunSnapsho
   };
 }
 
+/** Full persisted assessment for the rich alert card (null on any miss). */
+async function latestAssessmentJson(userId: string, slug: string): Promise<StoreAssessment | null> {
+  const { data } = await supabase
+    .from('store_assessments')
+    .select('assessment')
+    .eq('user_id', userId).eq('store_slug', slug)
+    .order('scanned_at', { ascending: false }).limit(1).maybeSingle();
+  return (data?.assessment as StoreAssessment) ?? null;
+}
+
 // ---- child run -------------------------------------------------------------
 
 interface StoreRunResult {
@@ -350,7 +362,21 @@ async function main() {
       const r: StoreRunResult = { slug, ok: true, current: current ?? undefined, storeName, alerts };
       results.push(r);
       console.log(`  ✓ ${current?.verdict ?? '?'} grade ${current?.grade ?? '?'} · £${(current?.buyableNetGbp ?? 0).toFixed(2)} net · ${current?.buyableFreshLots ?? '—'} fresh${alerts.length ? `  → ALERT: ${alerts[0].kind}` : ''}`);
-      if (alerts.length) await postDiscord('DISCORD_WEBHOOK_OPPORTUNITIES', alertCard(r));
+      if (alerts.length) {
+        // Rich card from the full persisted assessment; legacy 3-field card as fallback.
+        // Dedicated channel via DISCORD_WEBHOOK_STORE_ASSESSMENT, else the shared one.
+        const webhookEnv = process.env.DISCORD_WEBHOOK_STORE_ASSESSMENT
+          ? 'DISCORD_WEBHOOK_STORE_ASSESSMENT' : 'DISCORD_WEBHOOK_OPPORTUNITIES';
+        let card: object;
+        try {
+          const full = await latestAssessmentJson(userId, slug);
+          card = full ? buildStoreAlertCard(full, alerts, slug, storeName) : alertCard(r);
+        } catch (e) {
+          console.error(`  [discord] rich card failed (${(e as Error).message}) — falling back`);
+          card = alertCard(r);
+        }
+        await postDiscord(webhookEnv, card);
+      }
     }
     if (i < plan.length - 1) await sleep(jitteredPaceMs());
   }
