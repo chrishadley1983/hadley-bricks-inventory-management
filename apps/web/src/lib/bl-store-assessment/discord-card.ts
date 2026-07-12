@@ -25,8 +25,9 @@ function pickLine(s: ScoredLot): string {
   const src = s.priceSource === 'world' ? '†' : '';
   const tag = s.overlap ? ` \`${OVERLAP_TAG[s.overlap] ?? s.overlap}\`` : '';
   const lotNet = s.lotProfit != null ? ` = **${gbp(s.lotProfit)}**` : '';
+  const str = s.strLots != null ? ` · STR ${s.strLots.toFixed(2)}` : '';
   return `**${s.itemNo}**${col} (${s.condition}) ${name}\n` +
-    `　ask ${gbp(s.ask)} vs 6MA ${gbp(s.benchmarkAvg)}${src} → ${gbp(s.netPerUnit)}/u (${pct0(s.marginPct)}) ×${s.invQty}${lotNet}${tag}`;
+    `　ask ${gbp(s.ask)} vs 6MA ${gbp(s.benchmarkAvg)}${src} → ${gbp(s.netPerUnit)}/u (${pct0(s.marginPct)}) ×${s.invQty}${lotNet}${str}${tag}`;
 }
 
 /** Keep a multi-line field under Discord's 1024-char limit, dropping whole lines. */
@@ -78,13 +79,13 @@ export function buildStoreAlertCard(
       inline: true,
     },
     {
-      name: '🏷️ Pricing posture',
-      value: `${wm != null ? `${Math.round(wm * 100)}% of market` : '—'} (${a.pricing.label})\n🧲 ${a.magnets.lots} magnets · ${a.magnets.alsoWithinMargin} buyable`,
+      name: '📈 Demand signals',
+      value: `${a.highStr.lots} high-STR lots (≥${a.inputs.minStr}) · ${a.highStr.alsoWithinMargin} buyable\n🧲 ${a.magnets.lots} magnets · ${a.magnets.alsoWithinMargin} buyable`,
       inline: true,
     },
     {
-      name: '🏬 Store',
-      value: `${a.size.totalLots} lots · ${gbp(a.size.totalValue)} value\nmedian ask ${gbp(a.size.medianLotPrice)}`,
+      name: '🏬 Store & pricing',
+      value: `${a.size.totalLots} lots · ${gbp(a.size.totalValue)} · median ${gbp(a.size.medianLotPrice)}\n${wm != null ? `${Math.round(wm * 100)}% of market` : '—'} (${a.pricing.label})`,
       inline: true,
     },
     {
