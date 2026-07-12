@@ -236,6 +236,20 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     });
     if (error) console.error(`[persist] failed: ${error.message}`);
     else log(`[persist] saved to store_assessments`);
+
+    // Raw scrape too (latest per store, PK upsert): benchmark re-scores and cart
+    // prep can then re-run the engine offline — no Chrome, no re-scrape.
+    const { error: scrapeErr } = await supabase.from('bl_store_scrapes').upsert({
+      store_slug: STORE_SLUG,
+      user_id: userId,
+      store_id: meta.storeId,
+      scanned_at: assessment.scannedAt,
+      lot_count: lots.length,
+      truncated,
+      lots,
+    }, { onConflict: 'store_slug' });
+    if (scrapeErr) console.error(`[persist] bl_store_scrapes failed (non-fatal): ${scrapeErr.message}`);
+    else log(`[persist] raw scrape saved to bl_store_scrapes (${lots.length} lots)`);
   } else if (!NO_PERSIST) {
     console.error('[persist] skipped — no resolvable user id (pass --user-id or set STORE_ASSESSMENT_USER_ID)');
   }
