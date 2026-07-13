@@ -147,3 +147,24 @@ Remove-Item -Recurse -Force node_modules/.cache, .next -ErrorAction SilentlyCont
 4. Check auth on every protected route
 5. Encrypt platform credentials in `platform_credentials` table
 6. Use parameterized queries — never concatenate SQL
+
+---
+
+## BrickLink Price Data — Standard Pattern (MANDATORY)
+
+**Every BL price lookup fetches ALL FOUR quadrants (sold N/U + stock N/U) through the
+standard write-through service, which persists them to the unified
+`bricklink_price_guide_cache`.** Each call must enrich the shared dataset — assessments,
+bl-basket, offline re-scores, and future runs all read the same cache.
+
+- CLI: `scripts/pg/pg-live-check.ts` — ALWAYS pass `--include-stock`. The sold-only
+  default is a trap: it leaves stock quadrants empty, STR renders as bogus `x/0L`
+  (stock-unknown coerced to zero supply), and the quadrants have to be re-bought.
+- Service: `src/lib/bricklink/live-check.service.ts` (`liveCheckBatch`) — the only
+  sanctioned API price-fetch path. Never make ad-hoc BL price calls or scrapes that
+  bypass the cache write-through; partial rows poison downstream consumers silently.
+- API budget is never the argument for skipping quadrants: 5,000 calls/day, typical
+  usage <5%. Doing it right once is always cheaper than a second pass.
+  (Origin: 2026-07-13 Andrew toys verification — sold-only first pass, ~640 quadrants
+  re-bought. Chris: "every price call needs to follow the standard pattern as we want
+  it to enrich the data too.")
