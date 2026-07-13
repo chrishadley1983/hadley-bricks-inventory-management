@@ -41,7 +41,9 @@ try {
 # exit 1, no telemetry). Drop to Continue around the native call — $LASTEXITCODE is the
 # real pass/fail signal.
 $ErrorActionPreference = 'Continue'
-& npx tsx scripts/pg/pg-refresh-cycle.ts 2>&1 | Tee-Object -FilePath $log -Append
+# TRIAL (Chris 2026-07-13): 5-min block backoff instead of the spec's 30 — testing whether
+# blocks are transient per-request throttles. Judge via telemetry; delete the arg to revert.
+& npx tsx scripts/pg/pg-refresh-cycle.ts --backoff-mins=5 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
 exit $code

@@ -878,14 +878,16 @@ export interface WantedEntry {
   itemType: StoreItemCode;
   itemNo: string;
   colourId: number;
-  /** null = mixed N+U merged — omit the CONDITION tag (any condition acceptable). */
-  condition: ItemCondition | null;
+  /** Always concrete — BL's uploader rejects entries without CONDITION ("null" error, live-proven 2026-07-13). */
+  condition: ItemCondition;
   totalQty: number;
   maxPrice: number;
   listPrice: number;
   totalLotProfit: number;
   mergedFrom: number;
   highestAsk: number;
+  /** Lots of the OTHER condition dropped from this entry (BL allows one entry per item/colour). */
+  droppedOtherCondLots: number;
   // Decision context for the wanted-list REMARKS (same tuple ⇒ same values across merged rows).
   sellThru: number;
   marginPct: number | null;
@@ -894,26 +896,28 @@ export interface WantedEntry {
 }
 
 export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
-  const groups = new Map<string, WantedEntry>();
-  // Highest-profit row first, so the group's pricing/remarks context comes from it.
+  // Two levels: same-condition rows merge fully; across conditions BL still only
+  // allows ONE entry per (item, colour) AND the uploader requires a concrete
+  // CONDITION (omitting it draws a "null" error — live-proven 2026-07-13). So per
+  // tuple we keep the higher-profit condition's entry and surface the dropped
+  // side's lot count in the remarks for the human reviewing on BL.
+  const byCond = new Map<string, WantedEntry>();
+  // Highest-profit row first, so each group's pricing/remarks context comes from it.
   const sorted = [...passed].sort((a, b) => (b.lotProfit ?? 0) - (a.lotProfit ?? 0));
   for (const l of sorted) {
     const listPrice = l.listPrice ?? l.unitPriceGBP;
     const breakEven = floorP(listPrice * (1 - VAR_FEE_PCT));
     const maxPrice = Math.max(Math.min(ceilP(l.unitPriceGBP * 1.05), breakEven), ceilP(l.unitPriceGBP));
-    // CONDITION deliberately NOT in the key — BL rejects same item/colour twice even
-    // when conditions differ (see the header note).
-    const key = `${l.itemType}|${l.itemNo}|${l.colourId}`;
-    const existing = groups.get(key);
+    const key = `${l.itemType}|${l.itemNo}|${l.colourId}|${l.condition}`;
+    const existing = byCond.get(key);
     if (existing) {
       existing.totalQty += l.invQty;
       existing.maxPrice = Math.max(existing.maxPrice, maxPrice);
       existing.totalLotProfit += l.lotProfit ?? 0;
       existing.highestAsk = Math.max(existing.highestAsk, l.unitPriceGBP);
       existing.mergedFrom += 1;
-      if (existing.condition !== l.condition) existing.condition = null; // mixed N+U → any
     } else {
-      groups.set(key, {
+      byCond.set(key, {
         itemType: l.itemType,
         itemNo: l.itemNo,
         colourId: l.colourId,
@@ -924,6 +928,7 @@ export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
         totalLotProfit: l.lotProfit ?? 0,
         mergedFrom: 1,
         highestAsk: l.unitPriceGBP,
+        droppedOtherCondLots: 0,
         sellThru: l.sellThru,
         marginPct: l.marginPct,
         ukSoldAvg: l.ukSoldAvg,
@@ -931,7 +936,21 @@ export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
       });
     }
   }
-  return Array.from(groups.values());
+  // Collapse to one entry per (item, colour): keep the higher-profit condition.
+  const byTuple = new Map<string, WantedEntry>();
+  for (const e of byCond.values()) {
+    const key = `${e.itemType}|${e.itemNo}|${e.colourId}`;
+    const existing = byTuple.get(key);
+    if (!existing) {
+      byTuple.set(key, e);
+    } else if (e.totalLotProfit > existing.totalLotProfit) {
+      e.droppedOtherCondLots = existing.mergedFrom + existing.droppedOtherCondLots;
+      byTuple.set(key, e);
+    } else {
+      existing.droppedOtherCondLots += e.mergedFrom;
+    }
+  }
+  return Array.from(byTuple.values());
 }
 
 function generateWantedXml(passed: EnrichedItem[]): string {
@@ -943,13 +962,19 @@ function generateWantedXml(passed: EnrichedItem[]): string {
   }
   const xml = ['<INVENTORY>'];
   for (const e of entries) {
+    // Bare colNN "set" ids (ambiguous CMF identity from the scrape) don't exist in the
+    // BL catalog — the upload rejects the whole file. Live-proven 2026-07-13 (col25).
+    if (e.itemType === 'S' && /^col\d+$/i.test(e.itemNo)) {
+      console.warn(`  skipping ${e.itemNo}: not a valid BL catalog id (ambiguous CMF identity)`);
+      continue;
+    }
     xml.push('  <ITEM>');
     xml.push(`    <ITEMTYPE>${e.itemType}</ITEMTYPE>`);
     xml.push(`    <ITEMID>${escXml(e.itemNo)}</ITEMID>`);
     if (e.itemType === 'P') xml.push(`    <COLOR>${e.colourId}</COLOR>`);
     xml.push(`    <MAXPRICE>${e.maxPrice.toFixed(2)}</MAXPRICE>`);
     xml.push(`    <MINQTY>${e.totalQty}</MINQTY>`);
-    if (e.condition) xml.push(`    <CONDITION>${e.condition}</CONDITION>`); // omitted = any (mixed N+U merge)
+    xml.push(`    <CONDITION>${e.condition}</CONDITION>`); // always concrete — BL uploader "null"s without it
     xml.push('    <NOTIFY>N</NOTIFY>');
     // Decision context inline: reviewing the wanted list on BL is the last point where
     // each item is click-through-able to its catalog page / price guide — the cart isn't.
@@ -963,6 +988,7 @@ function generateWantedXml(passed: EnrichedItem[]): string {
       e.mos != null ? `~${Math.round(e.mos)}mo` : null,
       `lot ${e.totalLotProfit.toFixed(2)}`,
       e.mergedFrom > 1 ? `ask<=${e.highestAsk.toFixed(2)} merged ${e.mergedFrom}` : `ask ${e.highestAsk.toFixed(2)}`,
+      e.droppedOtherCondLots > 0 ? `+${e.droppedOtherCondLots} ${e.condition === 'N' ? 'U' : 'N'} lot(s) in store (BL: 1 entry/item+colour)` : null,
     ].filter(Boolean);
     xml.push(`    <REMARKS>${escXml(parts.join(' | '))}</REMARKS>`);
     xml.push('  </ITEM>');

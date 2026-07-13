@@ -74,19 +74,22 @@ function check(label: string, cond: boolean, detail?: string) {
   check('both have mergedFrom=1', out.every((e) => e.mergedFrom === 1));
 }
 
-// Case 3: same item+colour, different condition — must NOT merge
+// Case 3: same item+colour, different condition — one entry, higher-profit side wins
 {
   console.log('\n[case 3] same (P, X, 5) but different condition (N vs U)');
-  // BL rejects same item/colour twice EVEN with differing conditions (live-proven
-  // 2026-07-13, P 12885 c86): must merge to ONE entry with CONDITION omitted (= any).
+  // BL allows one entry per item/colour (dupe rejection, live-proven P 12885 c86) AND
+  // its uploader requires a concrete CONDITION (omitting it draws a "null" error,
+  // both live-proven 2026-07-13). Keep the higher-profit condition; surface the
+  // dropped side via droppedOtherCondLots for the remarks.
   const passed: EnrichedItem[] = [
-    lot({ condition: 'N', invNew: 'N', invQty: 5 }),
-    lot({ condition: 'U', invNew: 'U', invQty: 3 }),
+    lot({ condition: 'N', invNew: 'N', invQty: 5, lotProfit: 1.00 }),
+    lot({ condition: 'U', invNew: 'U', invQty: 3, lotProfit: 0.40 }),
   ];
   const out = dedupeWantedEntries(passed);
-  check('1 merged entry emitted', out.length === 1, `got ${out.length}`);
-  check('condition null (any)', out[0].condition === null, `got ${out[0].condition}`);
-  check('qty summed across conditions', out[0].totalQty === 8, `got ${out[0].totalQty}`);
+  check('1 entry emitted', out.length === 1, `got ${out.length}`);
+  check('higher-profit condition kept (N)', out[0].condition === 'N', `got ${out[0].condition}`);
+  check('qty from kept side only', out[0].totalQty === 5, `got ${out[0].totalQty}`);
+  check('dropped side surfaced', out[0].droppedOtherCondLots === 1, `got ${out[0].droppedOtherCondLots}`);
 }
 
 // Case 4: 3+ way merge
