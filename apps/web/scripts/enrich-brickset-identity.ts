@@ -73,7 +73,16 @@ async function main() {
     const codes = [...codeToSet.keys()];
     let products: any[] = [];
     try { products = await keepa.searchByCode(codes); }
-    catch (e) { console.error(`[enrich] batch ${i / BATCH} keepa error: ${(e as Error).message}`); continue; }
+    catch (e) {
+      const msg = (e as Error).message;
+      // Token bucket drained → stop cleanly and resume next run (don't spin in 60s
+      // refill-waits until the process is killed). Everything written so far persists.
+      if (/429|Too Many Requests|rate limit/i.test(msg)) {
+        console.log(`[enrich] Keepa tokens exhausted — pausing cleanly at ${i}/${sets.length}. Re-run to resume.`);
+        break;
+      }
+      console.error(`[enrich] batch ${i / BATCH} keepa error: ${msg}`); continue;
+    }
     tokensUsed += products.length;
 
     // index products by every barcode they carry
