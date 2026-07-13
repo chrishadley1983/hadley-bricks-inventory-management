@@ -136,6 +136,9 @@ function addDaysIso(days: number): string {
 /** High-liquidity golden tuple — red 2×4 brick — always has PG data. */
 const WARMUP_PROBE: PgItemRef = { itemType: 'P', itemNo: '3001', colourId: 5 };
 
+/** Mid-run homepage re-establishes allowed per run (one per post-backoff wake-up, ~5 max). */
+const MAX_REESTABLISHES = 5;
+
 /** One ordinary BL page visit via raw CDP — re-establishes the session after idle. */
 async function visitHomepage(cdpPort: number): Promise<void> {
   const tabs = (await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()) as Array<{
@@ -560,6 +563,7 @@ async function main(): Promise<void> {
   let sessionCounts: SessionCounts = { requests: 0, ok: 0, failed: 0 };
   let firstBlockAtRequest: number | null = null;
   let totalProcessed = 0;
+  let reestablishes = 0;
   let queue: QueueRow[] = [];
   const batches = emptyBatches();
   let stopReason = 'unknown';
@@ -630,7 +634,27 @@ async function main(): Promise<void> {
       totalProcessed += 1;
 
       try {
-        const result = await scraper.scrape(item);
+        let result;
+        try {
+          result = await scraper.scrape(item);
+        } catch (e1) {
+          // Mid-run session re-establish (2026-07-13: the cold-start 403 also appears
+          // after a 30-min block backoff — the warm-up only covered startup). Same
+          // remedy: one homepage visit, retry the tuple. Capped per run so a genuinely
+          // dead session (real login loss) still fails fast via the fatal branch below.
+          if ((e1 instanceof PgLoginError || e1 instanceof PgCurrencyError) && reestablishes < MAX_REESTABLISHES) {
+            reestablishes += 1;
+            console.warn(
+              `[pg-refresh-cycle] session-shaped failure on ${tupleLabel(item)} (${(e1 as Error).name}) — ` +
+                `homepage re-establish ${reestablishes}/${MAX_REESTABLISHES}, then retrying the tuple`,
+            );
+            await visitHomepage(CDP_PORT);
+            await sleep(4000);
+            result = await scraper.scrape(item); // second failure falls through to the fatal branch
+          } else {
+            throw e1;
+          }
+        }
         batches.scrapeResults.push(result);
         batches.summaryRows.push(toSummaryCacheRow(result));
         batches.snapshotRows.push(toSnapshotRow(result, new Date().toISOString().slice(0, 10)));
