@@ -39,6 +39,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 import * as os from 'os';
 import * as path from 'path';
+import WebSocket from 'ws';
 import { discordService } from '../../src/lib/notifications/discord.service';
 import {
   PgScraper,
@@ -130,6 +131,25 @@ function addDaysIso(days: number): string {
 }
 
 // ---------------------------------------------------------------------------
+// Cold-start warm-up helpers (see the probe block in main())
+
+/** High-liquidity golden tuple — red 2×4 brick — always has PG data. */
+const WARMUP_PROBE: PgItemRef = { itemType: 'P', itemNo: '3001', colourId: 5 };
+
+/** One ordinary BL page visit via raw CDP — re-establishes the session after idle. */
+async function visitHomepage(cdpPort: number): Promise<void> {
+  const tabs = (await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()) as Array<{
+    type: string; url: string; webSocketDebuggerUrl: string;
+  }>;
+  const tab = tabs.find((t) => t.type === 'page' && t.url.includes('bricklink')) ?? tabs.find((t) => t.type === 'page');
+  if (!tab) throw new Error('warm-up: no page tab available on the CDP Chrome');
+  const ws = new WebSocket(tab.webSocketDebuggerUrl);
+  await new Promise<void>((resolve, reject) => { ws.on('open', () => resolve()); ws.on('error', reject); });
+  ws.send(JSON.stringify({ id: 1, method: 'Page.navigate', params: { url: 'https://www.bricklink.com/v2/main.page' } }));
+  await new Promise((r) => setTimeout(r, 6000));
+  ws.close();
+}
+
 // Queue claim / lock lifecycle
 // ---------------------------------------------------------------------------
 
@@ -500,6 +520,30 @@ async function main(): Promise<void> {
 
   const scraper = new PgScraper({ cdpPort: CDP_PORT });
   await scraper.open();
+
+  // Cold-start warm-up (three consecutive 00:05 fatals, 2026-07-11..13): after hours
+  // idle, BL serves the FIRST catalogPG navigation a 403/anonymous page, which the
+  // currency guard correctly reads as unusable — but it aborted the whole night on
+  // tuple one. A single ordinary page visit (homepage) re-establishes the session
+  // (proven manually both mornings). Probe a liquid golden tuple; on a session-shaped
+  // failure, visit the homepage and probe once more. Only a second failure is fatal.
+  try {
+    await scraper.scrape(WARMUP_PROBE);
+    console.log('[pg-refresh-cycle] warm-up probe ok');
+  } catch (err) {
+    if (err instanceof PgCurrencyError || err instanceof PgLoginError || err instanceof PgBlockError) {
+      console.warn(
+        `[pg-refresh-cycle] warm-up probe failed (${(err as Error).name}) — visiting homepage to ` +
+          `re-establish the session, then retrying once`,
+      );
+      await visitHomepage(CDP_PORT);
+      await sleep(4000);
+      await scraper.scrape(WARMUP_PROBE); // a second failure propagates: genuinely unusable session
+      console.log('[pg-refresh-cycle] warm-up probe ok after homepage re-establish');
+    } else if (!(err instanceof PgNotFoundError) && !(err instanceof PgNoDataError)) {
+      throw err;
+    }
+  }
 
   const state: PlannerState = {
     requestsThisSession: 0,
