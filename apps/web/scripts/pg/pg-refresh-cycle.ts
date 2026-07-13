@@ -78,7 +78,12 @@ const NAV_DELAY_MS = Math.max(4000, parseInt(argv['nav-delay-ms'] ?? '4000', 10)
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
 
-const BACKOFF_MS = 30 * 60 * 1000; // spec §4.4: 403 -> 30-min backoff
+// spec §4.4 default is 30; Chris 2026-07-13: trial 5-min backoff (set via the ps1
+// wrapper) — hypothesis: blocks are transient per-request throttles, so most of the
+// 30min is wasted window. Judged via bl_pg_lane_telemetry firstBlockAtRequest /
+// blocked-session counts; revert the wrapper arg if post-backoff sessions die earlier.
+const BACKOFF_MINS = parseFloat(argv['backoff-mins'] ?? '30');
+const BACKOFF_MS = BACKOFF_MINS * 60 * 1000;
 const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are reclaimable
 const ACTIVE_CYCLE_DAYS = 28;
 const NO_DATA_REQUEUE_DAYS = 90;
@@ -482,7 +487,7 @@ async function flush(sb: SupabaseClient, batches: Batches): Promise<void> {
 async function main(): Promise<void> {
   console.log(
     `[pg-refresh-cycle] run=${RUN_ID} cdpPort=${CDP_PORT} sessionSize=${SESSION_SIZE} ` +
-      `breatherMins=${BREATHER_MINS} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS}` +
+      `breatherMins=${BREATHER_MINS} backoffMins=${BACKOFF_MINS} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS}` +
       (LIMIT_TUPLES > 0 ? ` limitTuples=${LIMIT_TUPLES}` : ''),
   );
 
