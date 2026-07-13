@@ -84,6 +84,13 @@ const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
 // blocked-session counts; revert the wrapper arg if post-backoff sessions die earlier.
 const BACKOFF_MINS = parseFloat(argv['backoff-mins'] ?? '30');
 const BACKOFF_MS = BACKOFF_MINS * 60 * 1000;
+// Transient-block retry (Chris + data, 2026-07-13): BL 403s a single request but the
+// SAME tuple succeeds moments later — 4/5 blocked tuples that day recovered on a later
+// attempt. So retry the tuple in place before treating a block as session-ending; only a
+// block that survives all retries counts. This is the real fix — it makes breather/backoff
+// tuning largely moot, because transient blips no longer end sessions.
+const BLOCK_RETRIES = parseInt(argv['block-retries'] ?? '2', 10);
+const BLOCK_RETRY_MS = parseFloat(argv['block-retry-secs'] ?? '20') * 1000;
 const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are reclaimable
 const ACTIVE_CYCLE_DAYS = 28;
 const NO_DATA_REQUEUE_DAYS = 90;
@@ -487,7 +494,7 @@ async function flush(sb: SupabaseClient, batches: Batches): Promise<void> {
 async function main(): Promise<void> {
   console.log(
     `[pg-refresh-cycle] run=${RUN_ID} cdpPort=${CDP_PORT} sessionSize=${SESSION_SIZE} ` +
-      `breatherMins=${BREATHER_MINS} backoffMins=${BACKOFF_MINS} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS}` +
+      `breatherMins=${BREATHER_MINS} backoffMins=${BACKOFF_MINS} blockRetries=${BLOCK_RETRIES} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS}` +
       (LIMIT_TUPLES > 0 ? ` limitTuples=${LIMIT_TUPLES}` : ''),
   );
 
@@ -640,25 +647,43 @@ async function main(): Promise<void> {
 
       try {
         let result;
-        try {
-          result = await scraper.scrape(item);
-        } catch (e1) {
-          // Mid-run session re-establish (2026-07-13: the cold-start 403 also appears
-          // after a 30-min block backoff — the warm-up only covered startup). Same
-          // remedy: one homepage visit, retry the tuple. Capped per run so a genuinely
-          // dead session (real login loss) still fails fast via the fatal branch below.
-          if ((e1 instanceof PgLoginError || e1 instanceof PgCurrencyError) && reestablishes < MAX_REESTABLISHES) {
-            reestablishes += 1;
-            console.warn(
-              `[pg-refresh-cycle] session-shaped failure on ${tupleLabel(item)} (${(e1 as Error).name}) — ` +
-                `homepage re-establish ${reestablishes}/${MAX_REESTABLISHES}, then retrying the tuple`,
-            );
-            await visitHomepage(CDP_PORT);
-            await sleep(4000);
-            result = await scraper.scrape(item); // second failure falls through to the fatal branch
-          } else {
-            throw e1;
+        let blockRetries = 0;
+        for (;;) {
+          try {
+            result = await scraper.scrape(item);
+            break;
+          } catch (e1) {
+            // Transient block: retry the SAME tuple in place after a short pause before
+            // treating it as session-ending. Verified 2026-07-13 — most "blocks" clear on
+            // the next attempt. Only a block that survives every retry reaches the outer
+            // catch and ends the session.
+            if ((e1 instanceof PgBlockError || e1 instanceof PgCaptchaError) && blockRetries < BLOCK_RETRIES) {
+              blockRetries += 1;
+              const pause = BLOCK_RETRY_MS + Math.floor(Math.random() * 5000);
+              console.warn(
+                `[pg-refresh-cycle] transient block on ${tupleLabel(item)} — retry ${blockRetries}/${BLOCK_RETRIES} in ${Math.round(pause / 1000)}s`,
+              );
+              await sleep(pause);
+              continue;
+            }
+            // Mid-run session re-establish (2026-07-13: the cold-start 403 also appears
+            // mid-run). One homepage visit, then retry the tuple. Capped per run so a
+            // genuinely dead session (real login loss) still fails fast via the fatal branch.
+            if ((e1 instanceof PgLoginError || e1 instanceof PgCurrencyError) && reestablishes < MAX_REESTABLISHES) {
+              reestablishes += 1;
+              console.warn(
+                `[pg-refresh-cycle] session-shaped failure on ${tupleLabel(item)} (${(e1 as Error).name}) — ` +
+                  `homepage re-establish ${reestablishes}/${MAX_REESTABLISHES}, then retrying the tuple`,
+              );
+              await visitHomepage(CDP_PORT);
+              await sleep(4000);
+              continue;
+            }
+            throw e1; // retries exhausted → genuine sustained block / dead session
           }
+        }
+        if (blockRetries > 0) {
+          console.log(`[pg-refresh-cycle] recovered ${tupleLabel(item)} after ${blockRetries} transient-block retry(ies)`);
         }
         batches.scrapeResults.push(result);
         batches.summaryRows.push(toSummaryCacheRow(result));
