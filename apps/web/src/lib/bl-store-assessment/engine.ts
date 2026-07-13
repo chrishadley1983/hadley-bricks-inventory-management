@@ -41,6 +41,12 @@ const DAMAGE_KEYWORDS = new Set([
   'yellow', 'yellowed', 'yellowing', 'marked', 'marks', 'broken', 'bent',
   'tear', 'torn', 'sticky', 'cloudy', 'scuffed', 'scuff', 'worn',
   'discolour', 'discoloured', 'discolor', 'discolored', 'bitten', 'warped', 'flaw', 'flawed',
+  // bite/teeth damage (missed a live Hulk "several bitemarks on the head", 2026-07-13)
+  'bite', 'bites', 'bitemark', 'bitemarks', 'teeth', 'tooth', 'gnaw', 'gnawed', 'chew', 'chewed',
+  // other unambiguous condition-note damage (completeness handled separately via invComplete,
+  // so 'missing'/'incomplete' are deliberately excluded; 'hole'/'cut' excluded — legit part names)
+  'glued', 'repaired', 'melted', 'burnt', 'burned', 'stain', 'stained', 'mould', 'mouldy',
+  'rusty', 'brittle', 'snapped', 'ripped',
 ]);
 const NEGATION_PREFIXES: string[][] = [['no'], ['without'], ['not'], ['free', 'of'], ['free', 'from'], ['zero']];
 

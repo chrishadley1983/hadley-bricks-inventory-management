@@ -142,10 +142,19 @@ export async function scrapeStoreInventory(
         const nativePrice = Number((it as { nativePrice: unknown }).nativePrice);
         const rawConv = Number((it as { rawConvertedPrice: unknown }).rawConvertedPrice);
         const unitPriceGBP = nativePrice > 0 ? nativePrice : (Number.isFinite(rawConv) ? rawConv : 0);
+        // Collectible minifigs are catalogued PER FIGURE as `${base}-${seq}` (e.g. col10-6
+        // = Skydiver). The store AJAX returns only the bare series base in `itemNo` and the
+        // figure index in `itemSeq`. Bare `col10` resolves to figure -1 in the price guide,
+        // so without the suffix all 16 figures inherit ONE (wrong) price. Reconstruct the
+        // real figure number for col* items. Regular sets/parts price on their bare number
+        // (variant is implicitly -1), so they are left untouched.
+        const rawNo = String((it as { itemNo: unknown }).itemNo);
+        const itemSeq = Number((it as { itemSeq?: unknown }).itemSeq ?? 0);
+        const itemNo = /^col/i.test(rawNo) && itemSeq > 0 ? `${rawNo}-${itemSeq}` : rawNo;
         all.push({
           invID,
           itemType: type,
-          itemNo: String((it as { itemNo: unknown }).itemNo),
+          itemNo,
           colourId: Number((it as { colorID: unknown }).colorID ?? 0),
           colourName: ((it as { colorName?: string }).colorName) ?? null,
           itemName: String((it as { itemName: unknown }).itemName),
