@@ -106,6 +106,38 @@ describe('apiPriceGuideToUkCacheFields', () => {
     expect('uk_stock_lots_new' in row).toBe(false);
   });
 
+  it('builds uk_detail (byMonth/hist/median) + source from price_detail, merging prior quadrants', () => {
+    const soldNewGuide = fakeGuide({
+      new_or_used: 'N', unit_quantity: 3, total_quantity: 6, avg_price: '0.15',
+      price_detail: [
+        { quantity: 2, unit_price: '0.10', seller_country_code: 'UK', buyer_country_code: 'UK', date_ordered: '2026-06-05T00:00:00Z' },
+        { quantity: 1, unit_price: '0.20', seller_country_code: 'UK', buyer_country_code: 'UK', date_ordered: '2026-06-20T00:00:00Z' },
+        { quantity: 3, unit_price: '0.20', seller_country_code: 'UK', buyer_country_code: 'UK', date_ordered: '2026-05-10T00:00:00Z' },
+      ],
+    } as Partial<BrickLinkPriceGuide>);
+    const fetches: TupleFetches = {
+      soldNew: { requested: true, ok: true, guide: soldNewGuide },
+      soldUsed: { requested: false },
+      stockNew: { requested: false },
+      stockUsed: { requested: false },
+    };
+    const tuple: LiveCheckTuple = { itemType: 'P', itemNo: '3001', colourId: 11 };
+    // prior detail carries a soldUsed quadrant we do NOT re-fetch — it must survive.
+    const prior = { soldUsed: { min: 0.3, max: 0.3, byMonth: { 'April 2026': { lots: 1, qty: 1, avg: 0.3 } }, hist: { '0.3000': 1 } } };
+    const row = apiPriceGuideToUkCacheFields(tuple, fetches, '2026-07-13T00:00:00.000Z', prior as never);
+
+    expect(row.source).toBe('api-livecheck');
+    const detail = row.uk_detail as Record<string, { byMonth?: Record<string, { qty: number }>; hist: Record<string, number> }>;
+    // fetched soldNew quadrant enriched from price_detail
+    expect(detail.soldNew.byMonth?.['June 2026'].qty).toBe(3);
+    expect(detail.soldNew.byMonth?.['May 2026'].qty).toBe(3);
+    expect(detail.soldNew.hist['0.2000']).toBe(4); // 1 + 3 qty at 0.20
+    // median over the 3 transactions (prices 0.10, 0.20, 0.20) -> 0.20
+    expect(row.uk_sold_median_new).toBeCloseTo(0.2, 4);
+    // NOT-fetched soldUsed quadrant preserved from prior detail
+    expect(detail.soldUsed.byMonth?.['April 2026'].qty).toBe(1);
+  });
+
   it('maps the stock quadrant including min price when requested', () => {
     const fetches: TupleFetches = {
       ...noFetches,

@@ -47,8 +47,13 @@ export interface PgCacheRow {
   uk_detail: unknown;
   world_detail: unknown;
   parse_version: number;
+  /** Lane provenance: 'catalogpg' (page scrape) | 'api-livecheck' (BL store API). */
+  source: string;
   fetched_at: string;
 }
+
+/** PgScrapeResult.finalUrl sentinel set by the API capture path (fromBlApi). */
+const API_FINAL_URL = 'bl_api';
 
 // v3 (2026-07-08): per-quadrant sold/stock price histograms added to uk_detail/world_detail
 // (soldNew.hist, soldUsed.hist, stockNew.hist, stockUsed.hist) — enables qtyShareAtOrAbove
@@ -100,6 +105,9 @@ export function toPgCacheRow(r: PgScrapeResult): PgCacheRow {
       stockUsed: { lots: world.stockUsed.lots, qty: world.stockUsed.qty, avg: world.stockUsed.avg, hist: world.stockUsed.hist },
     },
     parse_version: PG_PARSE_VERSION,
+    // Provenance from the result itself: the API capture path stamps finalUrl='bl_api'
+    // (see fromBlApi); everything else is a real catalogPG page scrape.
+    source: r.finalUrl === API_FINAL_URL ? 'api-livecheck' : 'catalogpg',
     fetched_at: r.scrapedAt,
   };
 }

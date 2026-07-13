@@ -35,8 +35,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { RateLimitError, type BrickLinkClient } from './client';
 import type { BrickLinkItemType, BrickLinkPriceGuide } from './types';
-import { pgCacheKey, type PriceGuideCacheService } from './price-guide-cache.service';
-import { normaliseSetNo, type PgItemType } from './price-guide-page';
+import { pgCacheKey, type PgCacheRow, type PriceGuideCacheService } from './price-guide-cache.service';
+import { normaliseSetNo, recentMonthsQty, type PgItemType } from './price-guide-page';
+import { blGuideToQuadrant } from './price-guide/capture';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -97,20 +98,32 @@ export interface UkCacheFieldsRow {
   uk_sold_avg_used?: number | null;
   uk_sold_qty_avg_new?: number | null;
   uk_sold_qty_avg_used?: number | null;
+  uk_sold_median_new?: number | null;
+  uk_sold_median_used?: number | null;
   uk_sold_lots_new?: number;
   uk_sold_lots_used?: number;
   uk_sold_qty_new?: number;
   uk_sold_qty_used?: number;
+  uk_sold_last2mo_qty_new?: number;
+  uk_sold_last2mo_qty_used?: number;
   uk_stock_qty_new?: number;
   uk_stock_qty_used?: number;
   uk_stock_lots_new?: number;
   uk_stock_lots_used?: number;
   uk_stock_min_new?: number | null;
   uk_stock_min_used?: number | null;
+  /** Rich per-quadrant detail (byMonth/hist/median) built from the API's price_detail[].
+   *  Merged with any prior uk_detail so quadrants NOT fetched this call keep their value. */
+  uk_detail?: unknown;
   parse_version: number;
+  source: string;
   fetched_at: string;
   updated_at: string;
 }
+
+/** One quadrant's uk_detail sub-object (sold carries byMonth; stock does not). */
+type UkDetailQuad = { min: number | null; max: number | null; byMonth?: unknown; hist: unknown };
+type UkDetail = { soldNew?: UkDetailQuad; soldUsed?: UkDetailQuad; stockNew?: UkDetailQuad; stockUsed?: UkDetailQuad };
 
 export interface ConditionSummary {
   lots: number;
@@ -203,6 +216,7 @@ export function apiPriceGuideToUkCacheFields(
   tuple: LiveCheckTuple,
   fetches: TupleFetches,
   fetchedAt: string = new Date().toISOString(),
+  priorUkDetail: UkDetail | null = null,
 ): UkCacheFieldsRow {
   const soldNew = summariseGuideFetch(fetches.soldNew);
   const soldUsed = summariseGuideFetch(fetches.soldUsed);
@@ -214,9 +228,35 @@ export function apiPriceGuideToUkCacheFields(
     item_no: tuple.itemNo,
     colour_id: tuple.itemType === 'P' ? tuple.colourId : 0,
     parse_version: LIVE_CHECK_PARSE_VERSION,
+    source: 'api-livecheck',
     fetched_at: fetchedAt,
     updated_at: fetchedAt,
   };
+
+  // Build uk_detail (byMonth/hist/median) from each fetched quadrant's price_detail[],
+  // reusing the page-lane's exact math (blGuideToQuadrant). Merge onto any prior detail
+  // so quadrants NOT fetched this call keep their existing value (partial-write invariant).
+  const detail: UkDetail = { ...(priorUkDetail ?? {}) };
+  let builtAnyDetail = false;
+  const enrich = (fetch: PriceGuideFetch, isSold: boolean, quad: keyof UkDetail): void => {
+    if (!fetch.requested || !fetch.ok) return;
+    const q = blGuideToQuadrant(fetch.guide, isSold);
+    detail[quad] = isSold
+      ? { min: q.min, max: q.max, byMonth: q.byMonth, hist: q.hist }
+      : { min: q.min, max: q.max, hist: q.hist };
+    builtAnyDetail = true;
+    if (isSold) {
+      const median = q.median;
+      const last2mo = recentMonthsQty(q, 2);
+      if (quad === 'soldNew') { row.uk_sold_median_new = median; row.uk_sold_last2mo_qty_new = last2mo; }
+      else { row.uk_sold_median_used = median; row.uk_sold_last2mo_qty_used = last2mo; }
+    }
+  };
+  enrich(fetches.soldNew, true, 'soldNew');
+  enrich(fetches.soldUsed, true, 'soldUsed');
+  enrich(fetches.stockNew, false, 'stockNew');
+  enrich(fetches.stockUsed, false, 'stockUsed');
+  if (builtAnyDetail || priorUkDetail) row.uk_detail = detail;
 
   if (soldNew) {
     row.uk_sold_avg_new = soldNew.avg;
@@ -293,10 +333,14 @@ export async function liveCheckTuple(
   // Informational only: how stale (if at all) the existing L3 row is, so callers can report
   // "verified" vs "first time seen" without a second query of their own.
   let priorCacheAgeDays: number | null = null;
+  let priorUkDetail: PgCacheRow['uk_detail'] | null = null;
   try {
     const priorRows = await cacheService.getFresh([tuple], 36500);
     const prior = priorRows.get(pgCacheKey(tuple));
-    if (prior) priorCacheAgeDays = (Date.now() - new Date(prior.fetched_at).getTime()) / 86400000;
+    if (prior) {
+      priorCacheAgeDays = (Date.now() - new Date(prior.fetched_at).getTime()) / 86400000;
+      priorUkDetail = prior.uk_detail ?? null; // preserve quadrants we don't re-fetch this call
+    }
   } catch (err) {
     console.warn(`[liveCheckTuple] prior-cache lookup failed for ${pgCacheKey(tuple)}:`, (err as Error).message);
   }
@@ -344,7 +388,7 @@ export async function liveCheckTuple(
     }
   }
 
-  const ukRow = apiPriceGuideToUkCacheFields(tuple, fetches, fetchedAt);
+  const ukRow = apiPriceGuideToUkCacheFields(tuple, fetches, fetchedAt, priorUkDetail as never);
   const hasUkData =
     ukRow.uk_sold_lots_new !== undefined ||
     ukRow.uk_sold_lots_used !== undefined ||
