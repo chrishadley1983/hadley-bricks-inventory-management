@@ -855,26 +855,31 @@ function floorP(n: number) { return Math.floor(n * 100) / 100; }
 function escXml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 /**
- * BL's wanted-list format treats (itemType, itemNo, colourId, condition) as a
- * unique key — uploads with duplicate keys fail with "duplicate item/color
- * combinations". A single seller can list the same part/colour/condition as
- * multiple inventory rows (different storage, different remarks, different
- * prices), each of which we scrape as its own EnrichedItem. Before XML
- * generation we group those rows back together so BL accepts the upload.
+ * BL's wanted-list format treats (itemType, itemNo, colourId) as a unique key —
+ * CONDITION does NOT discriminate: an upload with the same part/colour as both
+ * N and U fails with "duplicate item/color combinations" (proven live 2026-07-13,
+ * P 12885 c86 on the Air list). A single seller can also list the same
+ * part/colour/condition as multiple inventory rows (different storage, remarks,
+ * prices), each scraped as its own EnrichedItem. Before XML generation we group
+ * ALL rows sharing (type, no, colour) so BL accepts the upload.
  *
  * Merge semantics:
  *   - MINQTY = sum of invQty (we still want every piece across the dupes)
  *   - MAXPRICE = max of the per-row gated ceiling (so the more expensive row
  *     stays eligible — BL fulfils greedily from cheapest, so the lower-priced
  *     row gets pulled first naturally)
- *   - listPrice/lotProfit on the report row are the same across dupes (same
- *     UK 6MA × multiplier) so totals are unaffected.
+ *   - CONDITION: kept when every merged row agrees; null (tag omitted = any
+ *     condition acceptable) when N and U rows merged
+ *   - listPrice/lotProfit on the report row are the same across same-condition
+ *     dupes (same UK 6MA × multiplier); across conditions we keep the
+ *     higher-profit row's pricing context for the remarks.
  */
 export interface WantedEntry {
   itemType: StoreItemCode;
   itemNo: string;
   colourId: number;
-  condition: ItemCondition;
+  /** null = mixed N+U merged — omit the CONDITION tag (any condition acceptable). */
+  condition: ItemCondition | null;
   totalQty: number;
   maxPrice: number;
   listPrice: number;
@@ -890,11 +895,15 @@ export interface WantedEntry {
 
 export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
   const groups = new Map<string, WantedEntry>();
-  for (const l of passed) {
+  // Highest-profit row first, so the group's pricing/remarks context comes from it.
+  const sorted = [...passed].sort((a, b) => (b.lotProfit ?? 0) - (a.lotProfit ?? 0));
+  for (const l of sorted) {
     const listPrice = l.listPrice ?? l.unitPriceGBP;
     const breakEven = floorP(listPrice * (1 - VAR_FEE_PCT));
     const maxPrice = Math.max(Math.min(ceilP(l.unitPriceGBP * 1.05), breakEven), ceilP(l.unitPriceGBP));
-    const key = `${l.itemType}|${l.itemNo}|${l.colourId}|${l.condition}`;
+    // CONDITION deliberately NOT in the key — BL rejects same item/colour twice even
+    // when conditions differ (see the header note).
+    const key = `${l.itemType}|${l.itemNo}|${l.colourId}`;
     const existing = groups.get(key);
     if (existing) {
       existing.totalQty += l.invQty;
@@ -902,6 +911,7 @@ export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
       existing.totalLotProfit += l.lotProfit ?? 0;
       existing.highestAsk = Math.max(existing.highestAsk, l.unitPriceGBP);
       existing.mergedFrom += 1;
+      if (existing.condition !== l.condition) existing.condition = null; // mixed N+U → any
     } else {
       groups.set(key, {
         itemType: l.itemType,
@@ -939,7 +949,7 @@ function generateWantedXml(passed: EnrichedItem[]): string {
     if (e.itemType === 'P') xml.push(`    <COLOR>${e.colourId}</COLOR>`);
     xml.push(`    <MAXPRICE>${e.maxPrice.toFixed(2)}</MAXPRICE>`);
     xml.push(`    <MINQTY>${e.totalQty}</MINQTY>`);
-    xml.push(`    <CONDITION>${e.condition}</CONDITION>`);
+    if (e.condition) xml.push(`    <CONDITION>${e.condition}</CONDITION>`); // omitted = any (mixed N+U merge)
     xml.push('    <NOTIFY>N</NOTIFY>');
     // Decision context inline: reviewing the wanted list on BL is the last point where
     // each item is click-through-able to its catalog page / price guide — the cart isn't.

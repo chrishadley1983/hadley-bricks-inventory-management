@@ -77,12 +77,16 @@ function check(label: string, cond: boolean, detail?: string) {
 // Case 3: same item+colour, different condition — must NOT merge
 {
   console.log('\n[case 3] same (P, X, 5) but different condition (N vs U)');
+  // BL rejects same item/colour twice EVEN with differing conditions (live-proven
+  // 2026-07-13, P 12885 c86): must merge to ONE entry with CONDITION omitted (= any).
   const passed: EnrichedItem[] = [
     lot({ condition: 'N', invNew: 'N', invQty: 5 }),
     lot({ condition: 'U', invNew: 'U', invQty: 3 }),
   ];
   const out = dedupeWantedEntries(passed);
-  check('2 entries emitted (no merge)', out.length === 2, `got ${out.length}`);
+  check('1 merged entry emitted', out.length === 1, `got ${out.length}`);
+  check('condition null (any)', out[0].condition === null, `got ${out[0].condition}`);
+  check('qty summed across conditions', out[0].totalQty === 8, `got ${out[0].totalQty}`);
 }
 
 // Case 4: 3+ way merge
