@@ -110,7 +110,7 @@ export async function scrapeStoreInventory(
   storeId: number,
   opts: { maxPages?: number; pageDelayMs?: number; onProgress?: (msg: string) => void } = {},
 ): Promise<StoreScrapeResult> {
-  const maxPages = opts.maxPages ?? 50;
+  const maxPages = opts.maxPages ?? 500; // raised 50->500 (2026-07-13) — no truncation on realistic stores
   const pageDelay = Math.max(3000, opts.pageDelayMs ?? 3000);
   const log = opts.onProgress ?? (() => {});
   const all: StoreLot[] = [];

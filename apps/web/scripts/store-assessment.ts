@@ -47,7 +47,12 @@ const NO_PERSIST = argv['no-persist'] === 'true';
 const ALLOW_NON_UK = argv['allow-non-uk'] === 'true';
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
-const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
+// Default raised 50->500 (Chris 2026-07-13): the 50-page/5,000-lot cap silently
+// truncated large stores (Agnes.k61 hit exactly 5,000 parts, understating the buy).
+// 500 pages = 50,000 lots/type captures the full inventory of any realistic store;
+// the ceiling is a runaway backstop, not a normal limit. Tradeoff: big-store scrapes
+// take longer, so the nightly sweep does fewer stores/night — full data over breadth.
+const MAX_PAGES = Math.min(1000, parseInt(argv['max-pages'] ?? '500', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const INVENTORY_TTL_DAYS = parseFloat(argv['inventory-ttl-days'] ?? '7');
 const GAPFILL_BUDGET = parseInt(argv['gapfill-budget'] ?? '120', 10);
