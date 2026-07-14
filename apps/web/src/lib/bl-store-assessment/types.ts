@@ -248,6 +248,25 @@ export interface SetsSection {
   totalBestNet: number;
 }
 
+/** One STR band row: where the store's lots — and its buyable money — sit by velocity. */
+export interface StrBandRow {
+  band: string; // 'no benchmark' | '0–0.25' | ... | '2.0+'
+  lots: number;
+  lotsPct: number; // share of scored lots
+  askValue: number;
+  /** Benchmark provenance within the band. */
+  ukLots: number;
+  worldLots: number;
+  /** withinMargin lots/net in this band (margin+ask+damage gates, NO STR gate — so the
+   * table shows what each velocity band would unlock). */
+  buyableLots: number;
+  buyableNet: number;
+}
+
+export interface StrCoverageSection {
+  rows: StrBandRow[];
+}
+
 export interface Verdict {
   grade: number; // 0..100 Arbitrage Attractiveness
   label: 'BUY' | 'REVIEW' | 'SKIP';
@@ -287,6 +306,8 @@ export interface StoreAssessment {
   overlap: OverlapSection;
   /** Proper-set decisions (separate from the parts grade). Absent on pre-v4 rows. */
   sets?: SetsSection;
+  /** STR × coverage band breakdown (Chris 2026-07-14: wanted on every store summary). */
+  strCoverage?: StrCoverageSection;
 }
 
 export const DEFAULT_INPUTS: AssessmentInputs = {
