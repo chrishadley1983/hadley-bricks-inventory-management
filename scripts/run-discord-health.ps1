@@ -1,19 +1,22 @@
-# Local eBay BIN Part-Out Watcher Runner
+# Local Discord Alerting Health Check Runner
 #
-# Drives one BIN part-out scan against the LOCAL Next.js server
-# (http://localhost:3000) - zero Vercel cost. The /api/cron/ebay-bin-partout
-# route watches newly-listed USED fixed-price LEGO listings for hit-list sets
-# whose BrickLink used part-out value is a high multiple of the asking price.
-# Quiet hours are enforced inside the route; the hit list self-refreshes from
-# the POV cache when older than 24h.
+# Drives the daily /api/cron/discord-health dead-man check against the LOCAL
+# Next.js server (http://localhost:3000). The route verifies that every
+# required DISCORD_WEBHOOK_* env var is present in the RUNNING server process
+# (catches stale env after a service restart), that each webhook still exists
+# on Discord's side (catches deleted webhooks), and that no eBay alert rows
+# are stuck undelivered (discord_sent=false).
 #
-# Scheduled every 15 minutes via register-ebay-bin-partout-task.ps1.
-# Each run appends a one-line summary to logs\ebay-bin-partout-local.log.
+# Born from the 2026-07-10..14 outage: a stale service env silently dropped
+# every eBay opportunity alert for four days while all run logs said "sent".
+#
+# Scheduled daily via register-discord-health-task.ps1.
+# Each run appends a one-line summary to logs\discord-health-local.log.
 
 $ErrorActionPreference = "Stop"
 
 $envFile = Join-Path $PSScriptRoot "..\apps\web\.env.local"
-$logFile = Join-Path $PSScriptRoot "..\logs\ebay-bin-partout-local.log"
+$logFile = Join-Path $PSScriptRoot "..\logs\discord-health-local.log"
 
 function Write-RunLog([string]$line) {
     $stamped = "{0} {1}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"), $line
@@ -49,11 +52,11 @@ if (-not $cronSecret) {
     exit 1
 }
 
-$uri = "http://localhost:3000/api/cron/ebay-bin-partout"
+$uri = "http://localhost:3000/api/cron/discord-health"
 $headers = @{ "Authorization" = "Bearer $cronSecret" }
 
 try {
-    $r = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -TimeoutSec 180
+    $r = Invoke-RestMethod -Uri $uri -Method Post -Headers $headers -TimeoutSec 120
 } catch {
     $detail = $_.Exception.Message
     if ($_.Exception.Response) {
@@ -66,17 +69,11 @@ try {
     exit 1
 }
 
-if ($r.skipped) {
-    Write-RunLog ("skipped reason={0}" -f $r.skipped)
-    exit 0
+if ($r.problems.Count -gt 0) {
+    Write-RunLog ("UNHEALTHY problems={0} webhooks={1} stuck={2}: {3}" -f `
+        $r.problems.Count, $r.webhooksChecked, $r.stuckAlerts, ($r.problems -join " | "))
+    exit 1
 }
 
-$summary = "ok seen={0} new={1} matches={2} candidates={3} alerts={4} apiCalls={5} hitlist={6}{7} ms={8}" -f `
-    $r.itemsSeen, $r.newItems, $r.hitlistMatches, $r.candidates, $r.alertsSent, `
-    $r.apiCallsMade, $r.hitlistSize, $(if ($r.hitlistRefreshed) { "(refreshed)" } else { "" }), $r.durationMs
-if ($r.discordFailures -gt 0) { $summary = "ERROR-DISCORD failures=$($r.discordFailures) | $summary" }
-if ($r.error) { $summary = "ERROR-IN-SCAN $($r.error) | $summary" }
-Write-RunLog $summary
-
-if ($r.error -or $r.discordFailures -gt 0) { exit 1 }
+Write-RunLog ("ok healthy webhooks={0} stuck={1} ms={2}" -f $r.webhooksChecked, $r.stuckAlerts, $r.durationMs)
 exit 0

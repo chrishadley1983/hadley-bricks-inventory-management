@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
 
     // Send Discord alerts for new opportunities
     let alertsSent = 0;
+    let discordFailures = 0;
+    let firstDiscordError: string | null = null;
 
     for (const opp of result.opportunities) {
       try {
@@ -103,10 +105,17 @@ export async function POST(request: NextRequest) {
         });
 
         await scanner.saveAlert(DEFAULT_USER_ID, opp, discordResult.success);
-        if (discordResult.success) alertsSent++;
+        if (discordResult.success) {
+          alertsSent++;
+        } else {
+          discordFailures++;
+          firstDiscordError ??= discordResult.error ?? 'unknown';
+        }
       } catch (err) {
         console.error('[Cron EbayAuctions] Failed to send alert:', err);
         await scanner.saveAlert(DEFAULT_USER_ID, opp, false);
+        discordFailures++;
+        firstDiscordError ??= err instanceof Error ? err.message : String(err);
       }
     }
 
@@ -129,11 +138,29 @@ export async function POST(request: NextRequest) {
         });
 
         await scanner.saveJoblotAlert(DEFAULT_USER_ID, joblot, discordResult.success);
-        if (discordResult.success) alertsSent++;
+        if (discordResult.success) {
+          alertsSent++;
+        } else {
+          discordFailures++;
+          firstDiscordError ??= discordResult.error ?? 'unknown';
+        }
       } catch (err) {
         console.error('[Cron EbayAuctions] Failed to send joblot alert:', err);
         await scanner.saveJoblotAlert(DEFAULT_USER_ID, joblot, false);
+        discordFailures++;
+        firstDiscordError ??= err instanceof Error ? err.message : String(err);
       }
+    }
+
+    // Opportunities that never reached Discord are lost money — escalate once
+    // per run to #alerts (a different webhook, so it survives an #opportunities
+    // outage) and surface the count to the local runner, which exits non-zero.
+    if (discordFailures > 0) {
+      await discordService.sendAlert({
+        title: '🔴 eBay auction alerts not reaching Discord',
+        message: `${discordFailures} alert(s) failed to deliver this scan.\nFirst error: ${firstDiscordError}`,
+        priority: 'high',
+      });
     }
 
     // Update result with actual alerts sent
@@ -153,6 +180,7 @@ export async function POST(request: NextRequest) {
         auctionsFound: result.auctionsFound,
         opportunities: result.opportunitiesFound,
         alertsSent,
+        discordFailures,
         joblots: result.joblotsFound,
       },
       200,
@@ -169,6 +197,7 @@ export async function POST(request: NextRequest) {
       auctionsWithSets: result.auctionsWithSets,
       opportunitiesFound: result.opportunitiesFound,
       alertsSent,
+      discordFailures,
       joblotsFound: result.joblotsFound,
       apiCallsMade: result.apiCallsMade,
       keepaCallsMade: result.keepaCallsMade,

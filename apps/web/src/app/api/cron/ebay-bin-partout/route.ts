@@ -57,6 +57,8 @@ export async function POST(request: NextRequest) {
     }
 
     let alertsSent = 0;
+    let discordFailures = 0;
+    let firstDiscordError: string | null = null;
     for (const opp of result.opportunities) {
       try {
         // Durability: persist the opportunity BEFORE attempting Discord — the
@@ -104,9 +106,14 @@ export async function POST(request: NextRequest) {
         if (discordResult.success) {
           await scanner.saveAlert(DEFAULT_USER_ID, opp, true);
           alertsSent++;
+        } else {
+          discordFailures++;
+          firstDiscordError ??= discordResult.error ?? 'unknown';
         }
       } catch (e) {
         console.error('[ebay-bin-partout] alert failed:', (e as Error).message);
+        discordFailures++;
+        firstDiscordError ??= (e as Error).message;
       }
       // Discord webhooks rate-limit rapid sequential posts (observed: 6 of 28
       // burst sends failed). Space them out — the run budget easily allows it.
@@ -115,9 +122,30 @@ export async function POST(request: NextRequest) {
 
     // Retry sweep: pre-saved alerts whose Discord send failed (rate limit,
     // transient network) would otherwise be stuck forever behind the dedupe.
-    alertsSent += await retryUnsentBinAlerts(supabase);
+    const retry = await retryUnsentBinAlerts(supabase);
+    alertsSent += retry.resent;
+    if (retry.failed > 0) {
+      discordFailures += retry.failed;
+      firstDiscordError ??= retry.firstError;
+    }
 
-    const body = { success: true, ...summary(result), alertsSent, durationMs: Date.now() - startTime };
+    // Escalate once per run to #alerts (separate webhook — survives an
+    // #opportunities outage) and let the local runner see the count.
+    if (discordFailures > 0) {
+      await discordService.sendAlert({
+        title: '🔴 eBay BIN part-out alerts not reaching Discord',
+        message: `${discordFailures} alert(s) failed to deliver this scan.\nFirst error: ${firstDiscordError}`,
+        priority: 'high',
+      });
+    }
+
+    const body = {
+      success: true,
+      ...summary(result),
+      alertsSent,
+      discordFailures,
+      durationMs: Date.now() - startTime,
+    };
     await execution.complete(body, 200);
     return NextResponse.json(body);
   } catch (error) {
@@ -135,7 +163,7 @@ export async function POST(request: NextRequest) {
  */
 async function retryUnsentBinAlerts(
   supabase: ReturnType<typeof createServiceRoleClient>
-): Promise<number> {
+): Promise<{ resent: number; failed: number; firstError: string | null }> {
   const { data: stuck } = await supabase
     .from('ebay_auction_alerts')
     .select('*')
@@ -145,7 +173,7 @@ async function retryUnsentBinAlerts(
     .gte('created_at', new Date(Date.now() - 24 * 3_600_000).toISOString())
     .order('created_at', { ascending: true })
     .limit(10);
-  if (!stuck || stuck.length === 0) return 0;
+  if (!stuck || stuck.length === 0) return { resent: 0, failed: 0, firstError: null };
 
   const setNumbers = [...new Set(stuck.flatMap((r) => String(r.set_number).split('+')))];
   const { data: hitRows } = await supabase
@@ -155,6 +183,8 @@ async function retryUnsentBinAlerts(
   const hits = new Map((hitRows ?? []).map((h) => [h.set_number, h]));
 
   let resent = 0;
+  let failed = 0;
+  let firstError: string | null = null;
   for (const row of stuck) {
     try {
       const sets = String(row.set_number)
@@ -204,14 +234,19 @@ async function retryUnsentBinAlerts(
           .update({ discord_sent: true, discord_sent_at: new Date().toISOString() })
           .eq('id', row.id);
         resent++;
+      } else {
+        failed++;
+        firstError ??= result.error ?? 'unknown';
       }
     } catch (e) {
       console.error('[ebay-bin-partout] retry send failed:', (e as Error).message);
+      failed++;
+      firstError ??= (e as Error).message;
     }
     await new Promise((r) => setTimeout(r, 600));
   }
   if (resent > 0) console.log(`[ebay-bin-partout] re-sent ${resent} previously unsent alert(s)`);
-  return resent;
+  return { resent, failed, firstError };
 }
 
 function summary(r: {
