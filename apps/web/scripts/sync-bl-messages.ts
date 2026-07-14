@@ -114,8 +114,15 @@ class CDPClient {
     await sleep(waitMs);
   }
 
+  /** Tab created by connectCdp for this client — closed on close() so we never leak tabs. */
+  ownedTabId: string | null = null;
+  ownedTabPort: number | null = null;
+
   close() {
     this.ws?.close();
+    if (this.ownedTabId && this.ownedTabPort) {
+      fetch(`http://127.0.0.1:${this.ownedTabPort}/json/close/${this.ownedTabId}`).catch(() => {});
+    }
   }
 }
 
@@ -129,19 +136,33 @@ async function connectCdp(): Promise<CDPClient> {
     );
     process.exit(1);
   }
-  const tabs = (await fetch(`http://127.0.0.1:${CDP_PORT}/json`).then((r) => r.json())) as Array<{
-    type: string;
-    url: string;
-    webSocketDebuggerUrl: string;
-  }>;
-  const blPage = tabs.find((t) => t.type === 'page' && t.url.includes('bricklink.com'));
-  const anyPage = tabs.find((t) => t.type === 'page');
-  const wsUrl = (blPage ?? anyPage)?.webSocketDebuggerUrl;
+  // Own tab (2026-07-14 audit): picking "any bricklink.com tab" hijacked whatever tab a
+  // concurrently-running store scrape was driving on the shared Chrome. Create a dedicated
+  // tab (PUT /json/new — Chrome 111+ requires PUT) and close it on exit.
+  const created = (await fetch(`http://127.0.0.1:${CDP_PORT}/json/new?about:blank`, { method: 'PUT' })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as { id?: string; webSocketDebuggerUrl?: string } | null;
+  let wsUrl = created?.webSocketDebuggerUrl;
+  if (!wsUrl) {
+    // Fallback: legacy tab reuse (older Chrome / endpoint disabled).
+    const tabs = (await fetch(`http://127.0.0.1:${CDP_PORT}/json`).then((r) => r.json())) as Array<{
+      type: string;
+      url: string;
+      webSocketDebuggerUrl: string;
+    }>;
+    const blPage = tabs.find((t) => t.type === 'page' && t.url.includes('bricklink.com'));
+    const anyPage = tabs.find((t) => t.type === 'page');
+    wsUrl = (blPage ?? anyPage)?.webSocketDebuggerUrl;
+  }
   if (!wsUrl) {
     console.error('[cdp] No page tab available');
     process.exit(1);
   }
   const cdp = new CDPClient();
+  if (created?.id) {
+    cdp.ownedTabId = created.id;
+    cdp.ownedTabPort = CDP_PORT;
+  }
   await cdp.connect(wsUrl);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');
