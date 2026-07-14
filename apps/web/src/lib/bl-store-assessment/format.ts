@@ -154,10 +154,10 @@ export function renderAssessment(a: StoreAssessment): string {
   // 13. STR × coverage bands — where the store's lots and buyable money sit by velocity
   if (a.strCoverage) {
     L.push(`\n[13] STR × COVERAGE  (buyable = margin/ask/damage gates, NO STR gate — shows what each band would unlock)`);
-    L.push(`  ${'Band'.padEnd(14)} ${'lots'.padStart(6)} ${'%'.padStart(6)}  ${'ask £'.padStart(9)}  ${'UK'.padStart(5)} ${'world'.padStart(5)}  ${'buyable'.padStart(7)}  ${'net £'.padStart(8)}`);
+    L.push(`  ${'Band'.padEnd(14)} ${'lots'.padStart(6)} ${'%'.padStart(6)}  ${'ask £'.padStart(9)}  ${'UK'.padStart(5)} ${'world'.padStart(5)}  ${'buyable'.padStart(7)}  ${'net £'.padStart(8)}  ${'addl'.padStart(5)}`);
     for (const r of a.strCoverage.rows) {
       L.push(
-        `  ${r.band.padEnd(14)} ${String(r.lots).padStart(6)} ${pct(r.lotsPct, 1).padStart(6)}  ${gbp(r.askValue).padStart(9)}  ${String(r.ukLots).padStart(5)} ${String(r.worldLots).padStart(5)}  ${String(r.buyableLots).padStart(7)}  ${gbp(r.buyableNet).padStart(8)}`,
+        `  ${r.band.padEnd(14)} ${String(r.lots).padStart(6)} ${pct(r.lotsPct, 1).padStart(6)}  ${gbp(r.askValue).padStart(9)}  ${String(r.ukLots).padStart(5)} ${String(r.worldLots).padStart(5)}  ${String(r.buyableLots).padStart(7)}  ${gbp(r.buyableNet).padStart(8)}  ${String(r.addlLots).padStart(5)}`,
       );
     }
   }

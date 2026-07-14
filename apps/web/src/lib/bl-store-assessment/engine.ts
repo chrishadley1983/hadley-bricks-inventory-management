@@ -508,6 +508,7 @@ function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
     worldLots: sel.filter((s) => s.priceSource === 'world').length,
     buyableLots: sel.filter((s) => s.withinMargin).length,
     buyableNet: round(sum(sel.filter((s) => s.withinMargin).map((s) => s.lotProfit ?? 0))),
+    addlLots: sel.filter((s) => s.withinMargin && (s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT')).length,
   });
   const rows: StrBandRow[] = [mk('no benchmark', scored.filter((s) => s.priceSource === 'none'))];
   for (const b of STR_BANDS) {
