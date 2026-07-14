@@ -104,10 +104,11 @@ describe('assembleAssessment', () => {
     expect(a.magnets.top[0].worldSupplyLots).toBe(2);
   });
 
-  it('reports honest price coverage (set has none)', () => {
-    // 100/110 of value has no benchmark (the set)
-    expect(a.confidence.noneValueShare).toBeGreaterThan(0.5);
-    expect(a.confidence.ukValueShare).toBeLessThan(0.5);
+  it('reports price coverage over parts+minifigs only (v6 — sets decided in [13])', () => {
+    // The unbenchmarked SET is excluded from confidence under the v6 parts/sets split;
+    // the parts value that remains is UK-covered.
+    expect(a.confidence.noneValueShare).toBeLessThan(0.5);
+    expect(a.confidence.ukValueShare).toBeGreaterThan(0.5);
   });
 
   it('produces a verdict with a grade, label, and v2 signals', () => {
@@ -123,7 +124,7 @@ describe('assembleAssessment', () => {
   });
 
   it('stamps the engine version and defaults scanTruncated false', () => {
-    expect(a.engineVersion).toBe(5);
+    expect(a.engineVersion).toBe(6);
     expect(a.scanTruncated).toBe(false);
   });
 

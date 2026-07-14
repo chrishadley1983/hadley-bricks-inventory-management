@@ -22,6 +22,7 @@ import {
 import { loadOwnStockIndex, classifyOverlap, type OwnStockIndex } from './overlap';
 import { readSetsIntel, ASIN_TRUST_MIN, type SetIntel } from './sets-intel';
 import { calculateAmazonFBMProfit } from '../arbitrage/calculations';
+import { resolveBareCmfLots, isBareCmf } from './cmf-resolve';
 
 /**
  * Bumped when scoring semantics change; persisted with every run.
@@ -31,8 +32,12 @@ import { calculateAmazonFBMProfit } from '../arbitrage/calculations';
  *      shows S-type lots as a DISTINCT split (Chris 2026-07-14: sets visible in all
  *      mechanisms, clearly separate, so they can carry their own decision — the [12]
  *      SETS view holds the per-set channel verdicts).
+ * v6 = approved two-table format (Chris 2026-07-14): Table A = P&M-only STR gate table
+ *      (bl-basket cart scope); Table B = SETS by sales method incl. CMF identity rows.
+ *      Bare-CMF listings are name-RESOLVED to per-figure ids (cmf-resolve.ts);
+ *      incomplete S-lots never price against complete-set guides.
  */
-export const ENGINE_VERSION = 5;
+export const ENGINE_VERSION = 6;
 
 /** Complete CMFs are BL-typed as sets but are commercially minifigs — they stay in the
  * normal Bricqer lot universe and NEVER enter the sets decision. */
@@ -194,15 +199,18 @@ function scoreLot(
   boilerplate: Set<string>,
   inp: AssessmentInputs,
 ): ScoredLot {
-  // Ambiguous CMF identity: a bare "col13" S-lot (seller listed a single figure without
-  // its figure number, itemSeq=0) matches the catalog entry for the COMPLETE SERIES BOX —
-  // benchmarking a £3 figure against a £25 box produced fake 70%+ margins (Alpine8,
-  // 2026-07-14; same class as the Agnes col10-6 bug). No identity → no benchmark.
-  const ambiguousCmf = lot.itemType === 'S' && /^col[a-z]*\d*$/i.test(lot.itemNo) && !lot.itemNo.includes('-');
+  // Ambiguous CMF identity: a bare "col13" S-lot matches the catalog entry for the
+  // COMPLETE SERIES BOX — benchmarking a £3 figure against a £25 box produced fake 70%+
+  // margins (Alpine8 2026-07-14). Name-resolvable lots were re-keyed to their figure id
+  // upstream (cmf-resolve.ts); whatever is STILL bare here has no identity → no benchmark.
+  const ambiguousCmf = isBareCmf(lot);
+  // Set condition guard (Chris 2026-07-14 "be careful on set condition"): an INCOMPLETE
+  // S-lot must never price against the complete-set guide.
+  const incompleteSet = lot.itemType === 'S' && /incomplete/i.test(lot.invComplete ?? '');
   // Grounded lens (Chris 2026-07-14): once a store has been fully price-scanned, a
   // checked tuple with no UK sales is GROUND TRUTH ("no UK market"), not a gap to
   // estimate — world-calibrated fallback is for triage of unswept stores only.
-  const pv = ambiguousCmf || (inp.ukGroundedOnly && pvIn?.coverage === 'world_fallback') ? undefined : pvIn;
+  const pv = ambiguousCmf || incompleteSet || (inp.ukGroundedOnly && pvIn?.coverage === 'world_fallback') ? undefined : pvIn;
   const condition: Condition = lot.invNew === 'New' ? 'N' : 'U';
   const side: SideView | null = pv ? (condition === 'N' ? pv.new : pv.used) : null;
   const priceSource: PriceSource = pv?.coverage === 'uk' ? 'uk' : pv?.coverage === 'world_fallback' ? 'world' : 'none';
@@ -251,6 +259,7 @@ function scoreLot(
     withinMargin, highStr, magnet,
     // Overlap is a post-pass (assembleAssessment) — scoring never depends on it.
     overlap: null, ourQty: null, ourSoldWindow: null,
+    cmfResolved: lot.cmfResolved ?? false,
   };
 }
 
@@ -576,10 +585,19 @@ function buildSets(
   setsIntel: Map<string, SetIntel>,
   inputs: AssessmentInputs,
 ): SetsSection {
-  const setLots = scored.filter((s) => s.itemType === 'S' && !isCmf(s.itemNo));
+  const allS = scored.filter((s) => s.itemType === 'S');
+  const setLots = allS.filter((s) => !isCmf(s.itemNo));
+  const cmfPriced = allS.filter((s) => isCmf(s.itemNo) && s.itemNo.includes('-'));
+  const cmfBare = allS.filter((s) => isCmf(s.itemNo) && !s.itemNo.includes('-'));
   const rows: SetDecisionRow[] = [];
-  const totals = { flipAmazon: { lots: 0, net: 0 }, sellBl: { lots: 0, net: 0 }, partOut: { lots: 0 }, skip: { lots: 0 } };
-  let totalBestNet = 0;
+  const mkRow = () => ({ lots: 0, outlay: 0, net: 0 });
+  const methods = {
+    flipAmazon: mkRow(), sellBl: mkRow(), partOut: mkRow(), skip: mkRow(),
+    cmfIdentified: mkRow(), cmfNoIdentity: mkRow(),
+  };
+  const add = (m: { lots: number; outlay: number; net: number }, s: ScoredLot, netU: number | null) => {
+    m.lots += 1; m.outlay += s.lotAskValue; if (netU != null) m.net += netU * s.invQty;
+  };
 
   for (const s of setLots) {
     const intel = setsIntel.get(s.itemNo);
@@ -612,11 +630,10 @@ function buildSets(
     else { verdict = 'SKIP'; best = null; }
 
     const bestNet = best?.net ?? null;
-    if (verdict === 'FLIP-AMAZON') { totals.flipAmazon.lots++; totals.flipAmazon.net += (bestNet ?? 0) * s.invQty; }
-    else if (verdict === 'SELL-BL') { totals.sellBl.lots++; totals.sellBl.net += (bestNet ?? 0) * s.invQty; }
-    else if (verdict === 'PART-OUT') totals.partOut.lots++;
-    else totals.skip.lots++;
-    if (verdict !== 'SKIP' && bestNet != null) totalBestNet += bestNet * s.invQty;
+    if (verdict === 'FLIP-AMAZON') add(methods.flipAmazon, s, bestNet);
+    else if (verdict === 'SELL-BL') add(methods.sellBl, s, bestNet);
+    else if (verdict === 'PART-OUT') add(methods.partOut, s, povGbp == null ? null : povGbp - s.ask);
+    else add(methods.skip, s, null);
 
     rows.push({
       itemNo: s.itemNo, setName: intel?.setName ?? s.itemName ?? null, condition: s.condition,
@@ -628,21 +645,38 @@ function buildSets(
     });
   }
 
+  // Per-figure CMFs (suffixed originally or name-resolved): sellable on BL like
+  // minifigs. Condition-matched pricing already happened in scoreLot.
+  for (const s of cmfPriced) {
+    if (s.withinMargin && s.netPerUnit != null && s.netPerUnit > 0) add(methods.cmfIdentified, s, s.netPerUnit);
+    else add(methods.skip, s, null);
+  }
+  // Bare-series CMFs the resolver could NOT identify — unpriceable, surfaced as a category.
+  for (const s of cmfBare) add(methods.cmfNoIdentity, s, null);
+
   rows.sort((a, b) => {
     const av = a.verdict === 'SKIP' ? -1 : (a.bestNet ?? 0) * a.invQty;
     const bv = b.verdict === 'SKIP' ? -1 : (b.bestNet ?? 0) * b.invQty;
     return bv - av;
   });
 
+  const roundRow = (m: { lots: number; outlay: number; net: number }) => ({ lots: m.lots, outlay: round(m.outlay), net: round(m.net) });
+  const sellable = {
+    lots: methods.flipAmazon.lots + methods.sellBl.lots + methods.cmfIdentified.lots,
+    outlay: methods.flipAmazon.outlay + methods.sellBl.outlay + methods.cmfIdentified.outlay,
+    net: methods.flipAmazon.net + methods.sellBl.net + methods.cmfIdentified.net,
+  };
   return {
-    lots: setLots.length,
-    askValue: round(sum(setLots.map((s) => s.lotAskValue))),
+    lots: allS.length,
+    askValue: round(sum(allS.map((s) => s.lotAskValue))),
+    methods: {
+      flipAmazon: roundRow(methods.flipAmazon), sellBl: roundRow(methods.sellBl),
+      partOut: roundRow(methods.partOut), skip: roundRow(methods.skip),
+      cmfIdentified: roundRow(methods.cmfIdentified), cmfNoIdentity: roundRow(methods.cmfNoIdentity),
+    },
+    cmfResolvedCount: allS.filter((s) => s.cmfResolved).length,
+    totalSellable: roundRow(sellable),
     decided: rows.slice(0, 20),
-    flipAmazon: { lots: totals.flipAmazon.lots, net: round(totals.flipAmazon.net) },
-    sellBl: { lots: totals.sellBl.lots, net: round(totals.sellBl.net) },
-    partOut: { lots: totals.partOut.lots },
-    skip: { lots: totals.skip.lots },
-    totalBestNet: round(totalBestNet),
   };
 }
 
@@ -664,6 +698,10 @@ export interface AssessArgs {
 
 export async function computeStoreAssessment(supabase: SupabaseClient, args: AssessArgs): Promise<StoreAssessment> {
   const inputs: AssessmentInputs = { ...DEFAULT_INPUTS, ...(args.inputs ?? {}), feeModel: { ...DEFAULT_INPUTS.feeModel, ...(args.inputs?.feeModel ?? {}) } };
+
+  // Resolve bare-CMF identities BEFORE building cache refs, so the per-figure guides
+  // are what we read (assembleAssessment re-resolves idempotently).
+  args = { ...args, lots: resolveBareCmfLots(args.lots).lots };
 
   // Dedupe item refs for the cache reads.
   const refs: ItemRef[] = [];
@@ -708,7 +746,10 @@ export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
  * two cache reads lives here; `computeStoreAssessment` is just those reads + this.
  */
 export function assembleAssessment(args: AssembleArgs): StoreAssessment {
-  const { inputs, lots, pgMap, supplyMap } = args;
+  const { inputs, pgMap, supplyMap } = args;
+  // Bare-CMF name resolution (idempotent — computeStoreAssessment already resolved so
+  // its cache reads used the right ids; direct assemble callers get it here).
+  const { lots } = resolveBareCmfLots(args.lots);
   const boilerplate = computeBoilerplate(lots);
   const scored = lots.map((l) => {
     const k = pgKey(l.itemType, l.itemNo, blColour(l));
@@ -746,25 +787,28 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     else if (c.includes('complete')) partMix.setCompleteness.complete += 1;
     else partMix.setCompleteness.unknown += 1;
   }
-  const withinMargin = buildMargin(scored);
-  const highStr = buildHighStr(scored);
-  const magnets = buildMagnets(scored);
-  const confidence = buildConfidence(scored);
+  // v6 (approved format): the buying sections + grade are PARTS+MINIFIGS only — the
+  // bl-basket cart scope. Every S-type lot is decided in the SETS section instead.
+  const partsScored = scored.filter((s) => s.itemType !== 'S');
+  const withinMargin = buildMargin(partsScored);
+  const highStr = buildHighStr(partsScored);
+  const magnets = buildMagnets(partsScored);
+  const confidence = buildConfidence(partsScored);
   const ageing = buildAgeing(scored, (s) => soldQtyByInv.get(s.invID) ?? null);
   const concentration = buildConcentration(scored);
   const overlap = buildOverlap(scored, args.ownStock);
   const sets = buildSets(scored, args.setsIntel ?? new Map(), inputs);
-  const strCoverage = buildStrCoverage(scored);
+  const strCoverage = buildStrCoverage(partsScored);
   const scanTruncated = args.scanTruncated ?? false;
   const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
   if (overlap.available && overlap.freshNetShare != null) {
     const fresh = overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');
     verdict.reasons.push(`${sum(fresh.map((t) => t.lots))} buyable lots are fresh demand (new to us / sold-out restock) — ${Math.round(overlap.freshNetShare * 100)}% of the projected net.`);
   }
-  if (sets.totalBestNet >= 25) {
+  if (sets.totalSellable.net >= 25 || sets.methods.cmfNoIdentity.lots >= 50) {
     verdict.reasons.push(
-      `Sets (separate decision, NOT in this grade): £${sets.totalBestNet.toFixed(2)} best-channel net across ` +
-        `${sets.flipAmazon.lots + sets.sellBl.lots} set lot(s)${sets.partOut.lots ? ` + ${sets.partOut.lots} part-out candidate(s)` : ''} — see SETS section.`,
+      `Sets (separate decision, NOT in this grade): £${sets.totalSellable.net.toFixed(2)} sellable net across ` +
+        `${sets.totalSellable.lots} lot(s)${sets.methods.cmfNoIdentity.lots ? `; ${sets.methods.cmfNoIdentity.lots} CMF lot(s) unpriceable (no identity)` : ''} — see SETS section.`,
     );
   }
 
