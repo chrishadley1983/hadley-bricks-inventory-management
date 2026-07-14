@@ -248,25 +248,30 @@ export interface SetsSection {
   totalBestNet: number;
 }
 
-/** One STR band row: where the store's lots — and its buyable money — sit by velocity. */
-export interface StrBandRow {
-  band: string; // 'no benchmark' | '0–0.25' | ... | '2.0+'
-  lots: number;
-  lotsPct: number; // share of scored lots
-  askValue: number;
-  /** Benchmark provenance within the band. */
-  ukLots: number;
-  worldLots: number;
-  /** withinMargin lots/net in this band (margin+ask+damage gates, NO STR gate — so the
-   * table shows what each velocity band would unlock). */
-  buyableLots: number;
-  buyableNet: number;
-  /** Buyable lots ADDITIONAL to our store (overlap NEW + RESTOCK_OUT). 0 when no overlap index. */
+/** One INCLUSIVE STR gate column (Chris 2026-07-14: cumulative "STR ≥ g", metrics as rows). */
+export interface StrGateColumn {
+  gate: number; // 0, 0.25, 0.5, 0.75, 1.0
+  lots: number; // withinMargin lots at this gate
+  outlay: number;
+  net: number;
+  marginPct: number | null; // net / list value
+  roiPct: number | null; // net / outlay
+  medianStr: number | null;
+  /** Median market months-of-supply (≈ 6 / STR-qty) across the gated lots. */
+  medianMonths: number | null;
+  /** Months by which ~80% of the gate's net clears (profit-weighted 80th pct of months). */
+  monthsTo80PctNet: number | null;
+  /** Net £ per lot per month — capital/labour velocity. */
+  capacityPerLotMo: number | null;
+  /** Lots additional to OUR store (overlap NEW + RESTOCK_OUT); 0 when no overlap index. */
   addlLots: number;
+  addlNet: number;
 }
 
 export interface StrCoverageSection {
-  rows: StrBandRow[];
+  /** Benchmark provenance over all scored lots. */
+  coverage: { totalLots: number; ukLots: number; worldLots: number; noneLots: number };
+  gates: StrGateColumn[];
 }
 
 export interface Verdict {
