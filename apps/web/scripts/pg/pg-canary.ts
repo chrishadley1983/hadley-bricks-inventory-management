@@ -54,6 +54,10 @@ const USE_CDP = argv['cdp'] === 'true';
 const USE_API = argv['api'] === 'true';
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const DIVERGENCE_PCT_THRESHOLD = 5;
+// Absolute floor (Chris 2026-07-14): penny parts trip the % threshold on fractions of a
+// penny (rounding + window-cadence differences between lanes), which is noise, not parser
+// drift. A divergence only counts when it's ≥5% AND ≥3p.
+const DIVERGENCE_ABS_FLOOR_GBP = 0.03;
 const DIVERGENT_TUPLE_ALERT_MIN = 3;
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -214,7 +218,11 @@ async function main(): Promise<void> {
       if (bl) {
         requests += 1;
         try {
-          const guide = await bl.bl.getPartPriceGuide(pgTypeToBlType(item.itemType), item.itemNo, item.colourId, {
+          // The store API wants the variant-suffixed set number ("75192-1"); bare "75192"
+          // (the catalogPG page-lane format) gets PARAMETER_MISSING_OR_INVALID. Parts and
+          // minifigs are unaffected.
+          const apiItemNo = item.itemType === 'S' && !item.itemNo.includes('-') ? `${item.itemNo}-1` : item.itemNo;
+          const guide = await bl.bl.getPartPriceGuide(pgTypeToBlType(item.itemType), apiItemNo, item.colourId, {
             countryCode: 'UK',
             currencyCode: 'GBP',
             guideType: 'sold',
@@ -247,6 +255,7 @@ async function main(): Promise<void> {
       // differ (~11% median, see spec §7.4), so cross-basis comparison would alert
       // permanently. Check each basis group independently.
       let worstPct = 0;
+      let worstAbs = 0;
       for (const basis of ['uk_', 'world_'] as const) {
         const values = Object.entries(lanes)
           .filter(([k, v]) => k.startsWith(basis) && v != null)
@@ -255,9 +264,12 @@ async function main(): Promise<void> {
         const max = Math.max(...values);
         const min = Math.min(...values);
         const divergencePct = min > 0 ? ((max - min) / min) * 100 : 0;
-        worstPct = Math.max(worstPct, divergencePct);
+        if (divergencePct > worstPct) {
+          worstPct = divergencePct;
+          worstAbs = max - min;
+        }
       }
-      if (worstPct > DIVERGENCE_PCT_THRESHOLD) {
+      if (worstPct > DIVERGENCE_PCT_THRESHOLD && worstAbs >= DIVERGENCE_ABS_FLOOR_GBP) {
         divergences.push({ label: tupleLabel(item), lanes, maxDivergencePct: worstPct });
       }
     }
