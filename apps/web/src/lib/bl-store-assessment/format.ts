@@ -131,6 +131,26 @@ export function renderAssessment(a: StoreAssessment): string {
     L.push('  (no user index — run the CLI with a resolvable user id to tag overlap)');
   }
 
+  // 12. Sets — a separate buying decision (never part of the parts grade)
+  if (a.sets && a.sets.lots > 0) {
+    const s = a.sets;
+    L.push(`\n[12] SETS — separate decision (${s.lots} lots · ${gbp(s.askValue)} ask; NOT in the grade)`);
+    L.push(`  FLIP-AMAZON ${String(s.flipAmazon.lots).padStart(3)} lots  net ${gbp(s.flipAmazon.net).padStart(9)}   SELL-BL ${String(s.sellBl.lots).padStart(3)} lots  net ${gbp(s.sellBl.net).padStart(9)}   PART-OUT ${s.partOut.lots}   SKIP ${s.skip.lots}`);
+    if (s.totalBestNet > 0) L.push(`  best-channel net (all set lots): ${gbp(s.totalBestNet)}`);
+    const shown = s.decided.filter((r) => r.verdict !== 'SKIP');
+    if (shown.length === 0) {
+      L.push('  (no set clears a channel margin)');
+    } else {
+      for (const r of shown) {
+        const name = `${r.itemNo} (${r.condition === 'N' ? 'N' : 'U'}) ${r.setName ?? ''}`.slice(0, 52);
+        const amz = r.amazonBuyBox != null ? `AMZ ${gbp(r.amazonBuyBox)}${r.amazonNet != null ? `→${gbp(r.amazonNet)}` : ''}` : (r.asinTrusted ? 'AMZ —' : 'AMZ n/t');
+        const ebay = r.ebayNewMin != null ? `eBay ${gbp(r.ebayNewMin)}` : '';
+        const pov = r.povGbp != null ? `POV ${gbp(r.povGbp)}${r.povMultiple != null ? ` (${r.povMultiple}x)` : ''}` : '';
+        L.push(`  ${name.padEnd(52)} ask ${gbp(r.ask).padStart(8)}  BL ${gbp(r.blNet).padStart(7)}  ${amz.padEnd(22)} ${ebay.padEnd(12)} ${pov.padEnd(18)} → ${r.verdict}`);
+      }
+    }
+  }
+
   L.push(`\n${rule}`);
   return L.join('\n');
 }

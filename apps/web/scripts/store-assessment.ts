@@ -255,12 +255,72 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     }, { onConflict: 'store_slug' });
     if (scrapeErr) console.error(`[persist] bl_store_scrapes failed (non-fatal): ${scrapeErr.message}`);
     else log(`[persist] raw scrape saved to bl_store_scrapes (${lots.length} lots)`);
+
+    // Feed discoveries back to the nightly page lane: any tuple this store carries that
+    // isn't in the refresh queue yet gets enqueued, so cache coverage self-heals
+    // overnight instead of needing ad-hoc API spends (2026-07-14 quota audit).
+    if (!argv['no-enqueue']) {
+      await enqueueMissingTuples(supabase, lots).catch((e: Error) =>
+        console.error(`[enqueue] failed (non-fatal): ${e.message}`),
+      );
+    }
   } else if (!NO_PERSIST) {
     console.error('[persist] skipped — no resolvable user id (pass --user-id or set STORE_ASSESSMENT_USER_ID)');
   }
 
   if (JSON_OUT) console.log(JSON.stringify(assessment, null, 2));
   else console.log(report);
+}
+
+/**
+ * Enqueue every tuple this store carries that the nightly refresh queue doesn't know
+ * about yet (ON CONFLICT DO NOTHING semantics — existing rows keep their schedule).
+ * Inserted rows: tier 'tail', rank 0, due now, 5-day grace — the daily rank job then
+ * re-scores them into their proper place. item_no goes in EXACTLY as scraped (bare set
+ * numbers stay bare; suffixed CMF "col10-6" keeps its suffix — both are valid PG pages).
+ */
+async function enqueueMissingTuples(
+  sb: ReturnType<typeof createClient>,
+  lots: StoreLot[],
+): Promise<void> {
+  const seen = new Set<string>();
+  const refs: { item_type: string; item_no: string; colour_id: number }[] = [];
+  for (const l of lots) {
+    const colour = l.itemType === 'P' ? l.colourId : 0;
+    const k = `${l.itemType}:${l.itemNo}:${colour}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    refs.push({ item_type: l.itemType, item_no: l.itemNo, colour_id: colour });
+  }
+
+  // Which are already queued? Chunked lookup by item_no (over-fetches same-number
+  // other-type rows; exact match applied client-side).
+  const queued = new Set<string>();
+  const nos = [...new Set(refs.map((r) => r.item_no))];
+  for (let i = 0; i < nos.length; i += 400) {
+    const { data, error } = await sb
+      .from('bl_pg_refresh_queue')
+      .select('item_type,item_no,colour_id')
+      .in('item_no', nos.slice(i, i + 400));
+    if (error) throw new Error(`queue lookup failed: ${error.message}`);
+    for (const r of data ?? []) queued.add(`${r.item_type}:${r.item_no}:${r.colour_id}`);
+  }
+
+  const missing = refs.filter((r) => !queued.has(`${r.item_type}:${r.item_no}:${r.colour_id}`));
+  if (!missing.length) { log(`[enqueue] all ${refs.length} tuples already queued`); return; }
+
+  const now = new Date().toISOString();
+  const grace = new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString();
+  for (let i = 0; i < missing.length; i += 500) {
+    const rows = missing.slice(i, i + 500).map((r) => ({
+      ...r, tier: 'tail', rank_score: 0, next_due_at: now, grace_until: grace,
+    }));
+    const { error } = await sb
+      .from('bl_pg_refresh_queue')
+      .upsert(rows, { onConflict: 'item_type,item_no,colour_id', ignoreDuplicates: true });
+    if (error) throw new Error(`queue insert failed: ${error.message}`);
+  }
+  log(`[enqueue] ${missing.length} new tuple(s) added to the nightly refresh queue (${refs.length - missing.length} already queued)`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

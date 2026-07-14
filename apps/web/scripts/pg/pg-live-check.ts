@@ -190,6 +190,7 @@ async function main() {
     conditions: CONDITIONS,
     includeStock: INCLUDE_STOCK,
     spacingMs: SPACING_MS,
+    forceBudget: process.argv.includes('--force-budget'),
   });
 
   printReport(result);
