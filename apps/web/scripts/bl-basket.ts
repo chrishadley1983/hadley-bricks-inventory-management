@@ -991,10 +991,13 @@ function generateWantedXml(passed: EnrichedItem[]): string {
       e.ukSoldAvg != null ? `6MA ${e.ukSoldAvg.toFixed(2)}` : null,
       e.mos != null ? `~${Math.round(e.mos)}mo` : null,
       `lot ${e.totalLotProfit.toFixed(2)}`,
-      e.mergedFrom > 1 ? `ask<=${e.highestAsk.toFixed(2)} merged ${e.mergedFrom}` : `ask ${e.highestAsk.toFixed(2)}`,
+      // "ask max" not "ask<=": BL's uploadXML.ajax hard-rejects (returnCode -1, no
+      // message) any REMARKS containing a &lt; entity — bisected live 2026-07-14.
+      e.mergedFrom > 1 ? `ask max ${e.highestAsk.toFixed(2)} merged ${e.mergedFrom}` : `ask ${e.highestAsk.toFixed(2)}`,
       e.droppedOtherCondLots > 0 ? `+${e.droppedOtherCondLots} ${e.condition === 'N' ? 'U' : 'N'} lot(s) in store (BL: 1 entry/item+colour)` : null,
     ].filter(Boolean);
-    xml.push(`    <REMARKS>${escXml(parts.join(' | '))}</REMARKS>`);
+    // Angle brackets stripped outright: even correctly-escaped &lt;/&gt; kill the upload.
+    xml.push(`    <REMARKS>${escXml(parts.join(' | ').replace(/[<>]/g, ''))}</REMARKS>`);
     xml.push('  </ITEM>');
   }
   xml.push('</INVENTORY>');
