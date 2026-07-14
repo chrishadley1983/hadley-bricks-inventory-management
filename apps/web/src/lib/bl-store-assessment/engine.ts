@@ -43,7 +43,10 @@ export const WORLD_TO_UK_UPLIFT = 1.11;
 
 // ---- damage-note filter (mirrors bl-basket, negation + boilerplate aware) ----
 
-const DAMAGE_KEYWORDS = new Set([
+// Exported: bl-basket imports this so both damage filters stay in lockstep — its private
+// copy missed the bite/teeth expansion and let the bitemark Hulk into a wanted list
+// (caught live 2026-07-14).
+export const DAMAGE_KEYWORDS = new Set([
   'dent', 'dents', 'scratch', 'scratches', 'scratched', 'crack', 'cracks', 'cracked',
   'chip', 'chipped', 'chips', 'damage', 'damaged', 'damages', 'fade', 'faded',
   'yellow', 'yellowed', 'yellowing', 'marked', 'marks', 'broken', 'bent',
