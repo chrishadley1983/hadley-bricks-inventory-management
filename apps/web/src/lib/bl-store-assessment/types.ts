@@ -261,6 +261,8 @@ export interface StrBandRow {
    * table shows what each velocity band would unlock). */
   buyableLots: number;
   buyableNet: number;
+  /** Buyable lots ADDITIONAL to our store (overlap NEW + RESTOCK_OUT). 0 when no overlap index. */
+  addlLots: number;
 }
 
 export interface StrCoverageSection {
