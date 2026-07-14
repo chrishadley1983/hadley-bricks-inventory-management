@@ -425,8 +425,10 @@ async function connectCdp(): Promise<CDPClient> {
 async function preflight(cdp: CDPClient): Promise<{ storeId: number; storeName: string; country: string; isUK: boolean }> {
   console.log('\n[1/10] Preflight...');
   await cdp.navigate(`https://store.bricklink.com/${STORE_SLUG}#/shop`);
-  await new Promise((r) => setTimeout(r, 3000));
-  const meta = await cdp.evaluate<string>(`(() => {
+  // POLL up to ~20s: a fixed sleep raced the store SPA's async render on cold tabs and
+  // mis-read healthy UK stores as "unknown" (same fix as store-scrape.preflight, #586 —
+  // this is a duplicated copy; folding bl-basket onto the shared lib is a wanted refactor).
+  const probe = `(() => {
     const sf = window.StoreFront;
     const bodyText = (document.body.innerText || '').slice(0, 2000);
     const isUK = /United Kingdom/i.test(bodyText);
@@ -437,8 +439,14 @@ async function preflight(cdp: CDPClient): Promise<{ storeId: number; storeName: 
       : (countryMatch ? countryMatch[1]
         : (sfCountry === 'GB' || sfCountry === 'UK' ? 'United Kingdom' : (sfCountry ?? 'unknown')));
     return JSON.stringify({ storeId: sf?.store?.id, storeName: sf?.store?.name, country });
-  })()`);
-  const parsed = JSON.parse(meta) as { storeId: number; storeName: string; country: string };
+  })()`;
+  const deadline = Date.now() + 20000;
+  let parsed: { storeId: number; storeName: string; country: string };
+  for (;;) {
+    parsed = JSON.parse(await cdp.evaluate<string>(probe)) as typeof parsed;
+    if ((parsed.country && parsed.country !== 'unknown' && parsed.storeId != null) || Date.now() > deadline) break;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
   const isUK = parsed.country === 'United Kingdom';
   if (!isUK) { console.error(`[preflight] Store country is "${parsed.country}", not UK — aborting`); process.exit(1); }
   console.log(`  store: ${parsed.storeName} (${parsed.country}, ID ${parsed.storeId})`);
