@@ -89,8 +89,9 @@ if ($r.skipped) {
 $summary = "ok found={0} withSets={1} opps={2} alerts={3} joblots={4} apiCalls={5} keepa={6} ms={7}" -f `
     $r.auctionsFound, $r.auctionsWithSets, $r.opportunitiesFound, $r.alertsSent, `
     $r.joblotsFound, $r.apiCallsMade, $r.keepaCallsMade, $r.durationMs
+if ($r.discordFailures -gt 0) { $summary = "ERROR-DISCORD failures=$($r.discordFailures) | $summary" }
 if ($r.error) { $summary = "ERROR-IN-SCAN $($r.error) | $summary" }
 Write-RunLog $summary
 
-if ($r.error) { exit 1 }
+if ($r.error -or $r.discordFailures -gt 0) { exit 1 }
 exit 0

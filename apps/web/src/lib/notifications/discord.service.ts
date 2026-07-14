@@ -236,6 +236,8 @@ export interface DiscordEmbed {
 export interface DiscordSendResult {
   success: boolean;
   error?: string;
+  /** True when the send never reached Discord because the channel's webhook env var is absent. */
+  skipped?: boolean;
 }
 
 /** Parameters for sendAlert method */
@@ -327,8 +329,15 @@ export class DiscordService {
     const webhookUrl = this.webhooks[channel];
 
     if (!webhookUrl) {
-      console.log(`[DiscordService] Channel ${channel} not configured - skipping`);
-      return { success: true }; // Silent skip if not configured
+      // A missing webhook must be a FAILURE, not a silent success: returning
+      // success here masked a 4-day total alert outage (2026-07-10..14, stale
+      // service env) because every caller trusted the return value.
+      console.error(`[DiscordService] Channel ${channel} not configured - send FAILED`);
+      return {
+        success: false,
+        skipped: true,
+        error: `Channel ${channel} not configured (missing DISCORD_WEBHOOK_* env var)`,
+      };
     }
 
     const controller = new AbortController();
