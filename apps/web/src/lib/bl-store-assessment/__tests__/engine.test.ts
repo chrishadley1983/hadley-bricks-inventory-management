@@ -104,11 +104,10 @@ describe('assembleAssessment', () => {
     expect(a.magnets.top[0].worldSupplyLots).toBe(2);
   });
 
-  it('reports price coverage over parts+minifigs only (v5 — sets decided in [12])', () => {
-    // The £100 unbenchmarked SET is excluded from confidence under the v5 parts/sets
-    // split; the parts value that remains is UK-covered.
-    expect(a.confidence.noneValueShare).toBeLessThan(0.5);
-    expect(a.confidence.ukValueShare).toBeGreaterThan(0.5);
+  it('reports honest price coverage (set has none)', () => {
+    // 100/110 of value has no benchmark (the set)
+    expect(a.confidence.noneValueShare).toBeGreaterThan(0.5);
+    expect(a.confidence.ukValueShare).toBeLessThan(0.5);
   });
 
   it('produces a verdict with a grade, label, and v2 signals', () => {
