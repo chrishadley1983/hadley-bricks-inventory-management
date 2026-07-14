@@ -23,7 +23,10 @@ import time
 
 log = logging.getLogger(__name__)
 
-CDP_PORT = int(os.environ.get("CHROME_CDP_PORT", "9222"))
+# Own port (2026-07-14 CDP audit): RM tracking is anonymous (public pages, throwaway temp
+# profile), but defaulting to 9222 meant its self-launched Chrome could squat the port and
+# the shared Chrome-Vinted instance lost it on next launch. 9226 removes it from the fight.
+CDP_PORT = int(os.environ.get("CHROME_CDP_PORT", "9226"))
 CHROME_PATH = os.environ.get(
     "CHROME_PATH",
     os.path.join("C:\\", "Program Files", "Google", "Chrome", "Application", "chrome.exe"),
