@@ -94,11 +94,13 @@ export async function connectCdp(port: number, storeSlug: string): Promise<CDPCl
 
 export interface StoreMeta { storeId: number; storeName: string; country: string; isUK: boolean }
 
-/** Load the store page and read identity + country from the StoreFront object. */
+/** Load the store page and read identity + country from the StoreFront object.
+ * POLLS up to ~20s for the SPA to populate — a fixed sleep raced the async render on
+ * cold tabs and mis-read healthy UK stores as country "unknown" (5/25 stores in the
+ * 2026-07-14 nightly sweep; also seen on fresh post-port-split tabs). */
 export async function preflight(cdp: CDPClient, storeSlug: string): Promise<StoreMeta> {
   await cdp.navigate(`https://store.bricklink.com/${storeSlug}#/shop`);
-  await sleep(3000);
-  const meta = await cdp.evaluate<string>(`(() => {
+  const probe = `(() => {
     const sf = window.StoreFront;
     const bodyText = (document.body.innerText || '').slice(0, 2000);
     const isUK = /United Kingdom/i.test(bodyText);
@@ -109,8 +111,14 @@ export async function preflight(cdp: CDPClient, storeSlug: string): Promise<Stor
       : (countryMatch ? countryMatch[1]
         : (sfCountry === 'GB' || sfCountry === 'UK' ? 'United Kingdom' : (sfCountry ?? 'unknown')));
     return JSON.stringify({ storeId: sf?.store?.id, storeName: sf?.store?.name, country });
-  })()`);
-  const parsed = JSON.parse(meta) as { storeId: number; storeName: string; country: string };
+  })()`;
+  const deadline = Date.now() + 20000;
+  let parsed: { storeId: number; storeName: string; country: string };
+  for (;;) {
+    parsed = JSON.parse(await cdp.evaluate<string>(probe)) as typeof parsed;
+    if ((parsed.country && parsed.country !== 'unknown' && parsed.storeId != null) || Date.now() > deadline) break;
+    await sleep(1500);
+  }
   return { storeId: parsed.storeId, storeName: parsed.storeName, country: parsed.country, isUK: parsed.country === 'United Kingdom' };
 }
 
