@@ -196,7 +196,7 @@ def _scan_and_merge(body_text: str, seen: dict) -> None:
 
 
 def relaunch_chrome_vinted(port: int = 9222) -> bool:
-    """Kill a wedged CDP Chrome-Vinted and relaunch it headless. Returns readiness.
+    """Kill a wedged CDP Chrome-Vinted and relaunch it (headed). Returns readiness.
 
     The Chrome-Vinted instance is shared (flight scraper, Vinted automation, this
     scraper). When it wedges — leaked tabs degrade it until connect_over_cdp
