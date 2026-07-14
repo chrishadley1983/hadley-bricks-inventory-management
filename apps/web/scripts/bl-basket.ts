@@ -260,8 +260,10 @@ function computeBoilerplate(items: { description: string | null }[]): { totalDes
 
 function hasDamageNote(desc: string | null | undefined): { flag: boolean; keyword?: string } {
   if (!desc) return { flag: false };
-  // Seller boilerplate doesn't describe per-item damage — skip it.
-  if (BOILERPLATE_DESCRIPTIONS.has(desc.trim())) return { flag: false };
+  // Seller boilerplate doesn't describe per-item damage — skip it. But only SENTENCE-length
+  // boilerplate: a bare repeated "minor wear" is per-item damage, not a disclaimer
+  // (Agnes 2026-07-14 — same rule as the assessment engine's hasDamageNote).
+  if (desc.trim().length >= 40 && BOILERPLATE_DESCRIPTIONS.has(desc.trim())) return { flag: false };
   const cleaned = desc.toLowerCase().replace(/[-–—,;:()/]/g, ' ').replace(/[.!?"']/g, '').replace(/\s+/g, ' ').trim();
   const words = cleaned.split(/\s+/);
   for (let i = 0; i < words.length; i++) {

@@ -54,6 +54,10 @@ export const DAMAGE_KEYWORDS = new Set([
   'discolour', 'discoloured', 'discolor', 'discolored', 'bitten', 'warped', 'flaw', 'flawed',
   // bite/teeth damage (missed a live Hulk "several bitemarks on the head", 2026-07-13)
   'bite', 'bites', 'bitemark', 'bitemarks', 'teeth', 'tooth', 'gnaw', 'gnawed', 'chew', 'chewed',
+  // wear (Chris 2026-07-14: "minor wear"/"minimal wear on legs" must not pass — only
+  // 'worn' was listed). Token matching means 'wearing' is unaffected. 'playwear' covers
+  // "playwear on the head"-style notes.
+  'wear', 'playwear',
   // other unambiguous condition-note damage (completeness handled separately via invComplete,
   // so 'missing'/'incomplete' are deliberately excluded; 'hole'/'cut' excluded — legit part names)
   'glued', 'repaired', 'melted', 'burnt', 'burned', 'stain', 'stained', 'mould', 'mouldy',
@@ -77,7 +81,11 @@ function computeBoilerplate(lots: StoreLot[], pct = 0.03): Set<string> {
 
 function hasDamageNote(desc: string | null | undefined, boilerplate: Set<string>): boolean {
   if (!desc) return false;
-  if (boilerplate.has(desc.trim())) return false;
+  // Boilerplate exemption is for repeated DISCLAIMER SENTENCES ("used parts may have
+  // small marks..."), not short repeated damage notes: Agnes stamped a bare "minor wear"
+  // on 3% of stock and the exemption waved 20 damaged lots into a wanted list
+  // (2026-07-14). A genuine disclaimer is a sentence — require length before exempting.
+  if (desc.trim().length >= 40 && boilerplate.has(desc.trim())) return false;
   const cleaned = desc.toLowerCase().replace(/[-–—,;:()/]/g, ' ').replace(/[.!?"']/g, '').replace(/\s+/g, ' ').trim();
   const words = cleaned.split(/\s+/);
   for (let i = 0; i < words.length; i++) {
