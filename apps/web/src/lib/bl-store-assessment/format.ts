@@ -131,32 +131,12 @@ export function renderAssessment(a: StoreAssessment): string {
     L.push('  (no user index — run the CLI with a resolvable user id to tag overlap)');
   }
 
-  // 12. Sets — a separate buying decision (never part of the parts grade)
-  if (a.sets && a.sets.lots > 0) {
-    const s = a.sets;
-    L.push(`\n[12] SETS — separate decision (${s.lots} lots · ${gbp(s.askValue)} ask; NOT in the grade)`);
-    L.push(`  FLIP-AMAZON ${String(s.flipAmazon.lots).padStart(3)} lots  net ${gbp(s.flipAmazon.net).padStart(9)}   SELL-BL ${String(s.sellBl.lots).padStart(3)} lots  net ${gbp(s.sellBl.net).padStart(9)}   PART-OUT ${s.partOut.lots}   SKIP ${s.skip.lots}`);
-    if (s.totalBestNet > 0) L.push(`  best-channel net (all set lots): ${gbp(s.totalBestNet)}`);
-    const shown = s.decided.filter((r) => r.verdict !== 'SKIP');
-    if (shown.length === 0) {
-      L.push('  (no set clears a channel margin)');
-    } else {
-      for (const r of shown) {
-        const name = `${r.itemNo} (${r.condition === 'N' ? 'N' : 'U'}) ${r.setName ?? ''}`.slice(0, 52);
-        const amz = r.amazonBuyBox != null ? `AMZ ${gbp(r.amazonBuyBox)}${r.amazonNet != null ? `→${gbp(r.amazonNet)}` : ''}` : (r.asinTrusted ? 'AMZ —' : 'AMZ n/t');
-        const ebay = r.ebayNewMin != null ? `eBay ${gbp(r.ebayNewMin)}` : '';
-        const pov = r.povGbp != null ? `POV ${gbp(r.povGbp)}${r.povMultiple != null ? ` (${r.povMultiple}x)` : ''}` : '';
-        L.push(`  ${name.padEnd(52)} ask ${gbp(r.ask).padStart(8)}  BL ${gbp(r.blNet).padStart(7)}  ${amz.padEnd(22)} ${ebay.padEnd(12)} ${pov.padEnd(18)} → ${r.verdict}`);
-      }
-    }
-  }
-
-  // 13. Buyable by STR gate — inclusive columns, metric rows (Chris's preferred format)
+  // 12. Table A (approved 2026-07-14): PARTS & MINIFIGS by inclusive STR gate.
   if (a.strCoverage) {
     const c = a.strCoverage.coverage;
     const gates = a.strCoverage.gates;
-    L.push(`\n[13] BUYABLE BY STR GATE  (inclusive gates; margin/ask/damage gates applied)`);
-    L.push(`  benchmark coverage: UK ${pct(c.ukLots / Math.max(1, c.totalLots))} · world-fallback ${pct(c.worldLots / Math.max(1, c.totalLots))} · none ${pct(c.noneLots / Math.max(1, c.totalLots))} of ${c.totalLots} lots`);
+    L.push(`\n[12] PARTS & MINIFIGS — BUYABLE BY STR GATE   (bl-basket scope; STR = qty basis; ${a.inputs.ukGroundedOnly ? 'UK-grounded' : 'estimate lens'})`);
+    L.push(`  benchmark coverage (P+M): UK ${pct(c.ukLots / Math.max(1, c.totalLots))} · world-fallback ${pct(c.worldLots / Math.max(1, c.totalLots))} · none ${pct(c.noneLots / Math.max(1, c.totalLots))} of ${c.totalLots} lots`);
     const row = (label: string, f: (x: (typeof gates)[number]) => string) =>
       `  ${label.padEnd(20)}${gates.map((x) => f(x).padStart(11)).join('')}`;
     L.push(row('', (x) => `STR≥${x.gate}`));
@@ -170,10 +150,34 @@ export function renderAssessment(a: StoreAssessment): string {
     L.push(row('£/lot/mo', (x) => (x.capacityPerLotMo != null ? x.capacityPerLotMo.toFixed(3) : '—')));
     L.push(row('Additional lots', (x) => String(x.addlLots)));
     L.push(row('Additional net', (x) => gbp(x.addlNet)));
-    L.push(row('· P+M lots (basket)', (x) => String(x.pmLots)));
-    L.push(row('· P+M net (basket)', (x) => gbp(x.pmNet)));
-    L.push(row('· S-type lots', (x) => String(x.setLots)));
-    L.push(row('· S-type net', (x) => gbp(x.setNet)));
+  }
+
+  // 13. Table B (approved 2026-07-14): SETS by sales method.
+  if (a.sets && a.sets.lots > 0) {
+    const s = a.sets;
+    const m = s.methods;
+    L.push(`\n[13] SETS — BY SALES METHOD   (${s.lots} S-type lots · ${gbp(s.askValue)} ask; how the margin is achieved)`);
+    const mrow = (label: string, r: { lots: number; outlay: number; net: number }, note: string, showNet = true) =>
+      `  ${label.padEnd(22)}${String(r.lots).padStart(6)} ${gbp(r.outlay).padStart(11)} ${showNet ? gbp(r.net).padStart(10) : '—'.padStart(10)}   ${note}`;
+    L.push(`  ${'Method'.padEnd(22)}${'Lots'.padStart(6)} ${'Outlay'.padStart(11)} ${'Net'.padStart(10)}   Note`);
+    L.push(mrow('FLIP-AMAZON', m.flipAmazon, 'buy box via trusted ASIN, FBM fees (NEW only)'));
+    L.push(mrow('SELL-BL', m.sellBl, 'sell complete at BL 6-mo avg, 9.4% fees'));
+    L.push(mrow('PART-OUT', m.partOut, 'POV ≥2× ask and ≥£10 gap (net = POV−ask signal)'));
+    L.push(mrow('SKIP (no margin)', m.skip, '', false));
+    L.push(mrow('CMFs, identified', m.cmfIdentified, `per-figure ids${s.cmfResolvedCount ? ` (${s.cmfResolvedCount} resolved by name)` : ''}, sold as figures on BL`));
+    L.push(mrow('CMFs, no identity', m.cmfNoIdentity, 'bare colNN — unpriceable without listing photos', false));
+    L.push(`  ${'─'.repeat(60)}`);
+    L.push(mrow('SETS TOTAL (sellable)', s.totalSellable, ''));
+    const shown = s.decided.filter((r) => r.verdict !== 'SKIP').slice(0, 10);
+    if (shown.length) {
+      L.push('  top set decisions:');
+      for (const r of shown) {
+        const name = `${r.itemNo} (${r.condition}) ${r.setName ?? ''}`.slice(0, 50);
+        const amz = r.amazonBuyBox != null ? `AMZ ${gbp(r.amazonBuyBox)}${r.amazonNet != null ? `→${gbp(r.amazonNet)}` : ''}` : 'AMZ n/t';
+        const pov = r.povGbp != null ? `POV ${gbp(r.povGbp)}${r.povMultiple != null ? ` (${r.povMultiple}x)` : ''}` : '';
+        L.push(`   ${name.padEnd(50)} ask ${gbp(r.ask).padStart(8)}  BL ${gbp(r.blNet).padStart(7)}  ${amz.padEnd(20)} ${pov.padEnd(16)} → ${r.verdict}`);
+      }
+    }
   }
 
   L.push(`\n${rule}`);

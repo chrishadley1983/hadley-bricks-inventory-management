@@ -25,6 +25,9 @@ export interface StoreLot {
   invComplete: string | null; // set completeness (Complete/Incomplete/Sealed)
   invQty: number;
   unitPriceGBP: number;
+  /** True when a bare-series CMF listing was resolved to its per-figure catalog id by
+   * name match (cmf-resolve.ts) — the lot then prices against the correct guide. */
+  cmfResolved?: boolean;
   description: string | null; // seller remarks / condition note
 }
 
@@ -69,6 +72,8 @@ export interface ScoredLot {
   invID: number;
   itemType: ItemTypeCode;
   itemNo: string;
+  /** Bare-series CMF listing resolved to this per-figure id by name (cmf-resolve.ts). */
+  cmfResolved?: boolean;
   colourId: number;
   colourName: string | null;
   itemName: string;
@@ -242,17 +247,30 @@ export interface SetDecisionRow {
   bestNet: number | null;
 }
 
-export interface SetsSection {
+/** One sales-method row of the SETS table (approved format 2026-07-14). */
+export interface SetsMethodRow {
   lots: number;
+  outlay: number;
+  net: number;
+}
+
+export interface SetsSection {
+  lots: number; // all S-type lots
   askValue: number;
-  /** Top rows by best-channel net (report caps the list; totals cover ALL set lots). */
+  /** Per-method breakdown — how the sets margin is achieved. */
+  methods: {
+    flipAmazon: SetsMethodRow; // buy box via trusted ASIN, FBM fees (NEW only)
+    sellBl: SetsMethodRow; // sell complete at BL 6-mo avg (condition-matched)
+    partOut: SetsMethodRow; // POV ≥2× ask and ≥£10 gap (net = POV-ask signal, not booked)
+    skip: SetsMethodRow; // priced, no margin on any channel
+    cmfIdentified: SetsMethodRow; // per-figure CMFs (suffixed or name-resolved), sellable on BL
+    cmfNoIdentity: SetsMethodRow; // bare-series CMFs that could NOT be resolved — unpriceable
+  };
+  /** Bare-CMF lots recovered by the name resolver this run. */
+  cmfResolvedCount: number;
+  totalSellable: SetsMethodRow;
+  /** Per-set detail (top N by net) — persisted for drill-down; not all rendered. */
   decided: SetDecisionRow[];
-  flipAmazon: { lots: number; net: number };
-  sellBl: { lots: number; net: number };
-  partOut: { lots: number };
-  skip: { lots: number };
-  /** Sum of positive best-channel nets × qty — the sets money on the table. */
-  totalBestNet: number;
 }
 
 /** One INCLUSIVE STR gate column (Chris 2026-07-14: cumulative "STR ≥ g", metrics as rows). */
@@ -273,11 +291,6 @@ export interface StrGateColumn {
   /** Lots additional to OUR store (overlap NEW + RESTOCK_OUT); 0 when no overlap index. */
   addlLots: number;
   addlNet: number;
-  /** Distinct splits (Chris 2026-07-14): parts+minifigs (bl-basket cart scope) vs S-type. */
-  pmLots: number;
-  pmNet: number;
-  setLots: number;
-  setNet: number;
 }
 
 export interface StrCoverageSection {
