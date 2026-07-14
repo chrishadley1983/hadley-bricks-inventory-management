@@ -94,7 +94,7 @@ export function renderAssessment(a: StoreAssessment): string {
   L.push(lotTable(a.withinMargin.top, 'margin'));
 
   // 6. High STR
-  L.push(`\n[6] HIGH-STR LOTS (STR ≥ ${a.inputs.minStr}, lots basis)`);
+  L.push(`\n[6] HIGH-STR LOTS (STR ≥ ${a.inputs.minStr}, qty basis)`);
   L.push(`  ${a.highStr.lots} lots · ${gbp(a.highStr.value)} · ${a.highStr.alsoWithinMargin} also within margin`);
   L.push(lotTable(a.highStr.top, 'str'));
 
@@ -170,8 +170,6 @@ export function renderAssessment(a: StoreAssessment): string {
     L.push(row('£/lot/mo', (x) => (x.capacityPerLotMo != null ? x.capacityPerLotMo.toFixed(3) : '—')));
     L.push(row('Additional lots', (x) => String(x.addlLots)));
     L.push(row('Additional net', (x) => gbp(x.addlNet)));
-    L.push(row('P+M lots (basket)', (x) => String(x.pmLots)));
-    L.push(row('P+M net (basket)', (x) => gbp(x.pmNet)));
   }
 
   L.push(`\n${rule}`);
