@@ -18,7 +18,7 @@
  *
  * Flags:
  *   --store-slug=<name>      REQUIRED — BL store URL slug
- *   --cdp-port=<n>           Chrome CDP port (default 9222)
+ *   --cdp-port=<n>           Chrome CDP port (default 9225)
  *   --shipping=<gbp>         Inbound postage estimate for allocation (default 3.00)
  *   --min-ask=<gbp>          Economy dial, NOT a visibility filter (default 0). List price is
  *                            bricqerListPrice(soldAvg, cond, str) — the £0.0699 floor already
@@ -97,7 +97,7 @@ if (!STORE_SLUG) {
   console.error('Required: --store-slug=<name>');
   process.exit(1);
 }
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const SHIPPING = parseFloat(argv['shipping'] ?? '3.00');
 const MIN_ASK = parseFloat(argv['min-ask'] ?? '0');
 const ENRICH_MIN_ASK = parseFloat(argv['enrich-min-ask'] ?? '0.10');

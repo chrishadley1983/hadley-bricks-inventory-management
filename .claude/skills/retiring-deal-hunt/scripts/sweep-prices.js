@@ -1,7 +1,7 @@
 /**
  * sweep-prices.js — CDP price sweep for the retiring-deal-hunt skill.
  *
- * Drives the dedicated CDP Chrome (port 9222) so retailer bot walls
+ * Drives the dedicated CDP Chrome (port 9225) so retailer bot walls
  * (Smyths/Argos/Very/JL) see a real browser. NEVER launches or kills Chrome.
  *
  * Input: JSON file of targets:
@@ -45,7 +45,7 @@ async function extract(page, site, text) {
 }
 
 (async () => {
-  const browser = await chromium.connectOverCDP('http://localhost:9222');
+  const browser = await chromium.connectOverCDP('http://localhost:9225');
   const ctx = browser.contexts()[0];
   const results = [];
 

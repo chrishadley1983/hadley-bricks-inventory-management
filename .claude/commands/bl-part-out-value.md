@@ -125,5 +125,5 @@ const { row } = await getPovForSet(supabase, detectedSetNumber); // cache-first;
 ## Prerequisites
 
 - `apps/web/.env.local` with `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-- A logged-in Chrome on CDP `:9222` (the dedicated CDP Chrome) for live scraping. Cache reads need
+- A logged-in Chrome on CDP `:9225` (the dedicated CDP Chrome) for live scraping. Cache reads need
   no Chrome.

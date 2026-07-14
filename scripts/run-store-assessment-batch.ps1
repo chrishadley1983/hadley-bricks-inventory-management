@@ -14,7 +14,7 @@
 # refresh it if secrets rotate.
 #
 # Scheduled nightly via register-store-assessment-batch-task.ps1.
-# Requires the dedicated CDP Chrome on :9222 (C:\chrome-cdp\launch-cdp-chrome.bat,
+# Requires the dedicated CDP Chrome on :9225 (C:\chrome-cdp\launch-cdp-chrome.bat,
 # logged in to BrickLink).
 
 $ErrorActionPreference = "Stop"

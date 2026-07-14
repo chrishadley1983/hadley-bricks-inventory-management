@@ -25,7 +25,7 @@ import { loadQueue, saveQueue, addCandidate } from './bl-store-queue';
 const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => { const [k, v] = a.replace(/^--/, '').split('='); acc[k] = v ?? 'true'; return acc; }, {});
 const DRY_RUN = argv['dry-run'] === 'true';
 const MIN_LOTS = parseInt(argv['min-lots'] ?? '300', 10);
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const COUNTRY = argv['country'] ?? 'UK';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

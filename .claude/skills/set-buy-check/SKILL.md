@@ -58,7 +58,7 @@ prediction if scored. Aggregate-listing POV rows are already excluded.
 
 The eBay Finding API is **dead** (decommissioned; returns 503 — verified
 2026-07-07). Sold comps come from scraping ebay.co.uk sold/completed search
-via the dedicated CDP Chrome on port 9222 (start it first if unreachable):
+via the dedicated CDP Chrome on port 9225 (start it first if unreachable):
 
 ```powershell
 npx tsx scripts/buy-check-ebay-sold.ts --condition used --json ..\..\analysis\buy-check-<date>-ebay.json <set> …
@@ -228,7 +228,7 @@ Save the full report to `analysis/buy-check-YYYY-MM-DD-<slug>.md`.
   `../.env.local`; Supabase via service role).
 - Key forms: `brickset_sets`/`investment_predictions` use `NNNNN-1`, POV cache
   uses bare `NNNNN` — both scripts handle this, don't hand-query without it.
-- CDP Chrome on port 9222 must be running for Stage 3 (and pov-fetch). If
+- CDP Chrome on port 9225 must be running for Stage 3 (and pov-fetch). If
   unreachable the scraper exits code 2 — start Chrome, don't fall back to
   WebFetch (eBay blocks it).
 - Never kill Chrome processes broadly; CDP PIDs only (standing rule).

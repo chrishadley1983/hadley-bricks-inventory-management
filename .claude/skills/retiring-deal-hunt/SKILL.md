@@ -47,7 +47,7 @@ anything the user already holds deep stock of (check inventory if in doubt).
 
 ## Phase 2 — CDP price sweep
 
-Prerequisite: the dedicated CDP Chrome on port 9222 (see chrome-cdp-skill).
+Prerequisite: the dedicated CDP Chrome on port 9225 (see chrome-cdp-skill).
 NEVER kill Chrome processes; only open/close tabs. Headless Playwright gets
 bot-walled by Smyths/Argos/Very — the CDP real-profile connection does not.
 
@@ -157,5 +157,5 @@ monthly stock budget until the prediction ledger proves out.
 
 - Read-only on the world: no checkouts, no basket-building unless asked.
 - Gentle scraping (jittered, small bursts) — see feedback_gentle_external_scraping.
-- Never kill Chrome; reuse the port-9222 instance; close every tab you open.
+- Never kill Chrome; reuse the port-9225 instance; close every tab you open.
 - All prices are point-in-time — timestamp the report.

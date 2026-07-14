@@ -290,6 +290,12 @@ export interface PgPageProbe {
   foreignNativeSeen: boolean;
   /** Body text sample for captcha/login detection (first ~2000 chars). */
   textSample: string;
+  /**
+   * Count of <nav> elements. Diagnostic only (never gates classification): a
+   * logged-in catalogPG renders the modern BL navbar (2 navs); a session-less
+   * (anonymous) render has 0. Confirmed empirically 2026-07-14.
+   */
+  navCount?: number;
 }
 
 export function classifyPgPage(p: PgPageProbe): PgPageKind {
@@ -368,6 +374,7 @@ export const PG_EXTRACT_JS = `(function(){
     textSample: (document.body && document.body.innerText ? document.body.innerText.slice(0, 2000) : ''),
     hasQuadrants: !!quads,
     foreignNativeSeen: foreignNative,
+    navCount: document.querySelectorAll('nav').length,
     quads: quads
   });
 })()`;
@@ -416,7 +423,7 @@ export class PgScraper {
   private readonly settleMs: number;
 
   constructor(opts: PgRunOptions = {}) {
-    this.port = opts.cdpPort ?? 9222;
+    this.port = opts.cdpPort ?? 9225;
     this.navTimeoutMs = opts.navTimeoutMs ?? 20000;
     this.settleMs = opts.settleMs ?? 1200;
   }
@@ -533,6 +540,21 @@ export class PgScraper {
     };
   }
 
+  /**
+   * Capture the current page's state for post-mortem (warm-up failure dumps).
+   * Best-effort — returns what it can; never throws.
+   */
+  async captureDiagnostics(): Promise<{ url: string; title: string; navCount: number; html: string }> {
+    try {
+      const raw = await this.evaluate<string>(
+        `JSON.stringify({ url: location.href, title: document.title, navCount: document.querySelectorAll('nav').length, html: document.documentElement.outerHTML.slice(0, 500000) })`,
+      );
+      return JSON.parse(raw) as { url: string; title: string; navCount: number; html: string };
+    } catch (e) {
+      return { url: '', title: '', navCount: -1, html: `capture failed: ${(e as Error).message}` };
+    }
+  }
+
   async close(): Promise<void> {
     try {
       if (this.targetId) await this.rawSend('Target.closeTarget', { targetId: this.targetId });
@@ -545,7 +567,7 @@ export class PgScraper {
 }
 
 /** Quick reachability check for graceful degradation. */
-export async function isPgCdpReachable(cdpPort = 9222): Promise<boolean> {
+export async function isPgCdpReachable(cdpPort = 9225): Promise<boolean> {
   try {
     const r = await fetch(`http://127.0.0.1:${cdpPort}/json/version`, { signal: AbortSignal.timeout(2000) });
     return r.ok;

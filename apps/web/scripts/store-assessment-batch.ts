@@ -22,7 +22,7 @@
  *   --sync-directory  force the England directory scan now (combine with --dry-run to only discover)
  *
  * Scheduled nightly via scripts/register-store-assessment-batch-task.ps1; needs the
- * CDP Chrome (:9222) up. Pacing is deliberately slow + jittered — see
+ * CDP Chrome (:9225) up. Pacing is deliberately slow + jittered — see
  * feedback_gentle_external_scraping.
  */
 import { createClient } from '@supabase/supabase-js';
@@ -54,7 +54,7 @@ const SEED = argv['seed'] === 'true';
 const DRY_RUN = argv['dry-run'] === 'true';
 const NO_DISCORD = argv['no-discord'] === 'true';
 const EXPLICIT_SLUGS = argv['store-slugs']?.split(',').map((s) => s.trim()).filter(Boolean) ?? null;
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 // Quarterly England store-directory discovery.
 const SYNC_DIRECTORY = argv['sync-directory'] === 'true';
 const DIRECTORY_MAX_AGE_DAYS = parseFloat(argv['directory-max-age-days'] ?? '90');
@@ -395,6 +395,17 @@ async function main() {
       ...top.slice(0, 3).map((r) => `• ${r.storeName ?? r.slug}: ${r.current!.verdict} · £${(r.current!.buyableNetGbp ?? 0).toFixed(2)} net · ${r.current!.buyableFreshLots ?? '—'} fresh`),
     ].join('\n'),
   });
+
+  // Systemic-failure guard (2026-07-14 audit): 5/25 stores failed preflight one night and
+  // the sweep still exited 0, so nothing alerted. A high failure rate means something
+  // environmental (blocked pages, wrong/poisoned Chrome), not per-store bad luck.
+  if (results.length >= 5 && failed.length / results.length > 0.2) {
+    const pct = Math.round((failed.length / results.length) * 100);
+    await postDiscord('DISCORD_WEBHOOK_ALERTS', {
+      content: `🚨 store-assessment sweep: ${failed.length}/${results.length} stores failed (${pct}%) — systemic issue (check the :9225 BL Chrome / blocks). First error: ${failed[0]?.error?.slice(0, 300)}`,
+    });
+    process.exitCode = 1;
+  }
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

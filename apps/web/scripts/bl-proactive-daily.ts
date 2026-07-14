@@ -7,7 +7,7 @@
  *
  * Critical design points:
  *   - ZERO BL API calls (--api-budget=0 forced)
- *   - Skips silently if CDP Chrome isn't on :9222 — emails the reason rather than crashing
+ *   - Skips silently if CDP Chrome isn't on :9225 — emails the reason rather than crashing
  *   - Single-store-per-run: BL won't flag this volume as scraping
  *   - All cart-build phases skipped (--skip-cart) — humans control money
  *
@@ -26,7 +26,7 @@ import { loadQueue, saveQueue, pickNext, markScreened, type ScreenVerdict } from
 const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => { const [k, v] = a.replace(/^--/, '').split('='); acc[k] = v ?? 'true'; return acc; }, {});
 const DRY_RUN = argv['dry-run'] === 'true';
 const STORE_OVERRIDE = argv['store-slug']; // optional: force a specific store (skip queue picking)
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 // Resend test-mode accounts can only send to verified domain addresses; default to the
 // business mailbox tied to the verified hadleybricks.co.uk domain. Override via
 // PROACTIVE_EMAIL_TO env var or --email-to= flag.

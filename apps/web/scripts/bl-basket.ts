@@ -107,7 +107,7 @@ const SKIP_PURCHASES_ROW = argv['skip-purchases-row'] === 'true';
 const RESUME_FROM_WANTED = argv['resume-from-wanted'] && argv['resume-from-wanted'] !== 'true' ? parseInt(argv['resume-from-wanted'], 10) : null;
 const RESUME_FROM_CART = argv['resume-from-cart'] === 'true';
 const AUTO_YES = argv['yes'] === 'true';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const USER_ID = argv['user-id'] ?? '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
 // Fee + velocity constants (Hadley Bricks verified — see memory)

@@ -5,7 +5,7 @@
 .DESCRIPTION
   Runs `npx tsx scripts/sync-bl-messages.ts` against local CDP Chrome.
   Skips silently if outside 08:00-22:00 local time or if CDP Chrome is
-  unreachable on :9222. Appends output to %USERPROFILE%\.hadley-bricks-logs\bl-cdp.log.
+  unreachable on :9225. Appends output to %USERPROFILE%\.hadley-bricks-logs\bl-cdp.log.
 
   Register via Task Scheduler:
     schtasks /Create /SC HOURLY /MO 1 /TN "HadleyBricks-OrderIssues-BL-CDP" `
@@ -34,10 +34,10 @@ if ($hour -lt 8 -or $hour -ge 22) {
 
 # Probe CDP Chrome
 try {
-  $resp = Invoke-WebRequest -Uri 'http://127.0.0.1:9222/json/version' -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
+  $resp = Invoke-WebRequest -Uri 'http://127.0.0.1:9225/json/version' -TimeoutSec 3 -UseBasicParsing -ErrorAction Stop
   if ($resp.StatusCode -ne 200) { throw "CDP returned $($resp.StatusCode)" }
 } catch {
-  Log "CDP Chrome not reachable on :9222 ($($_.Exception.Message)); skipping"
+  Log "CDP Chrome not reachable on :9225 ($($_.Exception.Message)); skipping"
   exit 0
 }
 

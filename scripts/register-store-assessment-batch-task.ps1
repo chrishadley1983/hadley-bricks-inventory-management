@@ -10,7 +10,7 @@
 #     checkout, apps/web/.env.local copied in. The task runs from THIS worktree because
 #     the main checkout's branch changes constantly (Claude sessions) — repo files may
 #     be absent at 02:15. The wrapper self-updates the worktree each night.
-#   - Dedicated CDP Chrome on :9222, logged in to BrickLink
+#   - Dedicated CDP Chrome on :9225, logged in to BrickLink
 #   - STORE_ASSESSMENT_USER_ID in hb-assess-wt\apps\web\.env.local (or a sole Bricqer snapshot owner)
 #   - DISCORD_WEBHOOK_OPPORTUNITIES / _SYNC_STATUS / _ALERTS in that .env.local
 

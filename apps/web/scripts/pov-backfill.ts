@@ -46,7 +46,7 @@ const LIMIT = Math.max(1, parseInt(argv['limit'] ?? '100', 10));
 const LOGGED_OUT = argv['logged-out'] === 'true' || argv['logged-out'] === '';
 const DRY_RUN = argv['dry-run'] === 'true' || argv['dry-run'] === '';
 const CONDITION = (argv['condition'] as PovCondition) ?? 'N';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const USD_RATE = argv['usd-rate'] ? parseFloat(argv['usd-rate']) : null;
 // --skip-rrp: don't look up / store UK RRP (Used runs — RRP is irrelevant for the whole-vs-parted call).
 const SKIP_RRP = argv['skip-rrp'] === 'true' || argv['skip-rrp'] === '';

@@ -2,7 +2,7 @@
 # (invoked by Windows Task Scheduler, see register-pg-tasks.ps1).
 #
 # HARD CONSTRAINT (done-criteria F3): this is LOCAL-ONLY. It drives the domham91 CDP
-# Chrome (port 9222, GBP display) through six ~350-page sessions with 20-min breathers
+# Chrome (port 9225, GBP display) through six ~350-page sessions with 20-min breathers
 # over a ~7.5h window. It must never become a Vercel cron/route.
 #
 # Prerequisite: the dedicated domham91 CDP Chrome profile must be running and logged in.
@@ -25,7 +25,7 @@ $log = Join-Path $logDir "refresh-$stamp.log"
 Set-Location $webDir
 Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) starting (cwd=$webDir)" | Tee-Object -FilePath $log -Append
 
-$cdpPort = 9222
+$cdpPort = 9225
 try {
     $resp = Invoke-WebRequest -Uri "http://127.0.0.1:$cdpPort/json/version" -TimeoutSec 3 -UseBasicParsing
     if ($resp.StatusCode -ne 200) { throw "unexpected status $($resp.StatusCode)" }
@@ -41,9 +41,10 @@ try {
 # exit 1, no telemetry). Drop to Continue around the native call — $LASTEXITCODE is the
 # real pass/fail signal.
 $ErrorActionPreference = 'Continue'
-# TRIAL (Chris 2026-07-13): 5-min block backoff instead of the spec's 30 — testing whether
-# blocks are transient per-request throttles. Judge via telemetry; delete the arg to revert.
-& npx tsx scripts/pg/pg-refresh-cycle.ts --backoff-mins=5 2>&1 | Tee-Object -FilePath $log -Append
+# TRIAL (Chris 2026-07-13): 5-min block backoff AND 5-min breather (down from 20) — testing
+# whether BL throttling is purely per-request-rate. Breather is the bigger risk (it's what
+# breaks up the sustained-crawl fingerprint) — revert breather-mins first if blocks rise.
+& npx tsx scripts/pg/pg-refresh-cycle.ts --backoff-mins=5 --breather-mins=5 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
 Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
 exit $code

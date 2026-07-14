@@ -7,7 +7,7 @@ REM  daily run uses up most of the BL 5K/day allowance and grows the cache fast.
 REM  Loops up to 50 stores per session; stops early on session-budget cap, queue
 REM  empty, or first error.
 REM
-REM  Pre-condition: CDP Chrome must be running on :9222 and logged in to BL.
+REM  Pre-condition: CDP Chrome must be running on :9225 and logged in to BL.
 REM                 If it's not, the daily runner aborts cleanly + emails the reason.
 REM
 REM  Logs to:  tmp\proactive-daily-<YYYY-MM-DD>.log

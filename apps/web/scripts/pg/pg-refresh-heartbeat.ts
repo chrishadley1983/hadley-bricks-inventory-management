@@ -87,7 +87,7 @@ async function main(): Promise<void> {
     description:
       `${detail}\n\n` +
       'The nightly lane-D refresh (00:05, domham91 CDP) either did not run or produced no ' +
-      'data. Check the pg-refresh Scheduled Task, the domham91 Chrome (:9222) session, and ' +
+      'data. Check the pg-refresh Scheduled Task, the domham91 Chrome (:9225) session, and ' +
       'logs/pg-refresh/. Telemetry: `bl_pg_lane_telemetry` where `lane=\'catalogpg\'`.',
     color: 0xe67e22,
     fields: latest

@@ -2,7 +2,7 @@
  * BrickLink message scraper for order-issues.
  *
  * BrickLink's official API does NOT expose message threads, so this scraper
- * uses local Chrome via CDP (port 9222) to navigate the BL inbox/order pages
+ * uses local Chrome via CDP (port 9225) to navigate the BL inbox/order pages
  * for each open BL issue and extract the message thread.
  *
  * MUST run on a machine with the dedicated CDP Chrome already launched and
@@ -28,7 +28,7 @@ import WebSocket from 'ws';
 import { OrderIssueService } from '../src/lib/services/order-issue.service';
 import type { Database } from '@hadley-bricks/database';
 
-const CDP_PORT = 9222;
+const CDP_PORT = 9225;
 
 const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
   const [k, v] = a.replace(/^--/, '').split('=');

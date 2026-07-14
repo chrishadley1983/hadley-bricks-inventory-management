@@ -206,9 +206,14 @@ def relaunch_chrome_vinted(port: int = 9222) -> bool:
     """
     import socket
     import subprocess
+    # Kill ONLY the Chrome-Vinted instance: match port AND user-data-dir. A port-only
+    # match killed whatever Chrome held :9222 — including the BrickLink Chrome when the
+    # two fought over the port (root cause of the 2026-07-14 audit's poisoned-Chrome
+    # incidents). BL Chrome now lives on :9225, but keep the kill scoped regardless.
     ps = (
         "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | "
-        f"Where-Object {{ $_.CommandLine -match 'remote-debugging-port={port}' }} | "
+        f"Where-Object {{ $_.CommandLine -match 'remote-debugging-port={port}' -and "
+        "$_.CommandLine -match 'Chrome-Vinted' } | "
         "ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }"
     )
     try:
@@ -217,11 +222,14 @@ def relaunch_chrome_vinted(port: int = 9222) -> bool:
     except Exception as e:
         log.warning("relaunch kill step failed: %s", e)
     time.sleep(2)
+    # HEADED relaunch: --headless=new poisons the shared Chrome-Vinted for every other
+    # consumer (Vinted review-queue / BL listing get 403'd headless). Headed still works
+    # from a scheduled task; if the desktop session is locked the window is just invisible.
     subprocess.Popen([
         r"C:\Program Files\Google\Chrome\Application\chrome.exe",
         f"--remote-debugging-port={port}",
         r"--user-data-dir=C:\Users\Chris Hadley\AppData\Local\Google\Chrome-Vinted",
-        "--headless=new", "--disable-gpu", "--no-first-run",
+        "--no-first-run",
         "--no-default-browser-check", "about:blank",
     ])
     for _ in range(30):
@@ -255,13 +263,13 @@ def scrape_vercel_usage() -> tuple[dict[str, float], str]:
         with socket.create_connection(("127.0.0.1", 9222), timeout=2):
             pass
     except (ConnectionRefusedError, OSError):
-        log.info("Chrome CDP not running — launching Chrome-Vinted headless")
+        log.info("Chrome CDP not running — launching Chrome-Vinted (headed; headless breaks the shared instance)")
         import subprocess
         subprocess.Popen([
             r"C:\Program Files\Google\Chrome\Application\chrome.exe",
             "--remote-debugging-port=9222",
             r"--user-data-dir=C:\Users\Chris Hadley\AppData\Local\Google\Chrome-Vinted",
-            "--headless=new", "--disable-gpu", "--no-first-run",
+            "--no-first-run",
             "--no-default-browser-check", "about:blank",
         ])
         for _ in range(15):

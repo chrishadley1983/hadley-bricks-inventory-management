@@ -192,7 +192,7 @@ A standalone `/order-issues` screen for tracking buyer-side order issues on Bric
 
 - Existing `bricklink_transactions`, `brickowl_transactions`, `order_items` tables populated by current sync services
 - Gmail API credential (existing infrastructure)
-- CDP Chrome on port 9222 (existing infrastructure for BL scraping)
+- CDP Chrome on port 9225 (existing infrastructure for BL scraping)
 - BO API credential (existing)
 
 ## Iteration Budget
