@@ -27,8 +27,12 @@ import { calculateAmazonFBMProfit } from '../arbitrage/calculations';
  * Bumped when scoring semantics change; persisted with every run.
  * v2 = audit fixes 2026-07-09. v3 = additive lot-overlap vs our own inventory.
  * v4 = additive SETS decision section (Amazon/POV/BL three-way, separate from grade).
+ * v5 = parts/sets split (Chris 2026-07-14): grade, margin, high-STR, magnets and the
+ *      gate table are PARTS+MINIFIGS ONLY (aligned with what bl-basket carts); ALL
+ *      S-type lots (incl. complete CMFs) are decided in the SETS section. STR is
+ *      QUANTITY basis everywhere (matches bl-basket).
  */
-export const ENGINE_VERSION = 4;
+export const ENGINE_VERSION = 5;
 
 /** Complete CMFs are BL-typed as sets but are commercially minifigs — they stay in the
  * normal Bricqer lot universe and NEVER enter the sets decision. */
@@ -225,7 +229,8 @@ function scoreLot(
 
   const eligible = ask >= inp.minAsk && !damageNote;
   const withinMargin = eligible && netPerUnit != null && netPerUnit > 0 && marginPct != null && marginPct >= inp.minMargin;
-  const highStr = eligible && strLots != null && strLots >= inp.minStr;
+  // QUANTITY-basis STR (Chris 2026-07-14) — consistent with bl-basket.
+  const highStr = eligible && strQty != null && strQty >= inp.minStr;
   const magnet = eligible && highStr && worldSupplyLots != null && worldSupplyLots > 0 && worldSupplyLots <= inp.magnetMaxSupplyLots;
 
   return {
@@ -331,7 +336,7 @@ function buildHighStr(scored: ScoredLot[]): HighStrSection {
   return {
     lots: hs.length, value: round(sum(hs.map((s) => s.lotAskValue))),
     alsoWithinMargin: hs.filter((s) => s.withinMargin).length,
-    top: [...hs].sort((a, b) => (b.strLots ?? 0) - (a.strLots ?? 0)).slice(0, 15),
+    top: [...hs].sort((a, b) => (b.strQty ?? 0) - (a.strQty ?? 0)).slice(0, 15),
   };
 }
 
@@ -511,7 +516,7 @@ function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
     noneLots: scored.filter((s) => s.priceSource === 'none').length,
   };
   const gates: StrGateColumn[] = STR_GATES.map((gate) => {
-    const sel = scored.filter((s) => s.withinMargin && (s.strLots ?? 0) >= gate);
+    const sel = scored.filter((s) => s.withinMargin && (s.strQty ?? 0) >= gate);
     const outlay = sum(sel.map((s) => s.lotAskValue));
     const net = sum(sel.map((s) => s.lotProfit ?? 0));
     const listValue = sum(sel.map((s) => (s.ourList ?? 0) * s.invQty));
@@ -538,14 +543,12 @@ function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
       net: round(net),
       marginPct: listValue > 0 ? round(net / listValue, 4) : null,
       roiPct: outlay > 0 ? round(net / outlay, 4) : null,
-      medianStr: medianOrNull(sel.map((s) => s.strLots ?? 0)),
+      medianStr: medianOrNull(sel.map((s) => s.strQty ?? 0)),
       medianMonths: med == null ? null : round(med, 1),
       monthsTo80PctNet: monthsTo80 == null ? null : round(monthsTo80, 1),
       capacityPerLotMo: sel.length && med ? round(net / sel.length / med, 3) : null,
       addlLots: sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').length,
       addlNet: round(sum(sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').map((s) => s.lotProfit ?? 0))),
-      pmLots: sel.filter((s) => s.itemType !== 'S').length,
-      pmNet: round(sum(sel.filter((s) => s.itemType !== 'S').map((s) => s.lotProfit ?? 0))),
     };
   });
   return { coverage, gates };
@@ -564,7 +567,9 @@ function buildSets(
   setsIntel: Map<string, SetIntel>,
   inputs: AssessmentInputs,
 ): SetsSection {
-  const setLots = scored.filter((s) => s.itemType === 'S' && !isCmf(s.itemNo));
+  // ALL S-type lots — complete CMFs included (Chris 2026-07-14: every set-typed
+  // lot gets an explicit channel decision here; the parts flow never sees them).
+  const setLots = scored.filter((s) => s.itemType === 'S');
   const rows: SetDecisionRow[] = [];
   const totals = { flipAmazon: { lots: 0, net: 0 }, sellBl: { lots: 0, net: 0 }, partOut: { lots: 0 }, skip: { lots: 0 } };
   let totalBestNet = 0;
@@ -734,15 +739,18 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     else if (c.includes('complete')) partMix.setCompleteness.complete += 1;
     else partMix.setCompleteness.unknown += 1;
   }
-  const withinMargin = buildMargin(scored);
-  const highStr = buildHighStr(scored);
-  const magnets = buildMagnets(scored);
-  const confidence = buildConfidence(scored);
+  // Parts/sets split (v5): the buying sections + grade see PARTS+MINIFIGS only —
+  // aligned with what bl-basket actually carts. S-type lots are decided in `sets`.
+  const partsScored = scored.filter((s) => s.itemType !== 'S');
+  const withinMargin = buildMargin(partsScored);
+  const highStr = buildHighStr(partsScored);
+  const magnets = buildMagnets(partsScored);
+  const confidence = buildConfidence(partsScored);
   const ageing = buildAgeing(scored, (s) => soldQtyByInv.get(s.invID) ?? null);
   const concentration = buildConcentration(scored);
   const overlap = buildOverlap(scored, args.ownStock);
   const sets = buildSets(scored, args.setsIntel ?? new Map(), inputs);
-  const strCoverage = buildStrCoverage(scored);
+  const strCoverage = buildStrCoverage(partsScored);
   const scanTruncated = args.scanTruncated ?? false;
   const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
   if (overlap.available && overlap.freshNetShare != null) {
