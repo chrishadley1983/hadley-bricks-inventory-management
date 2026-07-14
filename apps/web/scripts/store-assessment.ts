@@ -17,7 +17,7 @@
  *   npx tsx scripts/store-assessment.ts --store-slug=<name> [--mode=full] [--json]
  *     [--min-margin=0.20] [--min-str=0.5] [--magnet-max-supply=3] [--inbound-per-unit=0]
  *     [--cache-ttl-days=90] [--gapfill-budget=120] [--force-rescrape] [--no-persist]
- *     [--allow-non-uk] [--cdp-port=9222] [--user-id=<uuid>]
+ *     [--allow-non-uk] [--cdp-port=9225] [--user-id=<uuid>]
  */
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
@@ -46,7 +46,7 @@ const JSON_OUT = argv['json'] === 'true';
 const NO_PERSIST = argv['no-persist'] === 'true';
 const ALLOW_NON_UK = argv['allow-non-uk'] === 'true';
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 // Default raised 50->500 (Chris 2026-07-13): the 50-page/5,000-lot cap silently
 // truncated large stores (Agnes.k61 hit exactly 5,000 parts, understating the buy).
 // 500 pages = 50,000 lots/type captures the full inventory of any realistic store;

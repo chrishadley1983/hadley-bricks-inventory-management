@@ -89,7 +89,7 @@ async function main() {
   const config = await service.getConfig();
   const force = args.force === 'true' || args.force === '';
   const loggedOut = args['logged-out'] === 'true' || args['logged-out'] === '';
-  const cdpPort = args['cdp-port'] ? parseInt(args['cdp-port'], 10) : 9222;
+  const cdpPort = args['cdp-port'] ? parseInt(args['cdp-port'], 10) : 9225;
   const freshnessDays = args.freshness ? parseInt(args.freshness, 10) : config?.freshness_days ?? undefined;
 
   const incInstructions =

@@ -52,7 +52,16 @@ export class CDPClient {
     }
     await sleep(waitMs);
   }
-  close() { this.ws?.close(); }
+  /** Tab created by connectCdp for this client — closed on close() so we never leak tabs. */
+  ownedTabId: string | null = null;
+  ownedTabPort: number | null = null;
+  close() {
+    this.ws?.close();
+    if (this.ownedTabId && this.ownedTabPort) {
+      // Best-effort, fire-and-forget: leaked tabs degrade the shared Chrome over time.
+      fetch(`http://127.0.0.1:${this.ownedTabPort}/json/close/${this.ownedTabId}`).catch(() => {});
+    }
+  }
 }
 
 export async function connectCdp(port: number, storeSlug: string): Promise<CDPClient> {
@@ -60,12 +69,23 @@ export async function connectCdp(port: number, storeSlug: string): Promise<CDPCl
   if (!version?.Browser) {
     throw new Error(`Chrome CDP not reachable on :${port}. Start C:\\chrome-cdp\\launch-cdp-chrome.bat, log in to BrickLink, then re-run.`);
   }
-  const tabs = (await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json())) as Array<{ type: string; url: string; webSocketDebuggerUrl: string }>;
-  const existing = tabs.find((t) => t.type === 'page' && t.url.includes(storeSlug));
-  const blank = tabs.find((t) => t.type === 'page');
-  const wsUrl = (existing ?? blank)?.webSocketDebuggerUrl;
+  // Own tab (2026-07-14 audit): reusing whatever tab matched the slug meant two concurrent
+  // jobs could drive the SAME tab and corrupt each other's navigation. Create a dedicated
+  // tab (PUT /json/new — Chrome 111+ requires PUT) and close it on exit.
+  const created = (await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as { id?: string; webSocketDebuggerUrl?: string } | null;
+  let wsUrl = created?.webSocketDebuggerUrl;
+  if (!wsUrl) {
+    // Fallback to the legacy tab-reuse path (older Chrome / endpoint disabled).
+    const tabs = (await fetch(`http://127.0.0.1:${port}/json`).then((r) => r.json())) as Array<{ type: string; url: string; webSocketDebuggerUrl: string }>;
+    const existing = tabs.find((t) => t.type === 'page' && t.url.includes(storeSlug));
+    const blank = tabs.find((t) => t.type === 'page');
+    wsUrl = (existing ?? blank)?.webSocketDebuggerUrl;
+  }
   if (!wsUrl) throw new Error('[cdp] No page tab available');
   const cdp = new CDPClient();
+  if (created?.id) { cdp.ownedTabId = created.id; cdp.ownedTabPort = port; }
   await cdp.connect(wsUrl);
   await cdp.send('Page.enable');
   await cdp.send('Runtime.enable');

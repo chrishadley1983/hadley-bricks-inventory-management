@@ -356,7 +356,7 @@ export class PovScraper {
   private readonly callTimeoutMs: number;
 
   constructor(runOpts: PovRunOptions = {}) {
-    this.port = runOpts.cdpPort ?? 9222;
+    this.port = runOpts.cdpPort ?? 9225;
     this.loggedOut = runOpts.loggedOut ?? false;
     this.navTimeoutMs = runOpts.navTimeoutMs ?? 15000;
     this.settleMs = runOpts.settleMs ?? 1200;
@@ -534,7 +534,7 @@ export async function scrapePov(opts: PovOptions, runOpts: PovRunOptions = {}): 
 export const scrapePovByNavigation = scrapePov;
 
 /** Quick check that the CDP Chrome is reachable (used for graceful degradation). */
-export async function isCdpReachable(cdpPort = 9222): Promise<boolean> {
+export async function isCdpReachable(cdpPort = 9225): Promise<boolean> {
   try {
     const r = await fetch(`http://127.0.0.1:${cdpPort}/json/version`, { signal: AbortSignal.timeout(2000) });
     return r.ok;

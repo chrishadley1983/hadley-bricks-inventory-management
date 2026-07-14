@@ -66,7 +66,7 @@ cd apps/web && npx tsx scripts/store-assessment-batch.ts --budget=10
 ```
 
 Runs nightly at 02:15 via the `HadleyBricks-Store-Assessment-Local` scheduled task
-(`scripts/register-store-assessment-batch-task.ps1`). Needs the CDP Chrome on :9222.
+(`scripts/register-store-assessment-batch-task.ps1`). Needs the CDP Chrome on :9225.
 Discord: BUY verdicts + material deltas (net jump ≥£20, price drop ≥10pts, promising
 first assessment) → #opportunities; sweep summary → #sync-status. Manage candidates in
 `store_assessment_watchlist` (enabled flag; unique per user+slug).
@@ -143,7 +143,7 @@ npx tsx scripts/bl-basket.ts --store-slug=<SLUG>
 
 The script runs 10 phases autonomously:
 
-1. **Preflight** — Chrome CDP 9222 check (aborts with clear error if not
+1. **Preflight** — Chrome CDP 9225 check (aborts with clear error if not
    running), navigate to store, verify StoreFront.id + UK country (aborts on
    non-UK).
 2. **Scrape** — AJAX inventory for parts/sets/minifigs, 3s between pages, 50
@@ -186,7 +186,7 @@ The script runs 10 phases autonomously:
 
 ## Prerequisites
 
-1. **Chrome CDP Chrome running on :9222** — `C:\chrome-cdp\launch-cdp-chrome.bat`.
+1. **Chrome CDP Chrome running on :9225** — `C:\chrome-cdp\launch-cdp-chrome.bat`.
    Alert user if not running: "Start `C:\chrome-cdp\launch-cdp-chrome.bat`, log in
    to BrickLink, then re-run."
 2. **Logged in to BrickLink** in that CDP Chrome window (script detects login
@@ -213,7 +213,7 @@ Supabase:
 
 | Error | Response |
 |---|---|
-| CDP not on :9222 | Print command to start, exit 1 |
+| CDP not on :9225 | Print command to start, exit 1 |
 | Not logged in to BL | "Log in to BrickLink in CDP Chrome first", exit 2 |
 | Store country ≠ UK | Abort with country name in message |
 | BL rate limit (429) | Stop scrape/enrich, preserve progress, return what we have |

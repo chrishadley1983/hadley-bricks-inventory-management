@@ -25,7 +25,7 @@ import { loadQueue, saveQueue } from './bl-store-queue';
 const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => { const [k, v] = a.replace(/^--/, '').split('='); acc[k] = v ?? 'true'; return acc; }, {});
 const COUNT = argv['count'] ? parseInt(argv['count'], 10) : null; // null = all missing
 const DRY_RUN = argv['dry-run'] === 'true';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const PAGE_DELAY_MS = parseInt(argv['page-delay-ms'] ?? '3000', 10);
 const FORCE = argv['force'] === 'true'; // re-enrich even if already populated
 

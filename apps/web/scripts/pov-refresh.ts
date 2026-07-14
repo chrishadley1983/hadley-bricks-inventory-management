@@ -15,7 +15,7 @@
  * breathers) — the Discord report cron reads it for trend lines + job-missed detection.
  *
  * MUST run locally: scraping needs the dedicated throwaway BL account (domham91, USD display)
- * logged into the CDP Chrome (:9222) behind a VPN. Runs daily via Windows Task Scheduler.
+ * logged into the CDP Chrome (:9225) behind a VPN. Runs daily via Windows Task Scheduler.
  *
  * Usage (from apps/web):
  *   npx tsx scripts/pov-refresh.ts                 # drain up to config budget (500/day)
@@ -50,7 +50,7 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
 }, {});
 
 const DRY_RUN = argv['dry-run'] === 'true' || argv['dry-run'] === '';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const BUDGET_OVERRIDE = argv['budget'] ? Math.max(1, parseInt(argv['budget'], 10)) : null;
 const USD_RATE_OVERRIDE = argv['usd-rate'] ? parseFloat(argv['usd-rate']) : null;
 // Self-healing throttle recovery — same shape as the backfill.
@@ -194,7 +194,7 @@ async function main() {
     stats.stoppedEarly = true;
     stats.stopReason = 'CDP Chrome unreachable at start';
     await recordRun(startedAt, budget, stats, backlogBefore, backlogBefore);
-    console.error('[refresh] STOP — CDP Chrome (:9222) unreachable. Is the dedicated Chrome up + logged in?');
+    console.error('[refresh] STOP — CDP Chrome (:9225) unreachable. Is the dedicated Chrome up + logged in?');
     process.exit(1);
   }
 

@@ -27,7 +27,7 @@
  *   --set=<no>           Repeatable. Bare or "-N" suffixed BL set number.
  *   --cond=N|U            Condition to score (default N).
  *   --top-l3=<n>           How many top-value lots get an L3 upgrade attempt (default 20).
- *   --cdp-port=<n>          CDP port for the L3 scrape lane (default 9222).
+ *   --cdp-port=<n>          CDP port for the L3 scrape lane (default 9225).
  *   --no-cdp                Pure L1 mode: never attempt a scrape, even if CDP is reachable.
  *   --price=<gbp>            Optional: render a buy/skip verdict at this price.
  *   --report-file=<path>      Optional: also write the report as markdown to this path.
@@ -89,7 +89,7 @@ if (COND !== 'N' && COND !== 'U') {
   process.exit(1);
 }
 const TOP_L3 = Math.max(0, parseInt(ARGS['top-l3'] ?? '20', 10));
-const CDP_PORT = parseInt(ARGS['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(ARGS['cdp-port'] ?? '9225', 10);
 const NO_CDP = ARGS['no-cdp'] === 'true';
 const PRICE = ARGS['price'] != null ? parseFloat(ARGS['price']) : null;
 const REPORT_FILE = ARGS['report-file'] ? path.resolve(process.cwd(), ARGS['report-file']) : null;

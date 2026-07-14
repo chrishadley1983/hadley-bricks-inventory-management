@@ -60,7 +60,7 @@ const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
 const MIN_DISCOUNT = parseFloat(argv['min-discount'] ?? '0.20'); // ask ≤ (1 - this) × sold avg
 const MIN_TIMES_SOLD = parseInt(argv['min-times-sold'] ?? '10', 10);
 const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const REQUIRE_UK = (argv['require-uk'] ?? 'true') !== 'false';
 
 const BL_SELLER_FEE_RATE = 0.07;

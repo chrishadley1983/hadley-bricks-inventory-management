@@ -1,7 +1,7 @@
 # pov-refresh.ps1 — daily runner for the POV freshness top-up (invoked by Windows Task Scheduler).
 #
 # Re-scrapes the most-overdue stale POV cache rows (up to the daily budget) so the dataset never
-# goes stale. Needs the dedicated CDP Chrome (:9222) up, logged in as domham91 (USD display),
+# goes stale. Needs the dedicated CDP Chrome (:9225) up, logged in as domham91 (USD display),
 # behind the VPN — same prerequisites as the backfill. If Chrome is down the job records a
 # stopped-early run and the Discord report flags it.
 #

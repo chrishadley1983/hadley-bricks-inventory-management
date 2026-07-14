@@ -64,14 +64,14 @@ Probe results:
 ## 4. Architecture (local writes, cloud reads)
 
 ```
- Local Windows (Chrome CDP :9222) ── pov-fetch.ts / skill (logged-in)   ┐ writes
+ Local Windows (Chrome CDP :9225) ── pov-fetch.ts / skill (logged-in)   ┐ writes
                                       pov-backfill.ts (logged-out + VPN) ┘   ▼
                                                 Supabase: pov_cache + pov_config
                                                                             ▲ reads / live-fetch
  Cloud (Vercel) / Local dev ── set-lookup "Official POV" card ── /api/bricklink/part-out-value
 ```
 Vercel cannot reach local Chrome, so cloud **reads cache**; live scraping only happens where a
-logged-in/-out Chrome on :9222 is reachable (local dev server, scripts, skill).
+logged-in/-out Chrome on :9225 is reachable (local dev server, scripts, skill).
 
 ## 5. Phase 1 scope
 
@@ -117,7 +117,7 @@ Aliases added to `packages/database/src/index.ts`:
 - `parsePovHtml(text): PovParseResult` — strip tags, collapse whitespace, slice each label, capture
   value + items + lots + **currency token** (`GBP` or `US $`). Tolerates `my_inv` absent. Returns a
   null-shaped result (not a throw) on a non-POV page.
-- `scrapePovByNavigation(opts, { cdpPort=9222, context })` — drive a tab (or fresh incognito context),
+- `scrapePovByNavigation(opts, { cdpPort=9225, context })` — drive a tab (or fresh incognito context),
   one navigation, read `document.body.innerText`, parse. Throws typed `LoginRequiredError` /
   `CaptchaError` / `NotFoundError` when the page is not a valid POV result.
 - `PartOutValueCacheService` — `getCached(setNumber, opts)`, `upsert(result)`, `getFreshnessDays()`

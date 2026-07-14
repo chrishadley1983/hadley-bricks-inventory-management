@@ -10,7 +10,7 @@
 # whole-vs-parted call, partout_multiple stays null), --year-min=1980 --min-digits=3 (include vintage),
 # and a longer default deadline for a continuous multi-day run (~14,642 sets @ ~160/hr ~= 90 hours).
 #
-# Prereqs: the dedicated throwaway BL account (domham91) logged into the CDP Chrome (:9222),
+# Prereqs: the dedicated throwaway BL account (domham91) logged into the CDP Chrome (:9225),
 # behind a VPN. Sold/for-sale convert USD->GBP via bricklink_pov_config.usd_to_gbp_rate.
 #
 # Usage (from apps/web), detached:

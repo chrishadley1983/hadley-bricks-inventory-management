@@ -25,7 +25,7 @@
  * tuples already in the golden set) and retried once.
  *
  * Usage (from apps/web):
- *   npx tsx scripts/pg/pg-canary.ts [--cdp] [--api] [--cdp-port=9222]
+ *   npx tsx scripts/pg/pg-canary.ts [--cdp] [--api] [--cdp-port=9225]
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -52,7 +52,7 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
 
 const USE_CDP = argv['cdp'] === 'true';
 const USE_API = argv['api'] === 'true';
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const DIVERGENCE_PCT_THRESHOLD = 5;
 const DIVERGENT_TUPLE_ALERT_MIN = 3;
 

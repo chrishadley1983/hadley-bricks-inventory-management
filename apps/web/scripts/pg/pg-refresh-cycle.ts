@@ -7,7 +7,7 @@
  * store-scoped and resumable across nights via `next_due_at` rather than a local cache file.
  *
  * HARD CONSTRAINT (done-criteria F3 / Chris, 2026-07-08): this is LOCAL-ONLY. It is invoked
- * by a Windows Scheduled Task via pg-refresh-cycle.ps1 (domham91 CDP Chrome, port 9222) and
+ * by a Windows Scheduled Task via pg-refresh-cycle.ps1 (domham91 CDP Chrome, port 9225) and
  * must never become a Vercel cron or API route.
  *
  * Per-tuple write fan-out on every successful scrape:
@@ -24,7 +24,7 @@
  *   npx tsx scripts/pg/pg-refresh-cycle.ts
  *
  * Flags (all optional):
- *   --cdp-port=<n>          Chrome CDP port (default 9222)
+ *   --cdp-port=<n>          Chrome CDP port (default 9225)
  *   --session-size=<n>      Requests per session before a normal breather (default 350)
  *   --breather-mins=<n>     Minutes to rest between normal sessions (default 20)
  *   --max-sessions=<n>      Hard cap on sessions this run (default 6)
@@ -37,12 +37,14 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import WebSocket from 'ws';
 import { discordService } from '../../src/lib/notifications/discord.service';
 import {
   PgScraper,
+  PgError,
   PgBlockError,
   PgCaptchaError,
   PgLoginError,
@@ -69,7 +71,7 @@ const argv = process.argv.slice(2).reduce<Record<string, string>>((acc, a) => {
   return acc;
 }, {});
 
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const SESSION_SIZE = parseInt(argv['session-size'] ?? '350', 10);
 const BREATHER_MINS = parseFloat(argv['breather-mins'] ?? '20');
 const MAX_SESSIONS = parseInt(argv['max-sessions'] ?? '6', 10);
@@ -91,6 +93,11 @@ const BACKOFF_MS = BACKOFF_MINS * 60 * 1000;
 // tuning largely moot, because transient blips no longer end sessions.
 const BLOCK_RETRIES = parseInt(argv['block-retries'] ?? '2', 10);
 const BLOCK_RETRY_MS = parseFloat(argv['block-retry-secs'] ?? '20') * 1000;
+// Patient cold-start warm-up (2026-07-14): the 00:05 start is the coldest session of the
+// day and the one that most needs retries — a delayed 00:30 start beats a wasted night.
+// Escalating waits between attempts; each failure dumps the page for post-mortem.
+const WARMUP_ATTEMPTS = Math.max(1, parseInt(argv['warmup-attempts'] ?? '5', 10));
+const WARMUP_WAITS_MS = [30_000, 60_000, 120_000, 300_000, 600_000];
 const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are reclaimable
 const ACTIVE_CYCLE_DAYS = 28;
 const NO_DATA_REQUEUE_DAYS = 90;
@@ -151,7 +158,9 @@ const WARMUP_PROBE: PgItemRef = { itemType: 'P', itemNo: '3001', colourId: 5 };
 /** Mid-run homepage re-establishes allowed per run (one per post-backoff wake-up, ~5 max). */
 const MAX_REESTABLISHES = 5;
 
-/** One ordinary BL page visit via raw CDP — re-establishes the session after idle. */
+/** One ordinary BL page visit via raw CDP — re-establishes the session after idle.
+ * Polls readyState (up to 20s) instead of sleep-and-hope, then settles 3s so the
+ * modern main.page session JS has actually run before the caller re-probes. */
 async function visitHomepage(cdpPort: number): Promise<void> {
   const tabs = (await (await fetch(`http://127.0.0.1:${cdpPort}/json/list`)).json()) as Array<{
     type: string; url: string; webSocketDebuggerUrl: string;
@@ -160,9 +169,44 @@ async function visitHomepage(cdpPort: number): Promise<void> {
   if (!tab) throw new Error('warm-up: no page tab available on the CDP Chrome');
   const ws = new WebSocket(tab.webSocketDebuggerUrl);
   await new Promise<void>((resolve, reject) => { ws.on('open', () => resolve()); ws.on('error', reject); });
-  ws.send(JSON.stringify({ id: 1, method: 'Page.navigate', params: { url: 'https://www.bricklink.com/v2/main.page' } }));
-  await new Promise((r) => setTimeout(r, 6000));
+  let msgId = 0;
+  const pending = new Map<number, (v: unknown) => void>();
+  ws.on('message', (data) => {
+    const msg = JSON.parse(data.toString()) as { id?: number; result?: { result?: { value?: unknown } } };
+    if (msg.id && pending.has(msg.id)) { pending.get(msg.id)!(msg.result?.result?.value); pending.delete(msg.id); }
+  });
+  const send = (method: string, params: Record<string, unknown>) =>
+    new Promise<unknown>((resolve) => {
+      const id = ++msgId;
+      pending.set(id, resolve);
+      ws.send(JSON.stringify({ id, method, params }));
+      setTimeout(() => { if (pending.delete(id)) resolve(undefined); }, 10000);
+    });
+  await send('Page.navigate', { url: 'https://www.bricklink.com/v2/main.page' });
+  const deadline = Date.now() + 20000;
+  for (;;) {
+    await sleep(500);
+    const state = await send('Runtime.evaluate', { expression: 'document.readyState', returnByValue: true });
+    if (state === 'complete' || Date.now() > deadline) break;
+  }
+  await sleep(3000);
   ws.close();
+}
+
+/** Dump the probe page for post-mortem when a warm-up attempt fails. */
+async function dumpWarmupFailure(scraper: PgScraper, attempt: number, err: Error): Promise<void> {
+  try {
+    const diag = await scraper.captureDiagnostics();
+    const dir = path.join('logs', 'pg-refresh');
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const file = path.join(dir, `warmup-fail-${attempt}-${stamp}.html`);
+    const header = `<!-- warm-up failure ${err.name}: ${err.message}\n     url=${diag.url}\n     title=${diag.title}\n     navCount=${diag.navCount} (2=logged-in navbar rendered, 0=anonymous render) -->\n`;
+    fs.writeFileSync(file, header + diag.html, 'utf8');
+    console.warn(`[pg-refresh-cycle] warm-up diagnostics dumped: ${file} (navCount=${diag.navCount})`);
+  } catch (e) {
+    console.warn(`[pg-refresh-cycle] warm-up diagnostics dump failed: ${(e as Error).message}`);
+  }
 }
 
 // Queue claim / lock lifecycle
@@ -536,27 +580,39 @@ async function main(): Promise<void> {
   const scraper = new PgScraper({ cdpPort: CDP_PORT });
   await scraper.open();
 
-  // Cold-start warm-up (three consecutive 00:05 fatals, 2026-07-11..13): after hours
-  // idle, BL serves the FIRST catalogPG navigation a 403/anonymous page, which the
-  // currency guard correctly reads as unusable — but it aborted the whole night on
-  // tuple one. A single ordinary page visit (homepage) re-establishes the session
-  // (proven manually both mornings). Probe a liquid golden tuple; on a session-shaped
-  // failure, visit the homepage and probe once more. Only a second failure is fatal.
-  try {
-    await scraper.scrape(WARMUP_PROBE);
-    console.log('[pg-refresh-cycle] warm-up probe ok');
-  } catch (err) {
-    if (err instanceof PgCurrencyError || err instanceof PgLoginError || err instanceof PgBlockError) {
-      console.warn(
-        `[pg-refresh-cycle] warm-up probe failed (${(err as Error).name}) — visiting homepage to ` +
-          `re-establish the session, then retrying once`,
-      );
-      await visitHomepage(CDP_PORT);
-      await sleep(4000);
-      await scraper.scrape(WARMUP_PROBE); // a second failure propagates: genuinely unusable session
-      console.log('[pg-refresh-cycle] warm-up probe ok after homepage re-establish');
-    } else if (!(err instanceof PgNotFoundError) && !(err instanceof PgNoDataError)) {
-      throw err;
+  // Cold-start warm-up (00:05 fatals 2026-07-11..14): after hours idle, BL serves the
+  // FIRST catalogPG navigation session-less — an anonymous render whose display currency
+  // follows IP geo, not the account's GBP preference — and the guard read that as a
+  // fatal "wrong currency". The account/session state is actually FINE (Chris's call);
+  // the session just needs re-establishing and re-asking. Midday runs never see this
+  // because the session is warm. So: retry PATIENTLY (the coldest start is the one that
+  // most needs retries — the old code gave it 1 attempt vs the mid-run path's 5), with
+  // a homepage visit between attempts and a page dump per failure for post-mortem.
+  {
+    let warmed = false;
+    for (let attempt = 1; attempt <= WARMUP_ATTEMPTS && !warmed; attempt++) {
+      try {
+        await scraper.scrape(WARMUP_PROBE);
+        console.log(attempt === 1 ? '[pg-refresh-cycle] warm-up probe ok' : `[pg-refresh-cycle] warm-up probe ok after ${attempt - 1} re-establish(es)`);
+        warmed = true;
+      } catch (err) {
+        if (err instanceof PgNotFoundError || err instanceof PgNoDataError) { warmed = true; break; }
+        if (!(err instanceof PgCurrencyError || err instanceof PgLoginError || err instanceof PgBlockError)) throw err;
+        await dumpWarmupFailure(scraper, attempt, err as Error);
+        if (attempt === WARMUP_ATTEMPTS) {
+          throw new PgError(
+            `warm-up failed after ${WARMUP_ATTEMPTS} attempts over ~${Math.round(WARMUP_WAITS_MS.slice(0, WARMUP_ATTEMPTS - 1).reduce((a, b) => a + b, 0) / 60000)}min ` +
+              `(last: ${(err as Error).name}) — session genuinely unusable, see warmup-fail-*.html dumps`,
+          );
+        }
+        const wait = WARMUP_WAITS_MS[Math.min(attempt - 1, WARMUP_WAITS_MS.length - 1)];
+        console.warn(
+          `[pg-refresh-cycle] warm-up attempt ${attempt}/${WARMUP_ATTEMPTS} failed (${(err as Error).name}) — ` +
+            `homepage re-establish, then retrying in ${Math.round(wait / 1000)}s`,
+        );
+        await visitHomepage(CDP_PORT).catch((e: Error) => console.warn(`[pg-refresh-cycle] homepage visit failed: ${e.message}`));
+        await sleep(wait);
+      }
     }
   }
 

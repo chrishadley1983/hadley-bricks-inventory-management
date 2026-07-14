@@ -5,7 +5,7 @@
  *        → cached row + staleness/age. Read-only; never scrapes.
  *
  *   POST /api/bricklink/part-out-value          { set, ...options, force? }
- *        → live scrape via the LOCAL Chrome (CDP :9222) + cache. Only works where Chrome is
+ *        → live scrape via the LOCAL Chrome (CDP :9225) + cache. Only works where Chrome is
  *          reachable (local dev server). On Vercel/CI it gracefully returns cache-only.
  *
  * Auth: cookie session via requireUser(). Runtime: nodejs (CDP/ws).
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
     incExtra: b.incExtra ?? config?.default_inc_extra ?? false,
     incBreak: b.incBreak ?? config?.default_inc_break ?? false,
   });
-  const cdpPort = b.cdpPort ?? 9222;
+  const cdpPort = b.cdpPort ?? 9225;
 
   // Cache-first unless forced
   if (!b.force) {
