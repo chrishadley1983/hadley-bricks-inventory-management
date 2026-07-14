@@ -156,6 +156,51 @@ export interface LiveCheckBatchOptions extends LiveCheckTupleOptions {
   telemetrySessionNo?: number;
   /** Skip the telemetry write (unit tests). */
   skipTelemetry?: boolean;
+  /**
+   * Skip the shared-quota pre-flight (Chris 2026-07-14: BL's 5k/day is SHARED with
+   * Bricqer repricing — our scripts get 1,500 absolute max). Only set for genuinely
+   * urgent small runs; bulk work belongs on the catalogPG page lane (pg-page-sweep).
+   */
+  forceBudget?: boolean;
+}
+
+/** Our slice of the shared BL API daily quota (Bricqer repricing owns the rest of the 5k). */
+export const BL_API_DAILY_BUDGET = parseInt(process.env.BL_API_DAILY_BUDGET ?? '1400', 10);
+
+export class BlApiBudgetError extends Error {
+  constructor(msg: string) { super(msg); this.name = 'BlApiBudgetError'; }
+}
+
+/**
+ * Pre-flight the shared-quota ledger: refuse any batch whose projected calls would push
+ * today's total past BL_API_DAILY_BUDGET. Fails OPEN on ledger-read errors (a broken
+ * ledger shouldn't block urgent checks) but loudly.
+ */
+async function assertApiBudget(
+  supabase: SupabaseClient,
+  tupleCount: number,
+  opts: LiveCheckBatchOptions,
+): Promise<void> {
+  const callsPerTuple = (opts.conditions ?? ['N', 'U']).length * ((opts.includeStock ?? false) ? 2 : 1);
+  const projected = tupleCount * callsPerTuple;
+  const { data, error } = await supabase
+    .from('bricklink_api_calls_daily')
+    .select('count')
+    .eq('call_date', new Date().toISOString().slice(0, 10))
+    .maybeSingle();
+  if (error) {
+    console.warn(`[liveCheckBatch] budget ledger read failed (${error.message}) — proceeding unguarded`);
+    return;
+  }
+  const usedToday = data?.count ?? 0;
+  if (usedToday + projected > BL_API_DAILY_BUDGET) {
+    throw new BlApiBudgetError(
+      `batch refused: ${projected} projected calls (${tupleCount} tuples × ${callsPerTuple}) + ${usedToday} used today ` +
+        `> ${BL_API_DAILY_BUDGET} daily budget (5k BL quota is shared with Bricqer repricing). ` +
+        `Use the page lane for bulk: npx tsx scripts/pg/pg-page-sweep.ts --from-report=<tuples.json>. ` +
+        `Override (urgent, small): forceBudget / --force-budget.`,
+    );
+  }
 }
 
 export interface LiveCheckBatchResult {
@@ -436,6 +481,7 @@ export async function liveCheckBatch(
   opts: LiveCheckBatchOptions = {},
 ): Promise<LiveCheckBatchResult> {
   const spacingMs = opts.spacingMs ?? 1100;
+  if (!opts.forceBudget) await assertApiBudget(supabase, tuples.length, opts);
   const startedAt = new Date().toISOString();
 
   const results: LiveCheckTupleResult[] = [];

@@ -206,6 +206,48 @@ export interface OverlapSection {
   freshNetShare: number | null; // share of buyable projected net from NEW + RESTOCK_OUT
 }
 
+/**
+ * Proper sets (S-type, excluding complete CMFs) are a DIFFERENT buying decision from the
+ * parts/minifig arbitrage: flip complete on Amazon (new), sell at BL market (either
+ * condition), or part out (POV). Scored separately, never mixed into the parts grade —
+ * different capital and velocity profile (Chris 2026-07-14).
+ */
+export interface SetDecisionRow {
+  itemNo: string;
+  setName: string | null;
+  condition: Condition;
+  invQty: number;
+  ask: number;
+  /** Net if sold at BL whole-set 6mo sold avg (same fee model as parts). */
+  blNet: number | null;
+  /** Amazon buy box (latest snapshot) — only when the ASIN mapping is trusted. */
+  amazonBuyBox: number | null;
+  /** Net per unit flipping FBM at buy box (referral+DST+VAT+shipping model). New only. */
+  amazonNet: number | null;
+  asinTrusted: boolean;
+  /** eBay NEW lowest listing — context only (we have no eBay sold data). */
+  ebayNewMin: number | null;
+  /** Part-out value (condition-matched 6mo sold basis) and its multiple of the ask. */
+  povGbp: number | null;
+  povMultiple: number | null;
+  verdict: 'FLIP-AMAZON' | 'SELL-BL' | 'PART-OUT' | 'SKIP';
+  /** Best channel net per unit (POV is a signal, not a net — excluded from bestNet). */
+  bestNet: number | null;
+}
+
+export interface SetsSection {
+  lots: number;
+  askValue: number;
+  /** Top rows by best-channel net (report caps the list; totals cover ALL set lots). */
+  decided: SetDecisionRow[];
+  flipAmazon: { lots: number; net: number };
+  sellBl: { lots: number; net: number };
+  partOut: { lots: number };
+  skip: { lots: number };
+  /** Sum of positive best-channel nets × qty — the sets money on the table. */
+  totalBestNet: number;
+}
+
 export interface Verdict {
   grade: number; // 0..100 Arbitrage Attractiveness
   label: 'BUY' | 'REVIEW' | 'SKIP';
@@ -243,6 +285,8 @@ export interface StoreAssessment {
   ageing: AgeingSection;
   concentration: ConcentrationSection;
   overlap: OverlapSection;
+  /** Proper-set decisions (separate from the parts grade). Absent on pre-v4 rows. */
+  sets?: SetsSection;
 }
 
 export const DEFAULT_INPUTS: AssessmentInputs = {

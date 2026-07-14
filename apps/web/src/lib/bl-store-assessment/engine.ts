@@ -17,14 +17,22 @@ import {
   type MagnetSection, type ConfidenceSection, type AgeingSection, type ConcentrationSection,
   type OverlapSection, type OverlapTagStat, type OverlapTagValue,
   type Verdict, type Condition, type ItemTypeCode, DEFAULT_INPUTS,
+  type SetsSection, type SetDecisionRow,
 } from './types';
 import { loadOwnStockIndex, classifyOverlap, type OwnStockIndex } from './overlap';
+import { readSetsIntel, ASIN_TRUST_MIN, type SetIntel } from './sets-intel';
+import { calculateAmazonFBMProfit } from '../arbitrage/calculations';
 
 /**
  * Bumped when scoring semantics change; persisted with every run.
  * v2 = audit fixes 2026-07-09. v3 = additive lot-overlap vs our own inventory.
+ * v4 = additive SETS decision section (Amazon/POV/BL three-way, separate from grade).
  */
-export const ENGINE_VERSION = 3;
+export const ENGINE_VERSION = 4;
+
+/** Complete CMFs are BL-typed as sets but are commercially minifigs — they stay in the
+ * normal Bricqer lot universe and NEVER enter the sets decision. */
+const isCmf = (itemNo: string): boolean => /^col/i.test(itemNo);
 
 /**
  * Worldwide 6-mo averages run ~11% below UK (2026-07-07 pg_summary coverage study,
@@ -467,6 +475,89 @@ function buildVerdict(
   };
 }
 
+// ---- sets decision (separate from the parts grade) ----
+
+/** POV must clear this multiple of the ask before part-out beats flipping — parting out
+ * is labour-heavy, so a thin multiple isn't worth the bench time. */
+const POV_MULTIPLE_MIN = 2.0;
+/** ...and the absolute POV-vs-ask gap must be worth the labour at all. */
+const POV_MIN_GAP_GBP = 10;
+
+function buildSets(
+  scored: ScoredLot[],
+  setsIntel: Map<string, SetIntel>,
+  inputs: AssessmentInputs,
+): SetsSection {
+  const setLots = scored.filter((s) => s.itemType === 'S' && !isCmf(s.itemNo));
+  const rows: SetDecisionRow[] = [];
+  const totals = { flipAmazon: { lots: 0, net: 0 }, sellBl: { lots: 0, net: 0 }, partOut: { lots: 0 }, skip: { lots: 0 } };
+  let totalBestNet = 0;
+
+  for (const s of setLots) {
+    const intel = setsIntel.get(s.itemNo);
+    // blNet: the engine's own scoring already models selling at BL whole-set 6mo avg.
+    const blNet = s.damageNote ? null : s.netPerUnit;
+    const asinTrusted = !!intel?.amazonBuyBox && (intel?.asinConfidence ?? 0) >= ASIN_TRUST_MIN;
+    // Amazon flip is NEW-only (used sets aren't Amazon inventory for us).
+    const amazonNet =
+      s.condition === 'N' && !s.damageNote && asinTrusted && intel?.amazonBuyBox
+        ? (calculateAmazonFBMProfit(intel.amazonBuyBox, s.ask)?.totalProfit ?? null)
+        : null;
+    const povGbp = intel ? intel.povSoldGbp[s.condition] : null;
+    const povMultiple = povGbp != null && s.ask > 0 ? round(povGbp / s.ask, 2) : null;
+
+    const channels: Array<{ verdict: SetDecisionRow['verdict']; net: number }> = [];
+    if (blNet != null && blNet > 0) channels.push({ verdict: 'SELL-BL', net: blNet });
+    if (amazonNet != null && amazonNet > 0) channels.push({ verdict: 'FLIP-AMAZON', net: amazonNet });
+    channels.sort((a, b) => b.net - a.net);
+    let best: { verdict: SetDecisionRow['verdict']; net: number } | null = channels[0] ?? null;
+
+    // Part-out wins only when POV dwarfs both the ask and the best flip channel.
+    const povWins =
+      povGbp != null && povMultiple != null &&
+      povMultiple >= POV_MULTIPLE_MIN && povGbp - s.ask >= POV_MIN_GAP_GBP &&
+      (best == null || povGbp - s.ask > best.net * 2);
+
+    let verdict: SetDecisionRow['verdict'];
+    if (povWins) verdict = 'PART-OUT';
+    else if (best && best.net >= Math.max(0.5, s.ask * inputs.minMargin)) verdict = best.verdict;
+    else { verdict = 'SKIP'; best = null; }
+
+    const bestNet = best?.net ?? null;
+    if (verdict === 'FLIP-AMAZON') { totals.flipAmazon.lots++; totals.flipAmazon.net += (bestNet ?? 0) * s.invQty; }
+    else if (verdict === 'SELL-BL') { totals.sellBl.lots++; totals.sellBl.net += (bestNet ?? 0) * s.invQty; }
+    else if (verdict === 'PART-OUT') totals.partOut.lots++;
+    else totals.skip.lots++;
+    if (verdict !== 'SKIP' && bestNet != null) totalBestNet += bestNet * s.invQty;
+
+    rows.push({
+      itemNo: s.itemNo, setName: intel?.setName ?? s.itemName ?? null, condition: s.condition,
+      invQty: s.invQty, ask: s.ask, blNet: blNet == null ? null : round(blNet, 2),
+      amazonBuyBox: intel?.amazonBuyBox ?? null, amazonNet: amazonNet == null ? null : round(amazonNet, 2),
+      asinTrusted, ebayNewMin: intel?.ebayNewMin ?? null,
+      povGbp: povGbp == null ? null : round(povGbp, 2), povMultiple,
+      verdict, bestNet: bestNet == null ? null : round(bestNet, 2),
+    });
+  }
+
+  rows.sort((a, b) => {
+    const av = a.verdict === 'SKIP' ? -1 : (a.bestNet ?? 0) * a.invQty;
+    const bv = b.verdict === 'SKIP' ? -1 : (b.bestNet ?? 0) * b.invQty;
+    return bv - av;
+  });
+
+  return {
+    lots: setLots.length,
+    askValue: round(sum(setLots.map((s) => s.lotAskValue))),
+    decided: rows.slice(0, 20),
+    flipAmazon: { lots: totals.flipAmazon.lots, net: round(totals.flipAmazon.net) },
+    sellBl: { lots: totals.sellBl.lots, net: round(totals.sellBl.net) },
+    partOut: { lots: totals.partOut.lots },
+    skip: { lots: totals.skip.lots },
+    totalBestNet: round(totalBestNet),
+  };
+}
+
 // ---- entry point ----
 
 export interface AssessArgs {
@@ -496,14 +587,15 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
     refs.push({ itemType: l.itemType, itemNo: l.itemNo, colourId: blColour(l), scheme: 'bl' });
   }
 
-  const [pgMap, supplyMap, ownStock] = await Promise.all([
+  const [pgMap, supplyMap, ownStock, setsIntel] = await Promise.all([
     readPriceGuide(supabase, refs, { ttlDays: inputs.cacheTtlDays ?? undefined }),
     // refs were built with blColour() already applied — colourId is canonical here.
     readWorldSupply(supabase, refs.map((r) => ({ itemType: r.itemType, itemNo: r.itemNo, blColourId: r.colourId }))),
     args.userId ? loadOwnStockIndex(supabase, args.userId) : Promise.resolve(null),
+    readSetsIntel(supabase, refs.filter((r) => r.itemType === 'S' && !isCmf(r.itemNo)).map((r) => r.itemNo)),
   ]);
 
-  return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock });
+  return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock, setsIntel });
 }
 
 export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
@@ -511,6 +603,8 @@ export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
   pgMap: Map<string, PriceGuideView>;
   supplyMap: Map<string, WorldSupply>;
   ownStock?: OwnStockIndex | null; // overlap index; absent → overlap.available = false
+  /** Amazon/eBay/POV intel for proper sets; absent → sets section uses BL channel only. */
+  setsIntel?: Map<string, SetIntel>;
 }
 
 /**
@@ -563,11 +657,18 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
   const ageing = buildAgeing(scored, (s) => soldQtyByInv.get(s.invID) ?? null);
   const concentration = buildConcentration(scored);
   const overlap = buildOverlap(scored, args.ownStock);
+  const sets = buildSets(scored, args.setsIntel ?? new Map(), inputs);
   const scanTruncated = args.scanTruncated ?? false;
   const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
   if (overlap.available && overlap.freshNetShare != null) {
     const fresh = overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');
     verdict.reasons.push(`${sum(fresh.map((t) => t.lots))} buyable lots are fresh demand (new to us / sold-out restock) — ${Math.round(overlap.freshNetShare * 100)}% of the projected net.`);
+  }
+  if (sets.totalBestNet >= 25) {
+    verdict.reasons.push(
+      `Sets (separate decision, NOT in this grade): £${sets.totalBestNet.toFixed(2)} best-channel net across ` +
+        `${sets.flipAmazon.lots + sets.sellBl.lots} set lot(s)${sets.partOut.lots ? ` + ${sets.partOut.lots} part-out candidate(s)` : ''} — see SETS section.`,
+    );
   }
 
   return {
@@ -578,6 +679,6 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     scanTruncated,
     inputs,
     verdict, size, pricing, feedback: args.profile, partMix,
-    withinMargin, highStr, magnets, confidence, ageing, concentration, overlap,
+    withinMargin, highStr, magnets, confidence, ageing, concentration, overlap, sets,
   };
 }
