@@ -60,6 +60,7 @@ import { bricqerMultiplier, bricqerListPrice } from '../src/lib/bricklink/bricqe
 import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
+import { DAMAGE_KEYWORDS } from '../src/lib/bl-store-assessment/engine';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -216,13 +217,8 @@ function acquireLock() {
 }
 
 /** Damage-note filter. Negation-aware ("no scratches" is OK). See feedback_bl_condition_filter memory. */
-const DAMAGE_KEYWORDS = new Set([
-  'dent', 'dents', 'scratch', 'scratches', 'scratched', 'crack', 'cracks', 'cracked',
-  'chip', 'chipped', 'chips', 'damage', 'damaged', 'damages', 'fade', 'faded',
-  'yellow', 'yellowed', 'yellowing', 'marked', 'marks', 'broken', 'bent',
-  'tear', 'torn', 'sticky', 'cloudy', 'scuffed', 'scuff', 'worn',
-  'discolour', 'discoloured', 'discolor', 'discolored', 'bitten', 'warped', 'flaw', 'flawed',
-]);
+// DAMAGE_KEYWORDS imported above from the assessment engine (single source of truth;
+// expanded 2026-07-14 after the bitemark Hulk slipped through this script's stale copy).
 const NEGATION_PREFIXES: string[][] = [['no'], ['without'], ['not'], ['free', 'of'], ['free', 'from'], ['zero']];
 
 /**
