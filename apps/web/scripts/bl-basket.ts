@@ -89,7 +89,12 @@ const CACHE_TTL_DAYS = parseInt(argv['cache-ttl-days'] ?? '90', 10);
 const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const API_DELAY_MS = parseInt(argv['api-delay-ms'] ?? '250', 10);
-const API_BUDGET = parseInt(argv['api-budget'] ?? '4500', 10);
+// Default 0 (Chris 2026-07-14: "scrape rather than API call") — the BL API's 5k/day is
+// shared with Bricqer repricing (our slice ~1,400, enforced in liveCheckBatch). Fill
+// benchmark gaps with the quota-free page lane instead:
+//   npx tsx scripts/pg/pg-page-sweep.ts --from-report=<missing-tuples.json>
+// then re-run the basket. Pass --api-budget=N explicitly for small urgent top-ups.
+const API_BUDGET = parseInt(argv['api-budget'] ?? '0', 10);
 const MIN_BARGAIN_BOMBS = parseInt(argv['min-bargain-bombs'] ?? '0', 10);
 const MAX_STALE_RATIO = parseFloat(argv['max-stale-ratio'] ?? '1.0');
 // Mid-loop checkpoint: after every N freshly-fetched tuples, recompute median ask÷UK 6MA
