@@ -224,10 +224,12 @@ def main() -> int:
     else:
         print(f"    ✓ CDP sees: {url}")
 
-    # 5. Swap to headless and run scraper
-    print("\n[5/5] Closing headed Chrome, relaunching headless, running scraper…")
+    # 5. Fresh headed relaunch and run scraper. HEADED, not headless (2026-07-14 CDP
+    # audit): leaving Chrome-Vinted headless poisons it for every other :9222 consumer
+    # (Vinted review-queue / BL flows 403 under headless).
+    print("\n[5/5] Closing headed Chrome, relaunching fresh (headed), running scraper…")
     _kill_chrome_vinted()
-    _launch_chrome(headless=True, url="about:blank")
+    _launch_chrome(headless=False, url="about:blank")
     time.sleep(2)
 
     scraper = SCRIPT_DIR / "vercel-usage-scraper.py"
