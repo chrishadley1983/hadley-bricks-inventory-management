@@ -194,10 +194,15 @@ function scoreLot(
   boilerplate: Set<string>,
   inp: AssessmentInputs,
 ): ScoredLot {
+  // Ambiguous CMF identity: a bare "col13" S-lot (seller listed a single figure without
+  // its figure number, itemSeq=0) matches the catalog entry for the COMPLETE SERIES BOX —
+  // benchmarking a £3 figure against a £25 box produced fake 70%+ margins (Alpine8,
+  // 2026-07-14; same class as the Agnes col10-6 bug). No identity → no benchmark.
+  const ambiguousCmf = lot.itemType === 'S' && /^col[a-z]*\d*$/i.test(lot.itemNo) && !lot.itemNo.includes('-');
   // Grounded lens (Chris 2026-07-14): once a store has been fully price-scanned, a
   // checked tuple with no UK sales is GROUND TRUTH ("no UK market"), not a gap to
   // estimate — world-calibrated fallback is for triage of unswept stores only.
-  const pv = inp.ukGroundedOnly && pvIn?.coverage === 'world_fallback' ? undefined : pvIn;
+  const pv = ambiguousCmf || (inp.ukGroundedOnly && pvIn?.coverage === 'world_fallback') ? undefined : pvIn;
   const condition: Condition = lot.invNew === 'New' ? 'N' : 'U';
   const side: SideView | null = pv ? (condition === 'N' ? pv.new : pv.used) : null;
   const priceSource: PriceSource = pv?.coverage === 'uk' ? 'uk' : pv?.coverage === 'world_fallback' ? 'world' : 'none';
