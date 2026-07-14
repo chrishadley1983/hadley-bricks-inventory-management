@@ -49,7 +49,7 @@ export function renderAssessment(a: StoreAssessment): string {
   const rule = '─'.repeat(72);
   L.push(rule);
   L.push(`STORE ASSESSMENT — ${a.store.storeName ?? a.store.slug}  (${a.store.country ?? '?'}, ID ${a.store.storeId ?? '?'})`);
-  L.push(`mode: ${a.mode.toUpperCase()}   scanned: ${a.scannedAt.slice(0, 16).replace('T', ' ')}   engine v${a.engineVersion}`);
+  L.push(`mode: ${a.mode.toUpperCase()}   scanned: ${a.scannedAt.slice(0, 16).replace('T', ' ')}   engine v${a.engineVersion}   lens: ${a.inputs.ukGroundedOnly ? 'UK-GROUNDED (full scan in place)' : 'ESTIMATE (world-calibrated fills gaps)'}`);
   if (a.scanTruncated) L.push(`⚠ SCAN TRUNCATED — inventory hit the page cap; every total below understates the store.`);
   L.push(rule);
 
