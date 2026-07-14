@@ -170,6 +170,8 @@ export function renderAssessment(a: StoreAssessment): string {
     L.push(row('£/lot/mo', (x) => (x.capacityPerLotMo != null ? x.capacityPerLotMo.toFixed(3) : '—')));
     L.push(row('Additional lots', (x) => String(x.addlLots)));
     L.push(row('Additional net', (x) => gbp(x.addlNet)));
+    L.push(row('P+M lots (basket)', (x) => String(x.pmLots)));
+    L.push(row('P+M net (basket)', (x) => gbp(x.pmNet)));
   }
 
   L.push(`\n${rule}`);

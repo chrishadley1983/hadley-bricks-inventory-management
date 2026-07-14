@@ -544,6 +544,8 @@ function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
       capacityPerLotMo: sel.length && med ? round(net / sel.length / med, 3) : null,
       addlLots: sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').length,
       addlNet: round(sum(sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').map((s) => s.lotProfit ?? 0))),
+      pmLots: sel.filter((s) => s.itemType !== 'S').length,
+      pmNet: round(sum(sel.filter((s) => s.itemType !== 'S').map((s) => s.lotProfit ?? 0))),
     };
   });
   return { coverage, gates };
