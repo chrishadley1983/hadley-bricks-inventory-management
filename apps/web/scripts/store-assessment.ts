@@ -60,6 +60,8 @@ const GAPFILL_DELAY_MS = parseInt(argv['gapfill-delay-ms'] ?? '400', 10);
 
 const inputs = {
   minAsk: parseFloat(argv['min-ask'] ?? '0.10'),
+  // --pricing-lens=grounded|estimate|auto (default auto: grounded once >=95% checked)
+  ukGroundedOnly: argv['pricing-lens'] === 'grounded' ? true : argv['pricing-lens'] === 'estimate' ? false : undefined,
   minMargin: parseFloat(argv['min-margin'] ?? '0.20'),
   minStr: parseFloat(argv['min-str'] ?? '0.5'),
   magnetMaxSupplyLots: parseInt(argv['magnet-max-supply'] ?? '3', 10),

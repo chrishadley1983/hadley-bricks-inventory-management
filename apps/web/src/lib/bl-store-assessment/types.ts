@@ -49,6 +49,13 @@ export interface AssessmentInputs {
   inboundPerUnit: number; // inbound postage allocated per unit in margin calc (default 0 = ex-postage)
   cacheTtlDays: number | null; // UK price-guide freshness gate (null = accept any age)
   feeModel: { blFee: number; bricqerFee: number; paypalPct: number };
+  /**
+   * Pricing lens (Chris 2026-07-14). true = GROUNDED: UK data only — a checked tuple
+   * with no UK sales is ground truth, never world-estimated. false = ESTIMATE: world
+   * fallback (+11% calibration) fills gaps — triage of unswept stores. undefined = AUTO:
+   * grounded once ≥95% of the store's tuples have been price-checked.
+   */
+  ukGroundedOnly?: boolean;
 }
 
 /** Where the market benchmark for a lot came from. */

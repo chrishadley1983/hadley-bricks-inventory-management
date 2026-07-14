@@ -185,11 +185,15 @@ const blColour = (l: { itemType: ItemTypeCode; colourId: number }): number => (l
 
 function scoreLot(
   lot: StoreLot,
-  pv: PriceGuideView | undefined,
+  pvIn: PriceGuideView | undefined,
   supply: WorldSupply | undefined,
   boilerplate: Set<string>,
   inp: AssessmentInputs,
 ): ScoredLot {
+  // Grounded lens (Chris 2026-07-14): once a store has been fully price-scanned, a
+  // checked tuple with no UK sales is GROUND TRUTH ("no UK market"), not a gap to
+  // estimate — world-calibrated fallback is for triage of unswept stores only.
+  const pv = inp.ukGroundedOnly && pvIn?.coverage === 'world_fallback' ? undefined : pvIn;
   const condition: Condition = lot.invNew === 'New' ? 'N' : 'U';
   const side: SideView | null = pv ? (condition === 'N' ? pv.new : pv.used) : null;
   const priceSource: PriceSource = pv?.coverage === 'uk' ? 'uk' : pv?.coverage === 'world_fallback' ? 'world' : 'none';
@@ -664,6 +668,14 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
     args.userId ? loadOwnStockIndex(supabase, args.userId) : Promise.resolve(null),
     readSetsIntel(supabase, refs.filter((r) => r.itemType === 'S' && !isCmf(r.itemNo)).map((r) => r.itemNo)),
   ]);
+
+  // AUTO lens: once ≥95% of this store's tuples have been price-checked (a full scan is
+  // in place), switch to grounded UK-only pricing — world calibration is triage-of-gaps
+  // only (Chris 2026-07-14).
+  if (inputs.ukGroundedOnly == null) {
+    const checked = refs.filter((r) => pgMap.has(pgKey(r.itemType, r.itemNo, r.colourId))).length;
+    inputs.ukGroundedOnly = refs.length > 0 && checked / refs.length >= 0.95;
+  }
 
   return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock, setsIntel });
 }
