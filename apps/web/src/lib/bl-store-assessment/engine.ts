@@ -17,7 +17,7 @@ import {
   type MagnetSection, type ConfidenceSection, type AgeingSection, type ConcentrationSection,
   type OverlapSection, type OverlapTagStat, type OverlapTagValue,
   type Verdict, type Condition, type ItemTypeCode, DEFAULT_INPUTS,
-  type SetsSection, type SetDecisionRow,
+  type SetsSection, type SetDecisionRow, type StrCoverageSection, type StrBandRow,
 } from './types';
 import { loadOwnStockIndex, classifyOverlap, type OwnStockIndex } from './overlap';
 import { readSetsIntel, ASIN_TRUST_MIN, type SetIntel } from './sets-intel';
@@ -486,6 +486,36 @@ function buildVerdict(
   };
 }
 
+// ---- STR × coverage bands (Chris 2026-07-14: on every store summary) ----
+
+const STR_BANDS: Array<{ label: string; lo: number; hi: number }> = [
+  { label: '0–0.25', lo: 0, hi: 0.25 },
+  { label: '0.25–0.5', lo: 0.25, hi: 0.5 },
+  { label: '0.5–0.75', lo: 0.5, hi: 0.75 },
+  { label: '0.75–1.0', lo: 0.75, hi: 1.0 },
+  { label: '1.0–2.0', lo: 1.0, hi: 2.0 },
+  { label: '2.0+', lo: 2.0, hi: Infinity },
+];
+
+function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
+  const total = scored.length || 1;
+  const mk = (label: string, sel: ScoredLot[]): StrBandRow => ({
+    band: label,
+    lots: sel.length,
+    lotsPct: round(sel.length / total, 4),
+    askValue: round(sum(sel.map((s) => s.lotAskValue))),
+    ukLots: sel.filter((s) => s.priceSource === 'uk').length,
+    worldLots: sel.filter((s) => s.priceSource === 'world').length,
+    buyableLots: sel.filter((s) => s.withinMargin).length,
+    buyableNet: round(sum(sel.filter((s) => s.withinMargin).map((s) => s.lotProfit ?? 0))),
+  });
+  const rows: StrBandRow[] = [mk('no benchmark', scored.filter((s) => s.priceSource === 'none'))];
+  for (const b of STR_BANDS) {
+    rows.push(mk(b.label, scored.filter((s) => s.priceSource !== 'none' && (s.strLots ?? 0) >= b.lo && (s.strLots ?? 0) < b.hi)));
+  }
+  return { rows };
+}
+
 // ---- sets decision (separate from the parts grade) ----
 
 /** POV must clear this multiple of the ask before part-out beats flipping — parting out
@@ -669,6 +699,7 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
   const concentration = buildConcentration(scored);
   const overlap = buildOverlap(scored, args.ownStock);
   const sets = buildSets(scored, args.setsIntel ?? new Map(), inputs);
+  const strCoverage = buildStrCoverage(scored);
   const scanTruncated = args.scanTruncated ?? false;
   const verdict = buildVerdict(pricing, withinMargin, confidence, magnets, { scanTruncated });
   if (overlap.available && overlap.freshNetShare != null) {
@@ -690,6 +721,6 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     scanTruncated,
     inputs,
     verdict, size, pricing, feedback: args.profile, partMix,
-    withinMargin, highStr, magnets, confidence, ageing, concentration, overlap, sets,
+    withinMargin, highStr, magnets, confidence, ageing, concentration, overlap, sets, strCoverage,
   };
 }
