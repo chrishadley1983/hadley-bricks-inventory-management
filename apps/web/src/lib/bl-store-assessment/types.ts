@@ -273,6 +273,11 @@ export interface StrGateColumn {
   /** Lots additional to OUR store (overlap NEW + RESTOCK_OUT); 0 when no overlap index. */
   addlLots: number;
   addlNet: number;
+  /** Distinct splits (Chris 2026-07-14): parts+minifigs (bl-basket cart scope) vs S-type. */
+  pmLots: number;
+  pmNet: number;
+  setLots: number;
+  setNet: number;
 }
 
 export interface StrCoverageSection {
