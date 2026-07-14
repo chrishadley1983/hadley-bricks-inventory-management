@@ -17,7 +17,7 @@ import {
   type MagnetSection, type ConfidenceSection, type AgeingSection, type ConcentrationSection,
   type OverlapSection, type OverlapTagStat, type OverlapTagValue,
   type Verdict, type Condition, type ItemTypeCode, DEFAULT_INPUTS,
-  type SetsSection, type SetDecisionRow, type StrCoverageSection, type StrBandRow,
+  type SetsSection, type SetDecisionRow, type StrCoverageSection, type StrGateColumn,
 } from './types';
 import { loadOwnStockIndex, classifyOverlap, type OwnStockIndex } from './overlap';
 import { readSetsIntel, ASIN_TRUST_MIN, type SetIntel } from './sets-intel';
@@ -486,35 +486,63 @@ function buildVerdict(
   };
 }
 
-// ---- STR × coverage bands (Chris 2026-07-14: on every store summary) ----
+// ---- STR × coverage: inclusive gate columns (Chris 2026-07-14) ----
 
-const STR_BANDS: Array<{ label: string; lo: number; hi: number }> = [
-  { label: '0–0.25', lo: 0, hi: 0.25 },
-  { label: '0.25–0.5', lo: 0.25, hi: 0.5 },
-  { label: '0.5–0.75', lo: 0.5, hi: 0.75 },
-  { label: '0.75–1.0', lo: 0.75, hi: 1.0 },
-  { label: '1.0–2.0', lo: 1.0, hi: 2.0 },
-  { label: '2.0+', lo: 2.0, hi: Infinity },
-];
+const STR_GATES = [0, 0.25, 0.5, 0.75, 1.0];
+
+/** Null-propagating median (the file's shared `median` returns 0 on empty, which would
+ * render as a real value in the gate table). */
+function medianOrNull(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const a = [...xs].sort((x, y) => x - y);
+  const m = Math.floor(a.length / 2);
+  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
+}
 
 function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
-  const total = scored.length || 1;
-  const mk = (label: string, sel: ScoredLot[]): StrBandRow => ({
-    band: label,
-    lots: sel.length,
-    lotsPct: round(sel.length / total, 4),
-    askValue: round(sum(sel.map((s) => s.lotAskValue))),
-    ukLots: sel.filter((s) => s.priceSource === 'uk').length,
-    worldLots: sel.filter((s) => s.priceSource === 'world').length,
-    buyableLots: sel.filter((s) => s.withinMargin).length,
-    buyableNet: round(sum(sel.filter((s) => s.withinMargin).map((s) => s.lotProfit ?? 0))),
-    addlLots: sel.filter((s) => s.withinMargin && (s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT')).length,
+  const coverage = {
+    totalLots: scored.length,
+    ukLots: scored.filter((s) => s.priceSource === 'uk').length,
+    worldLots: scored.filter((s) => s.priceSource === 'world').length,
+    noneLots: scored.filter((s) => s.priceSource === 'none').length,
+  };
+  const gates: StrGateColumn[] = STR_GATES.map((gate) => {
+    const sel = scored.filter((s) => s.withinMargin && (s.strLots ?? 0) >= gate);
+    const outlay = sum(sel.map((s) => s.lotAskValue));
+    const net = sum(sel.map((s) => s.lotProfit ?? 0));
+    const listValue = sum(sel.map((s) => (s.ourList ?? 0) * s.invQty));
+    // Market months-of-supply per lot: 6-month window ÷ qty sell-through. Capped at 36
+    // so dead-slow lots don't swamp the medians.
+    const months = sel.map((s) => (s.strQty && s.strQty > 0 ? Math.min(36, 6 / s.strQty) : 36));
+    const med = medianOrNull(months);
+    // Profit-weighted 80th percentile of months — when ~80% of the net has cleared.
+    let monthsTo80: number | null = null;
+    if (sel.length && net > 0) {
+      const byMonths = sel
+        .map((s, i) => ({ m: months[i], p: Math.max(0, s.lotProfit ?? 0) }))
+        .sort((a, b) => a.m - b.m);
+      let acc = 0;
+      for (const r of byMonths) {
+        acc += r.p;
+        if (acc >= net * 0.8) { monthsTo80 = r.m; break; }
+      }
+    }
+    return {
+      gate,
+      lots: sel.length,
+      outlay: round(outlay),
+      net: round(net),
+      marginPct: listValue > 0 ? round(net / listValue, 4) : null,
+      roiPct: outlay > 0 ? round(net / outlay, 4) : null,
+      medianStr: medianOrNull(sel.map((s) => s.strLots ?? 0)),
+      medianMonths: med == null ? null : round(med, 1),
+      monthsTo80PctNet: monthsTo80 == null ? null : round(monthsTo80, 1),
+      capacityPerLotMo: sel.length && med ? round(net / sel.length / med, 3) : null,
+      addlLots: sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').length,
+      addlNet: round(sum(sel.filter((s) => s.overlap === 'NEW' || s.overlap === 'RESTOCK_OUT').map((s) => s.lotProfit ?? 0))),
+    };
   });
-  const rows: StrBandRow[] = [mk('no benchmark', scored.filter((s) => s.priceSource === 'none'))];
-  for (const b of STR_BANDS) {
-    rows.push(mk(b.label, scored.filter((s) => s.priceSource !== 'none' && (s.strLots ?? 0) >= b.lo && (s.strLots ?? 0) < b.hi)));
-  }
-  return { rows };
+  return { coverage, gates };
 }
 
 // ---- sets decision (separate from the parts grade) ----

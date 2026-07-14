@@ -151,15 +151,25 @@ export function renderAssessment(a: StoreAssessment): string {
     }
   }
 
-  // 13. STR × coverage bands — where the store's lots and buyable money sit by velocity
+  // 13. Buyable by STR gate — inclusive columns, metric rows (Chris's preferred format)
   if (a.strCoverage) {
-    L.push(`\n[13] STR × COVERAGE  (buyable = margin/ask/damage gates, NO STR gate — shows what each band would unlock)`);
-    L.push(`  ${'Band'.padEnd(14)} ${'lots'.padStart(6)} ${'%'.padStart(6)}  ${'ask £'.padStart(9)}  ${'UK'.padStart(5)} ${'world'.padStart(5)}  ${'buyable'.padStart(7)}  ${'net £'.padStart(8)}  ${'addl'.padStart(5)}`);
-    for (const r of a.strCoverage.rows) {
-      L.push(
-        `  ${r.band.padEnd(14)} ${String(r.lots).padStart(6)} ${pct(r.lotsPct, 1).padStart(6)}  ${gbp(r.askValue).padStart(9)}  ${String(r.ukLots).padStart(5)} ${String(r.worldLots).padStart(5)}  ${String(r.buyableLots).padStart(7)}  ${gbp(r.buyableNet).padStart(8)}  ${String(r.addlLots).padStart(5)}`,
-      );
-    }
+    const c = a.strCoverage.coverage;
+    const gates = a.strCoverage.gates;
+    L.push(`\n[13] BUYABLE BY STR GATE  (inclusive gates; margin/ask/damage gates applied)`);
+    L.push(`  benchmark coverage: UK ${pct(c.ukLots / Math.max(1, c.totalLots))} · world-fallback ${pct(c.worldLots / Math.max(1, c.totalLots))} · none ${pct(c.noneLots / Math.max(1, c.totalLots))} of ${c.totalLots} lots`);
+    const row = (label: string, f: (x: (typeof gates)[number]) => string) =>
+      `  ${label.padEnd(20)}${gates.map((x) => f(x).padStart(11)).join('')}`;
+    L.push(row('', (x) => `STR≥${x.gate}`));
+    L.push(row('Lots', (x) => String(x.lots)));
+    L.push(row('Outlay', (x) => gbp(x.outlay)));
+    L.push(row('Net', (x) => gbp(x.net)));
+    L.push(row('Margin / ROI', (x) => `${x.marginPct != null ? Math.round(x.marginPct * 100) : '—'}%/${x.roiPct != null ? Math.round(x.roiPct * 100) : '—'}%`));
+    L.push(row('Median STR', (x) => (x.medianStr != null ? x.medianStr.toFixed(2) : '—')));
+    L.push(row('Median mo to clear', (x) => (x.medianMonths != null ? `${x.medianMonths}` : '—')));
+    L.push(row('80% net by (mo)', (x) => (x.monthsTo80PctNet != null ? `${x.monthsTo80PctNet}` : '—')));
+    L.push(row('£/lot/mo', (x) => (x.capacityPerLotMo != null ? x.capacityPerLotMo.toFixed(3) : '—')));
+    L.push(row('Additional lots', (x) => String(x.addlLots)));
+    L.push(row('Additional net', (x) => gbp(x.addlNet)));
   }
 
   L.push(`\n${rule}`);
