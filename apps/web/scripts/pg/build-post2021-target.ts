@@ -4,8 +4,10 @@
  * Universe = every SET in bl_pg_refresh_queue whose Brickset release year (year_from) is
  * >= 2022 — recent retirements + current production, where Amazon UK demand and international
  * price gaps actually sit (Chris 2026-07-15). Excludes sets already scraped in the last N
- * hours (the 1k run's overlap), so we don't redo work. Ordered newest-first so the most
- * relevant sets land first if a capped run stops early.
+ * hours (the 1k run's overlap), so we don't redo work. Ordered OLDEST-first (2022 -> 2026):
+ * recently-retired sets (2022-24) are the prime BL->Amazon arb candidates (Amazon price has
+ * risen on scarcity while international stock is still cheap), whereas brand-new sets are
+ * current-retail (thin gaps) and have high no-data rates — so value + hit-rate front-load.
  *
  * Writes tmp/post2021-sets.json (bare tuple array for pg-page-sweep --from-report).
  *
@@ -69,7 +71,7 @@ async function main(): Promise<void> {
     .map((q) => ({ itemNo: q.item_no, year: yearByBase.get(base(q.item_no)) ?? 0 }))
     .filter((r) => r.year >= MIN_YEAR && !freshSet.has(r.itemNo))
     .filter((r) => { if (seen.has(r.itemNo)) return false; seen.add(r.itemNo); return true; })
-    .sort((a, b) => b.year - a.year || a.itemNo.localeCompare(b.itemNo));
+    .sort((a, b) => a.year - b.year || a.itemNo.localeCompare(b.itemNo));
 
   const tuples = rows.map((r) => ({ itemType: 'S', itemNo: r.itemNo, colourId: 0 }));
   const outPath = path.resolve(__dirname, '../../../../tmp/post2021-sets.json');
