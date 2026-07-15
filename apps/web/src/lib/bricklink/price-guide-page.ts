@@ -485,6 +485,13 @@ export const PG_EXTRACT_JS = `(function(){
   });
 })()`;
 
+/** Lightweight readiness probe: "<storeLinkCount>:<countryFlagCount>". A fully-loaded
+ * catalogPG stock view flags EVERY listing, so links>0 && flags==0 = the pre-enrichment
+ * (UK-only) render; wait/reload for flags before extracting. */
+export const LISTING_PROBE_JS =
+  `(function(){var l=document.querySelectorAll('a[href*="store.asp"]').length;` +
+  `var f=document.querySelectorAll('img[src*="flagsS/"]').length;return l+':'+f;})()`;
+
 /**
  * Derive the item descriptor from the page title, Node-side — regexes inside the
  * PG_EXTRACT_JS template literal lose their backslashes when the string is cooked
@@ -594,11 +601,10 @@ export class PgScraper {
   }
 
   /** Scrape one price-guide page. Throws typed errors; retries a transient page once. */
-  async scrape(item: PgItemRef, _attempt = 1): Promise<PgScrapeResult> {
-    if (!this.ws || !this.sessionId) throw new PgError('PgScraper.open() must be called first');
-    const url = buildPgUrl(item);
-
-    await this.rawSend('Page.navigate', { url }, this.sessionId);
+  /** Navigate then block until readyState=complete (+ settle). Shared by scrape() and its
+   * enriched-view reload path. */
+  private async navigateAndSettle(url: string): Promise<void> {
+    await this.rawSend('Page.navigate', { url }, this.sessionId!);
     const deadline = Date.now() + this.navTimeoutMs;
     for (;;) {
       await sleep(400);
@@ -606,6 +612,34 @@ export class PgScraper {
       if (state === 'complete' || Date.now() > deadline) break;
     }
     await sleep(this.settleMs);
+  }
+
+  async scrape(item: PgItemRef, _attempt = 1): Promise<PgScrapeResult> {
+    if (!this.ws || !this.sessionId) throw new PgError('PgScraper.open() must be called first');
+    const url = buildPgUrl(item);
+
+    await this.navigateAndSettle(url);
+    // Data-complete guard for the international offers: in the enriched view EVERY current
+    // listing carries a country flag (even UK rows), so links>0 && flags==0 means the page
+    // hasn't finished rendering the full (flagged) listing set. Wait for a flag before
+    // extracting so we never persist a half-rendered UK-only subset; if flags never appear
+    // but listings exist, re-navigate once to force a fresh render. Costs one extra probe on
+    // the happy path (flags present immediately) — measured ~0 overhead across the 1k run.
+    for (let reload = 0; reload < 2; reload++) {
+      const pollStart = Date.now();
+      let needsReload = false;
+      for (;;) {
+        const [links, flags] = (await this.evaluate<string>(LISTING_PROBE_JS).catch(() => '0:0'))
+          .split(':').map((n) => parseInt(n, 10) || 0);
+        const elapsed = Date.now() - pollStart;
+        if (flags > 0) break;                          // enriched view present
+        if (links === 0 && elapsed > 1500) break;      // genuinely no current stock listings
+        if (elapsed > 5000) { needsReload = links > 0; break; } // flag-less render is stable → reload
+        await sleep(500);
+      }
+      if (!needsReload) break;
+      await this.navigateAndSettle(url);
+    }
 
     const raw = await this.evaluate<string>(PG_EXTRACT_JS);
     const page = JSON.parse(raw) as PgPageProbe & { quads: PgRawQuadrants | null };
