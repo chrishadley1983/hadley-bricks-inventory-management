@@ -315,7 +315,9 @@ async function enqueueMissingTuples(
   const grace = new Date(Date.now() + 5 * 24 * 3600 * 1000).toISOString();
   for (let i = 0; i < missing.length; i += 500) {
     const rows = missing.slice(i, i + 500).map((r) => ({
-      ...r, tier: 'tail', rank_score: 0, next_due_at: now, grace_until: grace,
+      // rank_floor tags the SOURCE so the digest's queue-growth line can split
+      // store-discovery from seed/new-release/backfill (Chris 2026-07-15).
+      ...r, tier: 'tail', rank_score: 0, rank_floor: 'store_discovered', next_due_at: now, grace_until: grace,
     }));
     const { error } = await sb
       .from('bl_pg_refresh_queue')

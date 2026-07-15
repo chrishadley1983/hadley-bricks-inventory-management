@@ -182,15 +182,38 @@ function summariseFirstBlockTrend(readings: number[]): string {
   return `${direction} ${first}→${last}`;
 }
 
+/** Queue growth over the last 7 days, split by source (Chris 2026-07-15: watch it taper).
+ * store-discovered = store-assessment enqueue (rank_floor null); new-release =
+ * pg-universe catalog-dir active tier; backfill = one-off catalogue front-loads. */
+async function loadQueueGrowth7d(cutoff7dIso: string): Promise<{ total: number; storeDiscovered: number; newRelease: number; backfill: number }> {
+  const count = async (build: (q: ReturnType<typeof supabase.from>) => unknown): Promise<number> => {
+    const base = supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).gte('created_at', cutoff7dIso);
+    const { count: c, error } = (await (build(base) as typeof base)) as { count: number | null; error: { message: string } | null };
+    if (error) throw new Error(`queue growth count failed: ${error.message}`);
+    return c ?? 0;
+  };
+  // Count only positively-SOURCED growth so the one-off seed (rank_floor null) is
+  // excluded as the baseline it is, not miscounted as store-discovery.
+  const [storeDiscovered, newRelease, backfill] = await Promise.all([
+    count((q) => (q as ReturnType<typeof supabase.from>).eq('rank_floor', 'store_discovered')),
+    count((q) => (q as ReturnType<typeof supabase.from>).eq('rank_floor', 'new_release')),
+    count((q) => (q as ReturnType<typeof supabase.from>).like('rank_floor', 'catalog_backfill%')),
+  ]);
+  return { total: storeDiscovered + newRelease + backfill, storeDiscovered, newRelease, backfill };
+}
+
 async function loadCoverageHealth(): Promise<{
   l1Total: number;
   activeTierCount: number;
   activeWithin28dPct: number;
   pastDueCount: number;
   laneTelemetry: PgDigestLaneTelemetry[];
+  growth7d: { total: number; storeDiscovered: number; newRelease: number; backfill: number };
 }> {
   const nowIso = new Date().toISOString();
   const cutoff28d = new Date(Date.now() - TWENTY_EIGHT_DAYS_MS).toISOString();
+  const cutoff7dIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
+  const growth7d = await loadQueueGrowth7d(cutoff7dIso);
 
   const [l1Total, activeTierCount, activeWithin28d, pastDueCount] = await Promise.all([
     countL1Total(),
@@ -231,7 +254,7 @@ async function loadCoverageHealth(): Promise<{
     return { lane, requests7d, ok7d, failed7d, firstBlockTrend: summariseFirstBlockTrend(readings) };
   });
 
-  return { l1Total, activeTierCount, activeWithin28dPct, pastDueCount, laneTelemetry };
+  return { l1Total, activeTierCount, activeWithin28dPct, pastDueCount, laneTelemetry, growth7d };
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +340,7 @@ async function main(): Promise<void> {
     `- Active tier: **${coverage.activeTierCount.toLocaleString()}**`,
     `- Within 28-day cycle: **${coverage.activeWithin28dPct.toFixed(1)}%**`,
     `- Past due (next_due_at elapsed): **${coverage.pastDueCount.toLocaleString()}**`,
+    `- Queue grew **+${coverage.growth7d.total.toLocaleString()}** (7d): ${coverage.growth7d.storeDiscovered.toLocaleString()} store-discovered · ${coverage.growth7d.newRelease.toLocaleString()} new-release · ${coverage.growth7d.backfill.toLocaleString()} backfill`,
     '',
     '### Lane telemetry (last 7 days)',
     '',
