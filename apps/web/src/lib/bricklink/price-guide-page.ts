@@ -85,6 +85,21 @@ export interface PgSideStats {
   stockUsed: PgQuadrantStats;
 }
 
+/** One current stock listing with seller identity (Tier-1 intl set-arb, 2026-07-15). */
+export interface PgStockOffer {
+  price: number; // GBP (converted if international)
+  qty: number;
+  intl: boolean; // tilde on the page = converted/international seller (native GBP = UK)
+  storeId: number | null;
+  storeName: string | null;
+}
+
+/** Per-condition stored offers: the cheapest 15 listings + ALL UK listings (Chris rule). */
+export interface PgStockOffers {
+  new: PgStockOffer[];
+  used: PgStockOffer[];
+}
+
 export interface PgScrapeResult {
   item: PgItemRef;
   itemName: string | null;
@@ -92,8 +107,40 @@ export interface PgScrapeResult {
   uk: PgSideStats;
   /** Worldwide stats (all rows, GBP-converted amounts as displayed). */
   world: PgSideStats;
+  /** SETS only: ALL current stock listings with seller+intl (price-sorted, unfiltered).
+   * Persist reduces to cheapest-10-that-ship + all-UK via reduceStockOffers(). */
+  stockListings?: PgStockOffers;
+  /** Final stored offers when the caller has enriched with ships-to-me (API); else
+   * toPgCacheRow derives a UK-only reduction from stockListings. */
+  stockOffers?: PgStockOffers;
   finalUrl: string;
   scrapedAt: string;
+}
+
+/** Raw stock-offer tuple from PG_EXTRACT_JS: [qty, priceGbp, intl, storeId, storeName]. */
+type RawStockOffer = [number, number, boolean, number | null, string | null];
+
+/** Map + price-sort a condition's raw listings (no filtering). */
+export function mapStockListings(raw: RawStockOffer[] | undefined): PgStockOffer[] {
+  if (!raw || raw.length === 0) return [];
+  return raw
+    .filter((r) => Number.isFinite(r[1]) && r[1] > 0 && Number.isFinite(r[0]) && r[0] > 0)
+    .map((r): PgStockOffer => ({ price: r[1], qty: r[0], intl: r[2], storeId: r[3], storeName: r[4] }))
+    .sort((a, b) => a.price - b.price);
+}
+
+/** Price key for matching page offers to API `shipping_available` (2dp GBP). */
+export const offerKey = (price: number): string => price.toFixed(2);
+
+/**
+ * Reduce listings to the stored set: cheapest 10 THAT SHIP TO ME + all remaining UK sellers.
+ * "Ships to me" = UK (native GBP, always) OR — for international — confirmed by the API
+ * shipsMap (price 2dp → shipping_available). Without a shipsMap, international can't be
+ * confirmed and is dropped (UK-only reduction).
+ */
+export function reduceStockOffers(listings: PgStockOffer[], shipsMap?: Map<string, boolean>): PgStockOffer[] {
+  const shipsOK = listings.filter((o) => !o.intl || shipsMap?.get(offerKey(o.price)) === true);
+  return shipsOK.filter((o, i) => i < 10 || !o.intl);
 }
 
 // ---------------------------------------------------------------------------
@@ -296,6 +343,8 @@ export interface PgPageProbe {
    * (anonymous) render has 0. Confirmed empirically 2026-07-14.
    */
   navCount?: number;
+  /** Raw per-listing stock offers with seller (Tier-1 intl set-arb); null if no quad row. */
+  stockOffersRaw?: { newC: RawStockOffer[]; usedC: RawStockOffer[] } | null;
 }
 
 export function classifyPgPage(p: PgPageProbe): PgPageKind {
@@ -367,6 +416,31 @@ export const PG_EXTRACT_JS = `(function(){
     var c = quadRow.children;
     quads = { soldNew: parseCell(c[0]), soldUsed: parseCell(c[1]), stockNew: parseCell(c[2]), stockUsed: parseCell(c[3]) };
   }
+  // Per-listing STOCK offers with seller identity (Tier-1 intl set-arb, 2026-07-15). Each
+  // stock listing row carries the seller store link+name in its first cell:
+  //   <a href="/store.asp?sID=NNN..."><img alt="Store: NAME" ...></a>
+  // Returns [qty, priceGbp, converted(intl), storeId, storeName] per listing; Node-side
+  // filters to cheapest-15 + all-UK and stores it (sets only).
+  function parseStockOffers(cell) {
+    var out = [];
+    if (!cell) return out;
+    var rows = Array.from(cell.querySelectorAll('tr'));
+    for (var i = 0; i < rows.length; i++) {
+      var cells = rows[i].children;
+      if (cells.length !== 3) continue;
+      var link = cells[0].querySelector('a[href*="store.asp"]');
+      if (!link) continue;
+      var qty = parseInt((cells[1].textContent||'').replace(/[,\\u00a0]/g,'').trim(), 10);
+      var m = (cells[2].textContent||'').replace(/\\u00a0/g,' ').trim().match(priceRe);
+      if (!m || !(qty > 0)) continue;
+      var sidM = (link.getAttribute('href')||'').match(/sID=(\\d+)/);
+      var img = link.querySelector('img');
+      var nameM = img && img.getAttribute('alt') ? img.getAttribute('alt').replace(/^Store:\\s*/, '') : null;
+      out.push([qty, parseFloat(m[3].replace(/,/g,'')), !!m[1], sidM ? parseInt(sidM[1],10) : null, nameM]);
+    }
+    return out;
+  }
+  var stockOffersRaw = quadRow ? { newC: parseStockOffers(quadRow.children[2]), usedC: parseStockOffers(quadRow.children[3]) } : null;
   return JSON.stringify({
     url: location.href,
     title: document.title,
@@ -375,6 +449,7 @@ export const PG_EXTRACT_JS = `(function(){
     hasQuadrants: !!quads,
     foreignNativeSeen: foreignNative,
     navCount: document.querySelectorAll('nav').length,
+    stockOffersRaw: stockOffersRaw,
     quads: quads
   });
 })()`;
@@ -530,11 +605,19 @@ export class PgScraper {
     }
 
     const quads = page.quads!;
+    // Tier-1 intl set-arb: per-listing seller-aware offers for SETS only (parts×colour
+    // would bloat the cache 100k-fold and have no Amazon-flip use). All listings kept here;
+    // persist/caller reduces to cheapest-10-that-ship + all-UK.
+    const stockListings =
+      item.itemType === 'S' && page.stockOffersRaw
+        ? { new: mapStockListings(page.stockOffersRaw.newC), used: mapStockListings(page.stockOffersRaw.usedC) }
+        : undefined;
     return {
       item,
       itemName: parseItemNameFromTitle(page.title),
       uk: computeSideStats(quads, true),
       world: computeSideStats(quads, false),
+      stockListings,
       finalUrl: page.url,
       scrapedAt: new Date().toISOString(),
     };
