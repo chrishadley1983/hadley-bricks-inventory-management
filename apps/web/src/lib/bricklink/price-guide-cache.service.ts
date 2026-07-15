@@ -16,6 +16,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   recentMonthsQty,
+  reduceStockOffers,
   type PgItemRef,
   type PgItemType,
   type PgScrapeResult,
@@ -46,6 +47,8 @@ export interface PgCacheRow {
   uk_stock_min_used: number | null;
   uk_detail: unknown;
   world_detail: unknown;
+  /** SETS only: cheapest-15 + all-UK current listings with seller (Tier-1 intl set-arb). */
+  stock_offers?: unknown;
   parse_version: number;
   /** Lane provenance: 'catalogpg' (page scrape) | 'api-livecheck' (BL store API). */
   source: string;
@@ -104,6 +107,18 @@ export function toPgCacheRow(r: PgScrapeResult): PgCacheRow {
       stockNew: { lots: world.stockNew.lots, qty: world.stockNew.qty, avg: world.stockNew.avg, hist: world.stockNew.hist },
       stockUsed: { lots: world.stockUsed.lots, qty: world.stockUsed.qty, avg: world.stockUsed.avg, hist: world.stockUsed.hist },
     },
+    // Tier-1 intl set-arb offers (sets only). Use the caller's ships-enriched offers if
+    // present; else derive a UK-only reduction from the page listings (international can't
+    // be ships-confirmed without the API). Omit the key entirely when absent so a partial
+    // API-lane upsert never nulls a page-lane value.
+    ...((): { stock_offers?: unknown } => {
+      const offers =
+        r.stockOffers ??
+        (r.stockListings
+          ? { new: reduceStockOffers(r.stockListings.new), used: reduceStockOffers(r.stockListings.used) }
+          : undefined);
+      return offers ? { stock_offers: offers } : {};
+    })(),
     parse_version: PG_PARSE_VERSION,
     // Provenance from the result itself: the API capture path stamps finalUrl='bl_api'
     // (see fromBlApi); everything else is a real catalogPG page scrape.
