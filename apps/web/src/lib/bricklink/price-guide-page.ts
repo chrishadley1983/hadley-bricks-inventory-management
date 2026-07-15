@@ -94,7 +94,7 @@ export interface PgStockOffer {
   storeName: string | null;
 }
 
-/** Per-condition stored offers: the cheapest 15 listings + ALL UK listings (Chris rule). */
+/** Per-condition stored offers: the cheapest 10 listings + ALL UK listings (Chris rule). */
 export interface PgStockOffers {
   new: PgStockOffer[];
   used: PgStockOffer[];
@@ -132,14 +132,26 @@ export function mapStockListings(raw: RawStockOffer[] | undefined): PgStockOffer
 /** Price key for matching page offers to API `shipping_available` (2dp GBP). */
 export const offerKey = (price: number): string => price.toFixed(2);
 
+/** Ships lookup with ±0.01 tolerance: the page and API GBP-convert the seller's native
+ * price independently, so their 2dp values can differ by a penny of FX rounding. Try the
+ * exact key and both neighbours so a genuinely-shipping intl offer isn't dropped. */
+function shipsToMe(price: number, shipsMap?: Map<string, boolean>): boolean {
+  if (!shipsMap) return false;
+  return shipsMap.get(offerKey(price)) === true
+    || shipsMap.get(offerKey(price + 0.01)) === true
+    || shipsMap.get(offerKey(price - 0.01)) === true;
+}
+
 /**
  * Reduce listings to the stored set: cheapest 10 THAT SHIP TO ME + all remaining UK sellers.
  * "Ships to me" = UK (native GBP, always) OR — for international — confirmed by the API
- * shipsMap (price 2dp → shipping_available). Without a shipsMap, international can't be
- * confirmed and is dropped (UK-only reduction).
+ * shipsMap. Without a shipsMap, international can't be confirmed and is dropped (UK-only
+ * reduction). `listings` MUST be price-sorted ascending (mapStockListings guarantees this)
+ * for the cheapest-10 semantics.
  */
 export function reduceStockOffers(listings: PgStockOffer[], shipsMap?: Map<string, boolean>): PgStockOffer[] {
-  const shipsOK = listings.filter((o) => !o.intl || shipsMap?.get(offerKey(o.price)) === true);
+  const sorted = [...listings].sort((a, b) => a.price - b.price); // defensive: guarantee order
+  const shipsOK = sorted.filter((o) => !o.intl || shipsToMe(o.price, shipsMap));
   return shipsOK.filter((o, i) => i < 10 || !o.intl);
 }
 
@@ -420,7 +432,7 @@ export const PG_EXTRACT_JS = `(function(){
   // stock listing row carries the seller store link+name in its first cell:
   //   <a href="/store.asp?sID=NNN..."><img alt="Store: NAME" ...></a>
   // Returns [qty, priceGbp, converted(intl), storeId, storeName] per listing; Node-side
-  // filters to cheapest-15 + all-UK and stores it (sets only).
+  // filters to cheapest-10 + all-UK and stores it (sets only).
   function parseStockOffers(cell) {
     var out = [];
     if (!cell) return out;

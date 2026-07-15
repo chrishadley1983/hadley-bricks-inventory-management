@@ -62,7 +62,7 @@ const FLUSH_AT = 25;
 // Ships-to-me API budget (Tier-1 intl set-arb): max API CALLS this run for enriching set
 // offers with shipping_available (2 calls/set). Default 300 keeps the 1k test inside the
 // shared BL quota; --no-ships disables entirely (page-only, UK offers).
-const SHIPS_BUDGET = argv['no-ships'] ? 0 : parseInt(argv['ships-budget']?.[0] ?? '300', 10);
+const SHIPS_BUDGET = argv['no-ships'] ? 0 : (Number.isFinite(parseInt(argv['ships-budget']?.[0] ?? '', 10)) ? parseInt(argv['ships-budget'][0], 10) : 300);
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
