@@ -47,7 +47,7 @@ export interface PgCacheRow {
   uk_stock_min_used: number | null;
   uk_detail: unknown;
   world_detail: unknown;
-  /** SETS only: cheapest-15 + all-UK current listings with seller (Tier-1 intl set-arb). */
+  /** SETS only: cheapest-10 + all-UK current listings with seller (Tier-1 intl set-arb). */
   stock_offers?: unknown;
   parse_version: number;
   /** Lane provenance: 'catalogpg' (page scrape) | 'api-livecheck' (BL store API). */

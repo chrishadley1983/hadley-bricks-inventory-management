@@ -40,14 +40,11 @@ import {
   PgNotFoundError,
   PgNoDataError,
   isPgCdpReachable,
-  reduceStockOffers,
   type PgItemRef,
   type PgItemType,
   type PgScrapeResult,
 } from '../../src/lib/bricklink/price-guide-page';
 import { PriceGuideCacheService } from '../../src/lib/bricklink/price-guide-cache.service';
-import { fetchSetShipsMap } from '../../src/lib/bricklink/set-ships';
-import { createScriptBlContext } from '../_bl-client';
 
 const argv = process.argv.slice(2).reduce<Record<string, string[]>>((acc, a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -59,10 +56,9 @@ const CDP_PORT = parseInt(argv['cdp-port']?.[0] ?? '9225', 10);
 const NAV_DELAY_MS = Math.max(3000, parseInt(argv['nav-delay-ms']?.[0] ?? '4500', 10));
 const LIMIT = parseInt(argv['limit']?.[0] ?? '0', 10);
 const FLUSH_AT = 25;
-// Ships-to-me API budget (Tier-1 intl set-arb): max API CALLS this run for enriching set
-// offers with shipping_available (2 calls/set). Default 300 keeps the 1k test inside the
-// shared BL quota; --no-ships disables entirely (page-only, UK offers).
-const SHIPS_BUDGET = argv['no-ships'] ? 0 : (Number.isFinite(parseInt(argv['ships-budget']?.[0] ?? '', 10)) ? parseInt(argv['ships-budget'][0], 10) : 300);
+// Ships-to-me + seller country now come FREE from the page (box16Y/N icon + country flag,
+// since domham91 set ship-to=UK and enabled the flag). The old API ships-enrichment lane is
+// retired — no BL quota spent on set offers any more.
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -110,10 +106,8 @@ async function main(): Promise<void> {
   if (!supabaseUrl || !supabaseKey) { console.error('Missing Supabase env (.env.local)'); process.exit(1); }
   const supabase = createClient(supabaseUrl, supabaseKey);
   const cacheService = new PriceGuideCacheService(supabase);
-  // BL API client for ships-to-me enrichment (sets only). Null when disabled.
-  const bl = SHIPS_BUDGET > 0 ? createScriptBlContext('pg-page-sweep-ships') : null;
 
-  console.log(`[pg-page-sweep] ${tuples.length} tuple(s), cdpPort=${CDP_PORT}, navDelay=${NAV_DELAY_MS}ms, shipsBudget=${SHIPS_BUDGET}`);
+  console.log(`[pg-page-sweep] ${tuples.length} tuple(s), cdpPort=${CDP_PORT}, navDelay=${NAV_DELAY_MS}ms`);
 
   const scraper = new PgScraper({ cdpPort: CDP_PORT });
   await scraper.open();
@@ -121,7 +115,6 @@ async function main(): Promise<void> {
   const results: PgScrapeResult[] = [];
   const okRefs: PgItemRef[] = [];
   let ok = 0, noData = 0, notFound = 0, failed = 0, reestablishes = 0;
-  let shipsSpent = 0, shipsEnriched = 0;
 
   const flush = async () => {
     if (!results.length) return;
@@ -145,25 +138,8 @@ async function main(): Promise<void> {
       for (;;) {
         try {
           const result = await scraper.scrape(item);
-          // Ships-to-me enrichment (sets with cheap international supply only). UK listings
-          // always ship, so we only spend the API when the cheapest ~15 include an intl
-          // seller — and only up to the run's --ships-budget cap.
-          if (
-            bl && result.stockListings && shipsSpent < SHIPS_BUDGET &&
-            [...result.stockListings.new, ...result.stockListings.used].slice(0, 30).some((o) => o.intl)
-          ) {
-            try {
-              const shipsMap = await fetchSetShipsMap(bl.bl, item.itemNo);
-              result.stockOffers = {
-                new: reduceStockOffers(result.stockListings.new, shipsMap),
-                used: reduceStockOffers(result.stockListings.used, shipsMap),
-              };
-              shipsSpent += 2;
-              shipsEnriched++;
-            } catch (e) {
-              console.warn(`  ships enrich failed for ${label}: ${(e as Error).message}`);
-            }
-          }
+          // Offers (incl. ships-to-me + country) come straight off the page now; toPgCacheRow
+          // reduces result.stockListings to the stored cheapest-10-that-ship + all-UK.
           results.push(result);
           okRefs.push(item);
           ok++;
@@ -202,7 +178,7 @@ async function main(): Promise<void> {
     await scraper.close();
   }
 
-  console.log(`[pg-page-sweep] done: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed of ${tuples.length}; ships-enriched ${shipsEnriched} set(s) (${shipsSpent} API calls)`);
+  console.log(`[pg-page-sweep] done: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed of ${tuples.length}`);
   process.exitCode = failed > tuples.length / 2 ? 1 : 0;
 }
 

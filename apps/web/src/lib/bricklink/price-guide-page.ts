@@ -92,6 +92,12 @@ export interface PgStockOffer {
   intl: boolean; // tilde on the page = converted/international seller (native GBP = UK)
   storeId: number | null;
   storeName: string | null;
+  /** ISO-2 seller country from the page flag (e.g. "HK", "GB"). Needs domham91's
+   * "show country flag" account setting; null on pre-setting rows. */
+  cc: string | null;
+  /** Ships to me (UK): page store icon box16Y=true / box16N=false. Needs domham91's
+   * ship-to country set to UK; null when the page can't say (no icon / setting off). */
+  ships: boolean | null;
 }
 
 /** Per-condition stored offers: the cheapest 10 listings + ALL UK listings (Chris rule). */
@@ -117,41 +123,32 @@ export interface PgScrapeResult {
   scrapedAt: string;
 }
 
-/** Raw stock-offer tuple from PG_EXTRACT_JS: [qty, priceGbp, intl, storeId, storeName]. */
-type RawStockOffer = [number, number, boolean, number | null, string | null];
+/** Raw stock-offer tuple from PG_EXTRACT_JS:
+ * [qty, priceGbp, intl, storeId, storeName, countryCode, shipsToMe]. */
+type RawStockOffer = [number, number, boolean, number | null, string | null, string | null, boolean | null];
 
 /** Map + price-sort a condition's raw listings (no filtering). */
 export function mapStockListings(raw: RawStockOffer[] | undefined): PgStockOffer[] {
   if (!raw || raw.length === 0) return [];
   return raw
     .filter((r) => Number.isFinite(r[1]) && r[1] > 0 && Number.isFinite(r[0]) && r[0] > 0)
-    .map((r): PgStockOffer => ({ price: r[1], qty: r[0], intl: r[2], storeId: r[3], storeName: r[4] }))
+    .map((r): PgStockOffer => ({
+      price: r[1], qty: r[0], intl: r[2], storeId: r[3], storeName: r[4],
+      cc: r[5] ?? null, ships: r[6] ?? null,
+    }))
     .sort((a, b) => a.price - b.price);
-}
-
-/** Price key for matching page offers to API `shipping_available` (2dp GBP). */
-export const offerKey = (price: number): string => price.toFixed(2);
-
-/** Ships lookup with ±0.01 tolerance: the page and API GBP-convert the seller's native
- * price independently, so their 2dp values can differ by a penny of FX rounding. Try the
- * exact key and both neighbours so a genuinely-shipping intl offer isn't dropped. */
-function shipsToMe(price: number, shipsMap?: Map<string, boolean>): boolean {
-  if (!shipsMap) return false;
-  return shipsMap.get(offerKey(price)) === true
-    || shipsMap.get(offerKey(price + 0.01)) === true
-    || shipsMap.get(offerKey(price - 0.01)) === true;
 }
 
 /**
  * Reduce listings to the stored set: cheapest 10 THAT SHIP TO ME + all remaining UK sellers.
- * "Ships to me" = UK (native GBP, always) OR — for international — confirmed by the API
- * shipsMap. Without a shipsMap, international can't be confirmed and is dropped (UK-only
- * reduction). `listings` MUST be price-sorted ascending (mapStockListings guarantees this)
- * for the cheapest-10 semantics.
+ * "Ships to me" now comes straight from the page (box16Y/N icon, since domham91's ship-to
+ * country is set to UK): UK sellers (native GBP) always ship; international ships only when
+ * `o.ships === true`. `listings` MUST be price-sorted ascending (mapStockListings
+ * guarantees this) for the cheapest-10 semantics.
  */
-export function reduceStockOffers(listings: PgStockOffer[], shipsMap?: Map<string, boolean>): PgStockOffer[] {
+export function reduceStockOffers(listings: PgStockOffer[]): PgStockOffer[] {
   const sorted = [...listings].sort((a, b) => a.price - b.price); // defensive: guarantee order
-  const shipsOK = sorted.filter((o) => !o.intl || shipsToMe(o.price, shipsMap));
+  const shipsOK = sorted.filter((o) => !o.intl || o.ships === true);
   return shipsOK.filter((o, i) => i < 10 || !o.intl);
 }
 
@@ -404,6 +401,10 @@ export const PG_EXTRACT_JS = `(function(){
     }) || null;
   }
   var foreignNative = false;
+  // Robust to BOTH row shapes: sold rows are 3-cell [spacer, qty, price]; current-listing
+  // stock rows became 4-cell [flag+ships+store, qty, spacer, price] once domham91 enabled
+  // the "show country flag" account setting (2026-07-15). qty is always cells[1]; price is
+  // the LAST cell matching priceRe. Aggregate rows (Min/Avg/Max) have no integer qty → skip.
   function parseCell(cell) {
     var out = [];
     if (!cell) return out;
@@ -413,10 +414,15 @@ export const PG_EXTRACT_JS = `(function(){
       var cells = rows[i].children;
       var txt = (rows[i].textContent||'').replace(/\\u00a0/g,' ').replace(/\\s+/g,' ').trim();
       if (monthRe.test(txt)) { currentMonth = txt; continue; }
-      if (cells.length !== 3) continue;
-      var qty = parseInt((cells[1].textContent||'').replace(/[,\\u00a0]/g,'').trim(), 10);
-      var m = (cells[2].textContent||'').replace(/\\u00a0/g,' ').trim().match(priceRe);
-      if (!m || !(qty > 0)) continue;
+      if (cells.length < 3) continue;
+      var qty = cells[1] ? parseInt((cells[1].textContent||'').replace(/[,\\u00a0]/g,'').trim(), 10) : NaN;
+      if (!(qty > 0)) continue;
+      var m = null;
+      for (var j = cells.length - 1; j >= 2; j--) {
+        m = (cells[j].textContent||'').replace(/\\u00a0/g,' ').trim().match(priceRe);
+        if (m) break;
+      }
+      if (!m) continue;
       var converted = !!m[1];
       if (!converted && m[2] !== 'GBP') foreignNative = true;
       out.push([currentMonth, qty, parseFloat(m[3].replace(/,/g,'')), converted]);
@@ -428,27 +434,40 @@ export const PG_EXTRACT_JS = `(function(){
     var c = quadRow.children;
     quads = { soldNew: parseCell(c[0]), soldUsed: parseCell(c[1]), stockNew: parseCell(c[2]), stockUsed: parseCell(c[3]) };
   }
-  // Per-listing STOCK offers with seller identity (Tier-1 intl set-arb, 2026-07-15). Each
-  // stock listing row carries the seller store link+name in its first cell:
-  //   <a href="/store.asp?sID=NNN..."><img alt="Store: NAME" ...></a>
-  // Returns [qty, priceGbp, converted(intl), storeId, storeName] per listing; Node-side
-  // filters to cheapest-10 + all-UK and stores it (sets only).
+  // Per-listing STOCK offers with seller identity + country + ships-to-me (Tier-1 intl
+  // set-arb, 2026-07-15). Since domham91 enabled the "show country flag" account setting,
+  // each current-listing row is 4-cell and its first cell carries, in order:
+  //   <img src="/images/flagsS/HK.gif" alt="Hong Kong SAR China">   ← seller country
+  //   <a href="/store.asp?sID=NNN..."><img src="/images/box16Y.png" alt="Store: NAME"></a>
+  // box16Y = ships to me (UK), box16N = does not — the icon only differentiates because the
+  // account has a ship-to country set. qty=cells[1], price=last priceRe cell (cells[3]).
+  // Returns [qty, priceGbp, intl, storeId, storeName, countryCode, shipsToMe] per listing.
   function parseStockOffers(cell) {
     var out = [];
     if (!cell) return out;
     var rows = Array.from(cell.querySelectorAll('tr'));
     for (var i = 0; i < rows.length; i++) {
       var cells = rows[i].children;
-      if (cells.length !== 3) continue;
+      if (cells.length < 3) continue;
       var link = cells[0].querySelector('a[href*="store.asp"]');
       if (!link) continue;
-      var qty = parseInt((cells[1].textContent||'').replace(/[,\\u00a0]/g,'').trim(), 10);
-      var m = (cells[2].textContent||'').replace(/\\u00a0/g,' ').trim().match(priceRe);
-      if (!m || !(qty > 0)) continue;
+      var qty = cells[1] ? parseInt((cells[1].textContent||'').replace(/[,\\u00a0]/g,'').trim(), 10) : NaN;
+      if (!(qty > 0)) continue;
+      var m = null;
+      for (var j = cells.length - 1; j >= 2; j--) {
+        m = (cells[j].textContent||'').replace(/\\u00a0/g,' ').trim().match(priceRe);
+        if (m) break;
+      }
+      if (!m) continue;
       var sidM = (link.getAttribute('href')||'').match(/sID=(\\d+)/);
-      var img = link.querySelector('img');
-      var nameM = img && img.getAttribute('alt') ? img.getAttribute('alt').replace(/^Store:\\s*/, '') : null;
-      out.push([qty, parseFloat(m[3].replace(/,/g,'')), !!m[1], sidM ? parseInt(sidM[1],10) : null, nameM]);
+      var simg = link.querySelector('img');
+      var nameM = simg && simg.getAttribute('alt') ? simg.getAttribute('alt').replace(/^Store:\\s*/, '') : null;
+      var flag = cells[0].querySelector('img[src*="flagsS/"]');
+      var cc = null;
+      if (flag) { var fm = (flag.getAttribute('src')||'').match(/flagsS\\/([A-Za-z]{2})[.-]/); if (fm) cc = fm[1].toUpperCase(); }
+      var box = cells[0].querySelector('img[src*="box16"]');
+      var ships = box ? /box16Y/i.test(box.getAttribute('src')||'') : null;
+      out.push([qty, parseFloat(m[3].replace(/,/g,'')), !!m[1], sidM ? parseInt(sidM[1],10) : null, nameM, cc, ships]);
     }
     return out;
   }
