@@ -155,6 +155,9 @@ export interface PgDigestCoverageHealth {
   /** Active-tier tuples whose next_due_at has already passed. */
   pastDueCount: number;
   laneTelemetry: PgDigestLaneTelemetry[];
+  /** Queue growth over the last 7 days, split by source — watch this taper toward zero
+   * once the catalogue is fully enrolled (Chris 2026-07-15). */
+  growth7d: { total: number; storeDiscovered: number; newRelease: number; backfill: number };
 }
 
 /** A markdown report's top-N lines for one section, carried into the digest verbatim. */
@@ -888,6 +891,7 @@ export class DiscordService {
       '',
       '**🩺 Coverage & freshness**',
       `L1 total: **${coverage.l1Total.toLocaleString()}** · Active tier: **${coverage.activeTierCount.toLocaleString()}** · within 28d cycle: **${coverage.activeWithin28dPct.toFixed(1)}%** · past due: **${coverage.pastDueCount.toLocaleString()}**`,
+      `Queue grew **+${coverage.growth7d.total.toLocaleString()}** (7d): ${coverage.growth7d.storeDiscovered.toLocaleString()} store-discovered · ${coverage.growth7d.newRelease.toLocaleString()} new-release · ${coverage.growth7d.backfill.toLocaleString()} backfill`,
     );
     if (coverage.laneTelemetry.length > 0) {
       sections.push(
