@@ -23,6 +23,9 @@
  *   --cdp-port=<n>              Chrome CDP port (default 9225).
  *   --nav-delay-ms=<n>          Delay between page loads (default 4500 + jitter).
  *   --limit=<n>                 Stop after n tuples.
+ *   --max-minutes=<n>           Wall-clock safety cap: stop at the next item boundary once n
+ *                               minutes elapse (after flushing). Use for big sweeps so they
+ *                               free :9225 before the nightly PG-Refresh-Cycle (00:05 local).
  */
 
 import * as path from 'path';
@@ -56,6 +59,11 @@ const CDP_PORT = parseInt(argv['cdp-port']?.[0] ?? '9225', 10);
 const NAV_DELAY_MS = Math.max(3000, parseInt(argv['nav-delay-ms']?.[0] ?? '4500', 10));
 const LIMIT = parseInt(argv['limit']?.[0] ?? '0', 10);
 const FLUSH_AT = 25;
+// Wall-clock safety cap (minutes). A long ad-hoc sweep shares BL Chrome :9225 with the
+// nightly HadleyBricks-PG-Refresh-Cycle (daily 00:05 local). Pass --max-minutes so a big
+// run self-terminates (at an item boundary, after flushing) before the nightly lane starts,
+// so it can never collide with / block the parts refresh. 0 = no cap.
+const MAX_MINUTES = Math.max(0, parseInt(argv['max-minutes']?.[0] ?? '0', 10) || 0);
 // Ships-to-me + seller country now come FREE from the page (box16Y/N icon + country flag,
 // since domham91 set ship-to=UK and enabled the flag). The old API ships-enrichment lane is
 // retired — no BL quota spent on set offers any more.
@@ -115,6 +123,8 @@ async function main(): Promise<void> {
   const results: PgScrapeResult[] = [];
   const okRefs: PgItemRef[] = [];
   let ok = 0, noData = 0, notFound = 0, failed = 0, reestablishes = 0;
+  const startMs = Date.now();
+  let stoppedEarly = false;
 
   const flush = async () => {
     if (!results.length) return;
@@ -131,6 +141,11 @@ async function main(): Promise<void> {
 
   try {
     for (let i = 0; i < tuples.length; i++) {
+      if (MAX_MINUTES && (Date.now() - startMs) / 60000 >= MAX_MINUTES) {
+        stoppedEarly = true;
+        console.log(`[pg-page-sweep] --max-minutes=${MAX_MINUTES} reached — stopping at ${i}/${tuples.length} (${ok} ok) to keep :${CDP_PORT} clear for the nightly lane`);
+        break;
+      }
       const item = tuples[i];
       const label = `${item.itemType} ${item.itemNo}${item.itemType === 'P' ? ` c${item.colourId}` : ''}`;
       if (i > 0) await sleep(NAV_DELAY_MS + Math.floor(Math.random() * 1500));
@@ -178,7 +193,7 @@ async function main(): Promise<void> {
     await scraper.close();
   }
 
-  console.log(`[pg-page-sweep] done: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed of ${tuples.length}`);
+  console.log(`[pg-page-sweep] ${stoppedEarly ? 'STOPPED EARLY' : 'done'}: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed of ${tuples.length} (${((Date.now() - startMs) / 60000).toFixed(1)} min)`);
   process.exitCode = failed > tuples.length / 2 ? 1 : 0;
 }
 
