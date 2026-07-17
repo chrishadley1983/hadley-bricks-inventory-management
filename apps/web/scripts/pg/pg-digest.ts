@@ -186,18 +186,20 @@ function summariseFirstBlockTrend(readings: number[]): string {
  * store-discovered = store-assessment enqueue (rank_floor null); new-release =
  * pg-universe catalog-dir active tier; backfill = one-off catalogue front-loads. */
 async function loadQueueGrowth7d(cutoff7dIso: string): Promise<{ total: number; storeDiscovered: number; newRelease: number; backfill: number }> {
-  const count = async (build: (q: ReturnType<typeof supabase.from>) => unknown): Promise<number> => {
-    const base = supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).gte('created_at', cutoff7dIso);
-    const { count: c, error } = (await (build(base) as typeof base)) as { count: number | null; error: { message: string } | null };
+  const makeBase = () =>
+    supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).gte('created_at', cutoff7dIso);
+  type QueueCountQuery = ReturnType<typeof makeBase>;
+  const count = async (build: (q: QueueCountQuery) => QueueCountQuery): Promise<number> => {
+    const { count: c, error } = await build(makeBase());
     if (error) throw new Error(`queue growth count failed: ${error.message}`);
     return c ?? 0;
   };
   // Count only positively-SOURCED growth so the one-off seed (rank_floor null) is
   // excluded as the baseline it is, not miscounted as store-discovery.
   const [storeDiscovered, newRelease, backfill] = await Promise.all([
-    count((q) => (q as ReturnType<typeof supabase.from>).eq('rank_floor', 'store_discovered')),
-    count((q) => (q as ReturnType<typeof supabase.from>).eq('rank_floor', 'new_release')),
-    count((q) => (q as ReturnType<typeof supabase.from>).like('rank_floor', 'catalog_backfill%')),
+    count((q) => q.eq('rank_floor', 'store_discovered')),
+    count((q) => q.eq('rank_floor', 'new_release')),
+    count((q) => q.like('rank_floor', 'catalog_backfill%')),
   ]);
   return { total: storeDiscovered + newRelease + backfill, storeDiscovered, newRelease, backfill };
 }

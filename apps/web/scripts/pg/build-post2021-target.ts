@@ -27,7 +27,7 @@ const EXCLUDE_FRESH_HOURS = parseFloat(argv['exclude-fresh-hours'] ?? '5');
 
 const base = (n: string) => n.split('-')[0];
 
-async function pageAll<T>(q: (from: number, to: number) => Promise<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+async function pageAll<T>(q: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
   const out: T[] = [];
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
