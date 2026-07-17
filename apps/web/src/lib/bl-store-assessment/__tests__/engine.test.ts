@@ -76,8 +76,8 @@ describe('assembleAssessment', () => {
     expect(a.withinMargin.lots).toBe(1);
     const top = a.withinMargin.top[0];
     expect(top.itemNo).toBe('3001');
-    // Bricqer: used STR 2.0 -> ×1.8 on £1.00 = £1.80 list; net = 1.80*0.906 - 0.50 > 0
-    expect(top.ourList).toBeCloseTo(1.80, 2);
+    // Bricqer v4: used STR 2.0 -> ×1.9 on £1.00 = £1.90 list; net = 1.90*0.906 - 0.50 > 0
+    expect(top.ourList).toBeCloseTo(1.9, 2);
     expect(top.netPerUnit!).toBeGreaterThan(1.0);
     expect(top.withinMargin).toBe(true);
   });
@@ -149,8 +149,8 @@ describe('world-fallback benchmark calibration', () => {
   });
 
   it('prices resale off the calibrated benchmark', () => {
-    // used STR 2.0 -> ×1.8 on the uplifted £1.11
-    expect(s.ourList).toBeCloseTo(1.11 * 1.8, 2);
+    // Bricqer v4: used STR 2.0 -> ×1.9 on the uplifted £1.11
+    expect(s.ourList).toBeCloseTo(1.11 * 1.9, 2);
   });
 });
 
