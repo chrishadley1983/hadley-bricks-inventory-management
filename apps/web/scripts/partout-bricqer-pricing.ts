@@ -7,8 +7,8 @@
  *   3. For uncached: ensurePriceGuide (4 BL API calls each — all four quadrants,
  *      captured automatically into the unified cache).
  *   4. Apply the CANONICAL Bricqer formula (src/lib/bricklink/bricqer-pricing.ts,
- *      v3 multipliers + £0.0699 floor):
- *      List price per part = max(0.0699, UK sold avg × multiplier)
+ *      v4 multipliers + £0.0399 floor):
+ *      List price per part = max(0.0399, UK sold avg × multiplier)
  *   5. Sum (list price × qty) across the set.
  *
  * Usage:
@@ -36,7 +36,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const { bl, supabase } = createScriptBlContext('partout-bricqer-pricing-script');
 
-// Canonical Bricqer formula (v3 + 7p floor) imported from bricqer-pricing.ts — never re-inline.
+// Canonical Bricqer formula (v4 + 4p floor) imported from bricqer-pricing.ts — never re-inline.
 
 interface PartLine {
   itemNo: string;

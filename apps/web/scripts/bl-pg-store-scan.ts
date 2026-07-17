@@ -21,7 +21,7 @@
  *   --cdp-port=<n>           Chrome CDP port (default 9225)
  *   --shipping=<gbp>         Inbound postage estimate for allocation (default 3.00)
  *   --min-ask=<gbp>          Economy dial, NOT a visibility filter (default 0). List price is
- *                            bricqerListPrice(soldAvg, cond, str) — the £0.0699 floor already
+ *                            bricqerListPrice(soldAvg, cond, str) — the store floor already
  *                            backstops it, and a cheap ask can be profitable when its UK 6MA
  *                            supports a higher list. Raise this only to skip scrape/cache/score
  *                            work on sub-threshold asks, never to hide otherwise-profitable lots.
@@ -187,7 +187,7 @@ function hasDamageNote(desc: string | null | undefined): boolean {
 }
 
 // Bricqer auto-pricing — canonical implementation imported from
-// src/lib/bricklink/bricqer-pricing.ts (v3, 2026-07-07: U STR>=1.5 → 1.80 + £0.0699 floor).
+// src/lib/bricklink/bricqer-pricing.ts (v4, 2026-07-17: U STR>=1.5 → 1.90 + £0.0399 floor).
 
 // ---------------------------------------------------------------------------
 // Store inventory scrape (paced AJAX via CDP, mirrors bl-basket phase 2)
@@ -823,7 +823,7 @@ function scoreLots(
     const velocityRatio = avgStr > 0 ? str / avgStr : 1;
     const monthlyRate = Math.min(1, Math.max(0.005, PERSONAL_MONTHLY_LOT_RATE * velocityRatio));
 
-    // Gate 2 — floor-viability (Chris 2026-07-08): when the £0.0699 floor, not the
+    // Gate 2 — floor-viability (Chris 2026-07-08): when the store floor, not the
     // market, sets our list price, check whether the market has ever actually supported
     // it. src='uk' lots get an authoritative answer from the L3 max-sold figure; other
     // lots (world-priced at floor) fall back to a soldAvg-vs-floor depth ratio.
@@ -866,7 +866,7 @@ function scoreLots(
       return base;
     }
     if (floorUnviable) {
-      base.rejectReason = 'floor-unviable — UK 6mo max sold price is below the £0.0699 floor; nobody has ever paid our price';
+      base.rejectReason = `floor-unviable — UK 6mo max sold price is below the £${BRICQER_PRICE_FLOOR} floor; nobody has ever paid our price`;
       base.watch = false;
       return base;
     }

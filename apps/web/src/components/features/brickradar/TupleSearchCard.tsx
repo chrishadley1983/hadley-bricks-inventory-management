@@ -36,8 +36,8 @@ export function TupleSearchCard() {
         </CardTitle>
         <CardDescription>
           Look up any (item type, item number, colour) tuple — joins the L1 worldwide summary, L3 UK price-guide
-          detail, and part-out value for a full identity view, including the sold-price histogram against the £0.0699
-          Bricqer floor.
+          detail, and part-out value for a full identity view, including the sold-price histogram against the
+          Bricqer store floor.
         </CardDescription>
       </CardHeader>
       <CardContent>

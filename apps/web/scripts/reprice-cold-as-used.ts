@@ -79,7 +79,7 @@ interface ScrapedItem {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// Canonical Bricqer formula (v3 + 7p floor) — never re-inline; see bricqer-pricing.ts.
+// Canonical Bricqer formula (v4 + 4p floor) — never re-inline; see bricqer-pricing.ts.
 
 function median(xs: number[]): number {
   if (xs.length === 0) return 0;

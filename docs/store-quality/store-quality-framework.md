@@ -139,7 +139,7 @@ COG ≤ 15%) because parts come from cheap job-lots — so the lever is **not** 
 This is where £-per-pick lives. Same weight class as velocity because it's an explicit goal.
 
 - **Avg value per lot** (= list value ÷ lots) — higher is fewer picks per £.
-- **Sub-floor tail share** — % of **lots** priced below the live 7p floor and in the 7–10p band.
+- **Sub-floor tail share** — % of **lots** priced below the live 4p floor (£0.0399, v4 2026-07-17) and in the 4–10p band.
   These are the picks that cost as much effort as a £2 lot for a fraction of the money.
 - **Lots-per-location** — `lots ÷ distinct storage_location`; a picking-density proxy.
 - **Grind-order exposure** — from order history, % of picks consumed by `<£10`, `≥10-lot` orders
@@ -221,7 +221,7 @@ lots named, so it's directly workable.
 | `UNDER-PRICED` | price ÷ 6mo-avg < 0.7, market STR ≥ 0.5 | Nudge up — auto-pricer's low-STR band is underselling a part that moves. |
 | `OVERSTOCK` | days-of-cover > 365 | Stop re-sourcing it; consider bulk-lot/relist; lower priority for shelf space. |
 | `DEAD` | never sold by us + market STR ≤ 0 | Quarantine list — don't re-source; bundle into mixed bulk lots. **Do not mass-cull cheap lots** (kills auto-buy coverage moat — `bl-price-floor` decision). |
-| `LOW-YIELD PICK` | < 10p + MOVER | Combine into multi-qty lots / bulk packs to cut picks-per-order; the 7p floor already lifts these. |
+| `LOW-YIELD PICK` | < 10p + MOVER | Combine into multi-qty lots / bulk packs to cut picks-per-order; the 4p floor already lifts these. |
 | `BLIND-HIGH-VALUE` | NULL STR, high `qty×price` | Top of the §6 enrichment shortlist. |
 | `DEMAND-GAP` | sold ≥ N times in 180d, now 0 stock | Feed the §5 sourcing target list. |
 

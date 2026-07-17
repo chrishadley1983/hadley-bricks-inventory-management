@@ -9,7 +9,8 @@ import { blColour } from '@/lib/bricklink/bl-colours';
 import { itemTypeLabel, bricklinkCatalogUrl } from './types';
 import type { SummaryCacheRow, PriceGuideCacheRow, PovRow } from './types';
 
-const BRICQER_FLOOR = 0.0699;
+import { BRICQER_PRICE_FLOOR as BRICQER_FLOOR } from '@/lib/bricklink/bricqer-pricing';
+
 const FLOOR_LABEL = `Bricqer floor (£${BRICQER_FLOOR.toFixed(4).replace(/0+$/, '')})`;
 
 function QuadrantStat({ label, lots, qty, avg, min, max, str }: {

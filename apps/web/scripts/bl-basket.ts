@@ -352,8 +352,8 @@ function staleScreen(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: nu
 }
 
 // Bricqer auto-pricing — CANONICAL implementation lives in
-// src/lib/bricklink/bricqer-pricing.ts (v3, 2026-07-07: adds U STR>=1.5 → 1.80
-// and the £0.0699 floor). Bricqer disables auto-pricing for items with a comment
+// src/lib/bricklink/bricqer-pricing.ts (v4, 2026-07-17: U STR>=1.5 → 1.90
+// and the £0.0399 floor). Bricqer disables auto-pricing for items with a comment
 // or where definition.lego_type == 'S' (sets); fresh basket inventory has no
 // comment and sets are filtered out of the projection, so neither gate changes
 // the bl-basket output.
