@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assembleAssessment, WORLD_TO_UK_UPLIFT } from '../engine';
+import { assembleAssessment, autoUkGroundedOnly, WORLD_TO_UK_UPLIFT } from '../engine';
 import { pgKey, type PriceGuideView, type SideView } from '../../bricklink/price-guide/read';
 import { DEFAULT_INPUTS, type StoreLot, type AssessmentInputs } from '../types';
 import { normalizeAssessment } from '../normalize';
@@ -337,5 +337,38 @@ describe('overlap tagging vs our own inventory', () => {
     expect(a.overlap.available).toBe(true);
     expect(a.overlap.freshNetShare).toBe(1); // all buyable net is fresh demand
     expect(a.verdict.reasons.some((r) => r.includes('fresh demand'))).toBe(true);
+  });
+});
+
+describe('autoUkGroundedOnly', () => {
+  const ref = (itemNo: string, colourId = 0) =>
+    ({ itemType: 'P' as const, itemNo, colourId, scheme: 'bl' as const });
+
+  function mapWithCoverage(entries: [string, PriceGuideView['coverage']][]): Map<string, PriceGuideView> {
+    return new Map(entries.map(([no, cov]) => [pgKey('P', no, 0), view('P', no, 0, EMPTY, EMPTY, cov)]));
+  }
+
+  it('stays OFF when most tuples only have world-fallback/none placeholders (Backbricks regression)', () => {
+    // readPriceGuide returns an entry for EVERY ref — a bare .has() check sees 100%
+    // "checked" here and wrongly flipped UK-grounded mode on for every store.
+    const refs = [ref('1'), ref('2'), ref('3'), ref('4')];
+    const pgMap = mapWithCoverage([['1', 'uk'], ['2', 'world_fallback'], ['3', 'world_fallback'], ['4', 'none']]);
+    expect(autoUkGroundedOnly(refs, pgMap)).toBe(false);
+  });
+
+  it('switches ON at >=95% genuine UK coverage', () => {
+    const refs = Array.from({ length: 20 }, (_, i) => ref(String(i)));
+    const all: [string, PriceGuideView['coverage']][] = refs.map((r, i) => [r.itemNo, i === 0 ? 'world_fallback' : 'uk']);
+    expect(autoUkGroundedOnly(refs, mapWithCoverage(all))).toBe(true); // 19/20 = 95%
+  });
+
+  it('stays OFF just under the threshold', () => {
+    const refs = Array.from({ length: 20 }, (_, i) => ref(String(i)));
+    const all: [string, PriceGuideView['coverage']][] = refs.map((r, i) => [r.itemNo, i < 2 ? 'none' : 'uk']);
+    expect(autoUkGroundedOnly(refs, mapWithCoverage(all))).toBe(false); // 18/20 = 90%
+  });
+
+  it('is OFF for an empty store', () => {
+    expect(autoUkGroundedOnly([], new Map())).toBe(false);
   });
 });
