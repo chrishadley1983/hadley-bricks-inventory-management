@@ -1,10 +1,11 @@
 import type { PgHist } from './types';
+import { BRICQER_PRICE_FLOOR } from '@/lib/bricklink/bricqer-pricing';
 
 export interface PriceHistogramBucket {
   label: string;
   rangeStart: number;
   qty: number;
-  /** true for the single bucket that contains the Bricqer floor (£0.0699). */
+  /** true for the single bucket that contains the Bricqer store floor. */
   isFloorBucket: boolean;
 }
 
@@ -20,7 +21,7 @@ export interface PriceHistogramResult {
  * ranges for a readable bar chart — "qty per price bucket" is the ask, not one
  * bar per exact observed price (which can run to 150 distinct values).
  */
-export function buildPriceHistogram(hist: PgHist | null | undefined, floor = 0.0699): PriceHistogramResult | null {
+export function buildPriceHistogram(hist: PgHist | null | undefined, floor = BRICQER_PRICE_FLOOR): PriceHistogramResult | null {
   if (!hist) return null;
 
   const entries = Object.entries(hist)

@@ -301,7 +301,7 @@ export function recentMonthsQty(stats: PgQuadrantStats, nMonths: number): number
 
 /**
  * Price-conditional sell-through: share of a quadrant's total qty transacted at price
- * >= `price` — e.g. "what share of UK sold qty cleared our 7p floor", which min/max alone
+ * >= `price` — e.g. "what share of UK sold qty cleared our store floor", which min/max alone
  * cannot answer (they only say whether ANYTHING cleared the floor).
  *
  * The `"other"` bucket (the capped-off illiquid tail — see PgQuadrantStats.hist) has no

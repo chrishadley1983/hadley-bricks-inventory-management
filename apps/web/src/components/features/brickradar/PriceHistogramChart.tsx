@@ -7,7 +7,7 @@ import type { PriceHistogramResult } from './priceHistogram';
 /**
  * "STR at my price" — the centrepiece drill-down visual (spec §7). Sequential
  * magnitude (qty sold) as one hue, one series ("Qty sold" — the title names it,
- * no legend box needed), with the £0.0699 Bricqer store floor as a reference
+ * no legend box needed), with the Bricqer store floor as a reference
  * line so it reads directly as "how much of this tuple's sold volume happened
  * at or above the price I'd actually list at."
  */

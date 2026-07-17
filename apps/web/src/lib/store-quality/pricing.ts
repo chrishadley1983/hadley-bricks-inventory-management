@@ -36,7 +36,7 @@ export function strRatioFromCache(cachedPct: number | null | undefined): number 
 
 /**
  * Project the Bricqer list price for a lot from its 6-month average and STR.
- * Returns null when the average is missing/zero. Applies the 7p floor (v3).
+ * Returns null when the average is missing/zero. Applies the 4p floor (v4).
  */
 export function projectListPrice(
   sixMonthAvg: number | null,
