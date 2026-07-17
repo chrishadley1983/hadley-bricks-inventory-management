@@ -696,6 +696,21 @@ export interface AssessArgs {
   scannedAt?: string;
 }
 
+/**
+ * AUTO lens: once ≥95% of a store's tuples have genuine UK price data (a full lane D
+ * scan is in place), switch to grounded UK-only pricing — world calibration is
+ * triage-of-gaps only (Chris 2026-07-14). Counts coverage==='uk' rows specifically:
+ * readPriceGuide returns an entry for EVERY ref (world_fallback / 'none' placeholders
+ * included), so a bare pgMap.has() is always true and would flip this on for every store.
+ */
+export function autoUkGroundedOnly(refs: ItemRef[], pgMap: Map<string, PriceGuideView>): boolean {
+  if (refs.length === 0) return false;
+  const ukChecked = refs.filter(
+    (r) => pgMap.get(pgKey(r.itemType, r.itemNo, r.colourId))?.coverage === 'uk',
+  ).length;
+  return ukChecked / refs.length >= 0.95;
+}
+
 export async function computeStoreAssessment(supabase: SupabaseClient, args: AssessArgs): Promise<StoreAssessment> {
   const inputs: AssessmentInputs = { ...DEFAULT_INPUTS, ...(args.inputs ?? {}), feeModel: { ...DEFAULT_INPUTS.feeModel, ...(args.inputs?.feeModel ?? {}) } };
 
@@ -721,12 +736,8 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
     readSetsIntel(supabase, refs.filter((r) => r.itemType === 'S' && !isCmf(r.itemNo)).map((r) => r.itemNo)),
   ]);
 
-  // AUTO lens: once ≥95% of this store's tuples have been price-checked (a full scan is
-  // in place), switch to grounded UK-only pricing — world calibration is triage-of-gaps
-  // only (Chris 2026-07-14).
   if (inputs.ukGroundedOnly == null) {
-    const checked = refs.filter((r) => pgMap.has(pgKey(r.itemType, r.itemNo, r.colourId))).length;
-    inputs.ukGroundedOnly = refs.length > 0 && checked / refs.length >= 0.95;
+    inputs.ukGroundedOnly = autoUkGroundedOnly(refs, pgMap);
   }
 
   return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock, setsIntel });
