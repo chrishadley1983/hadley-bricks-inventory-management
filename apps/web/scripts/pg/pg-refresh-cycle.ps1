@@ -46,5 +46,13 @@ $ErrorActionPreference = 'Continue'
 # breaks up the sustained-crawl fingerprint) — revert breather-mins first if blocks rise.
 & npx tsx scripts/pg/pg-refresh-cycle.ts --backoff-mins=5 --breather-mins=5 2>&1 | Tee-Object -FilePath $log -Append
 $code = $LASTEXITCODE
+
+# Post-step (intl-set-arb F3): re-flag arbitrage candidates from tonight's fresh
+# offers. Cache-only (no CDP, no BL calls) — a failure here must not fail the
+# refresh run; it just means candidates lag a night.
+Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) refreshing intl set-arb candidates..." | Tee-Object -FilePath $log -Append
+& npx tsx scripts/intl-arb/refresh-candidates.ts 2>&1 | Tee-Object -FilePath $log -Append
+Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) candidates refresh exit=$LASTEXITCODE" | Tee-Object -FilePath $log -Append
+
 Write-Output "[pg-refresh-cycle.ps1] $(Get-Date -Format o) finished exit=$code" | Tee-Object -FilePath $log -Append
 exit $code
