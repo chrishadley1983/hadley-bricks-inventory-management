@@ -33,6 +33,12 @@ export interface ConsignmentBreakdown {
 export const CONSIGNMENT_FLOOR_GBP = 135;
 
 export function buildConsignment(zone: ZoneCosts, items: ConsignmentItem[]): ConsignmentBreakdown {
+  if (items.length === 0) {
+    return {
+      itemsGbp: 0, totalWeightG: 0, shippingGbp: 0, dutyGbp: 0, vatGbp: 0, handlingGbp: 0,
+      landedGbp: 0, clearsFloor: false, sellNetGbp: 0, netMarginGbp: 0, netMarginPct: null, perItem: [],
+    };
+  }
   const itemsGbp = items.reduce((a, i) => a + i.buyPriceGbp * i.qty, 0);
   const totalWeightG = items.reduce((a, i) => a + i.weightG * i.qty, 0);
   const shipping = zone.zone === 'UK' ? 0 : zone.ship_base_gbp + (totalWeightG / 100) * zone.ship_per_100g_gbp;

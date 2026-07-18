@@ -16,7 +16,7 @@ Extends `collection-spec.md` (data collection, built #602–#609) into the full 
   zone costs × Amazon sell side (Buy Box / Keepa via existing tables, ~17% fees,
   drops90 velocity). Keyed (set, source_zone, **sell_channel**) — 'amazon' now, 'ebay'
   addable without migration. Sell-side valuation behind a `ChannelValuer` interface.
-  Refreshes nightly after the 00:05 lane D run. >£135 intl-only rule enforced.
+  Refreshes nightly after the 00:05 lane D run. ≥£135 intl rule enforced at the CONSIGNMENT level (basket clearsFloor); sub-floor single candidates stay visible with a below_consignment_floor flag because they legitimately ride along inside a qualifying basket.
 - **F4 — Consignment builder.** Candidates grouped by seller; on-demand Tier-2 store
   pull for a flagged seller; consignment basket = Σ items + shared shipping(weight) +
   duty + VAT + one handling fee; basket net margin + per-set breakdown.
