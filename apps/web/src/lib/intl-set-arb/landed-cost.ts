@@ -50,10 +50,17 @@ export interface LandedUnit {
 }
 
 /** Per-unit landed cost under consignment amortisation. Null when weight unknown
- * (shipping unmodellable — never guess). UK zone: item price only. */
+ * (shipping unmodellable — never guess). UK zone: item + domestic postage share —
+ * no duty, no import VAT, no customs handling. */
 export function landedUnitGbp(zone: ZoneCosts, itemGbp: number, weightG: number | null): LandedUnit | null {
   if (zone.zone === 'UK') {
-    return { itemGbp, shippingGbp: 0, dutyGbp: 0, vatGbp: 0, handlingGbp: 0, landedGbp: itemGbp };
+    const marginal = marginalShippingGbp(zone, weightG);
+    if (marginal == null) return null;
+    const shipping = marginal + zone.ship_base_gbp / HANDLING_AMORTISE_UNITS;
+    return {
+      itemGbp, shippingGbp: +shipping.toFixed(2), dutyGbp: 0, vatGbp: 0, handlingGbp: 0,
+      landedGbp: +(itemGbp + shipping).toFixed(2),
+    };
   }
   const marginal = marginalShippingGbp(zone, weightG);
   if (marginal == null) return null;

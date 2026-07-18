@@ -127,15 +127,23 @@ export async function refreshCandidates(supabase: SupabaseClient, opts: { offers
     const news = (o.stock_offers?.new ?? []).filter((x) => x.price > 0);
     if (news.length === 0) continue;
     const ukCheapest = news.filter((x) => !x.intl).reduce<number | null>((m, x) => (m == null || x.price < m ? x.price : m), null);
-    const intlShips = news.filter((x) => x.intl && x.ships);
-    if (intlShips.length === 0) continue;
+    // Buy-side pool: international offers that ship to us, PLUS domestic UK offers
+    // (Chris 2026-07-18: UK re-enters as a first-class source zone — postage-only
+    // landed cost, no import legs; the old page's domestic view folds in here).
+    const ukZone = zones.find((z) => z.zone === 'UK');
+    const buyable = [
+      ...news.filter((x) => x.intl && x.ships),
+      ...news.filter((x) => !x.intl),
+    ];
+    if (buyable.length === 0) continue;
 
     for (const valuer of valuers) {
       const quote = valuer.quote(setNorm);
       if (!quote) { skippedNoSellSide++; continue; }
-      for (const off of intlShips) {
-        const zone = zoneForCountry(off.cc, zones);
-        if (zone.zone === 'UK') continue;
+      for (const off of buyable) {
+        const zone = off.intl ? zoneForCountry(off.cc, zones) : ukZone;
+        if (!zone) continue;
+        if (off.intl && zone.zone === 'UK') continue; // intl offer routed to UK cc = data noise, skip
         if (weightG == null) { skippedNoWeight++; continue; }
         const landed = landedUnitGbp(zone, off.price, weightG);
         if (!landed) continue;
@@ -143,13 +151,14 @@ export async function refreshCandidates(supabase: SupabaseClient, opts: { offers
         if (netMargin < MIN_NET_MARGIN_GBP) continue;
         const flags: Record<string, boolean> = {};
         if (zone.calibrated_at == null) flags.uncalibrated = true;
-        if (off.price < CONSIGNMENT_FLOOR_GBP / 4) flags.below_consignment_floor = true;
+        // £135 border floor is meaningless for domestic buys
+        if (zone.zone !== 'UK' && off.price < CONSIGNMENT_FLOOR_GBP / 4) flags.below_consignment_floor = true;
         rows.push({
           item_no: o.item_no,
           condition: 'N',
           sell_channel: valuer.channel,
           source_zone: zone.zone,
-          source_country: off.cc ?? null,
+          source_country: off.cc ?? (zone.zone === 'UK' ? 'UK' : null),
           source_store_id: off.storeId,
           source_store_name: off.storeName,
           buy_price_gbp: off.price,

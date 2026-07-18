@@ -67,6 +67,7 @@ interface IntlArbResponse {
 }
 
 const ZONE_TINT: Record<string, string> = {
+  UK: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30',
   ASIA: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30',
   EU: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30',
   US_CA: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30',
@@ -301,7 +302,7 @@ export default function IntlSetArbPage() {
             <Ship className="h-6 w-6" /> International Set Arbitrage
           </h1>
           <p className="text-sm text-muted-foreground">
-            BrickLink consignments → Amazon UK. {data?.meta.candidates ?? '…'} candidates across {data?.meta.sellers ?? '…'} sellers
+            BrickLink sourcing → Amazon UK — domestic and import, landed-cost honest. {data?.meta.candidates ?? '…'} candidates across {data?.meta.sellers ?? '…'} sellers
             {data?.meta.lastComputed ? ` · computed ${new Date(data.meta.lastComputed).toLocaleString('en-GB')}` : ''}
           </p>
         </div>
@@ -337,6 +338,7 @@ export default function IntlSetArbPage() {
           <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All zones</SelectItem>
+            <SelectItem value="UK">UK (domestic)</SelectItem>
             <SelectItem value="ASIA">Asia</SelectItem>
             <SelectItem value="EU">EU</SelectItem>
             <SelectItem value="US_CA">US / CA</SelectItem>

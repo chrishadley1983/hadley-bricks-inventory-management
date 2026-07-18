@@ -41,7 +41,9 @@ export function buildConsignment(zone: ZoneCosts, items: ConsignmentItem[]): Con
   }
   const itemsGbp = items.reduce((a, i) => a + i.buyPriceGbp * i.qty, 0);
   const totalWeightG = items.reduce((a, i) => a + i.weightG * i.qty, 0);
-  const shipping = zone.zone === 'UK' ? 0 : zone.ship_base_gbp + (totalWeightG / 100) * zone.ship_per_100g_gbp;
+  // UK = domestic: postage charged once like any consignment, but no duty /
+  // import-VAT / customs handling legs.
+  const shipping = zone.ship_base_gbp + (totalWeightG / 100) * zone.ship_per_100g_gbp;
   const dutiable = itemsGbp + shipping;
   const duty = zone.zone === 'UK' ? 0 : zone.duty_rate * dutiable;
   const vat = zone.zone === 'UK' || zone.vat_recoverable ? 0 : zone.vat_rate * (dutiable + duty);
@@ -69,7 +71,8 @@ export function buildConsignment(zone: ZoneCosts, items: ConsignmentItem[]): Con
     vatGbp: +vat.toFixed(2),
     handlingGbp: +handling.toFixed(2),
     landedGbp: +landed.toFixed(2),
-    clearsFloor: itemsGbp >= CONSIGNMENT_FLOOR_GBP,
+    // The £135 floor is a border-VAT regime concept — domestic baskets have none.
+    clearsFloor: zone.zone === 'UK' ? true : itemsGbp >= CONSIGNMENT_FLOOR_GBP,
     sellNetGbp: +sellNet.toFixed(2),
     netMarginGbp: netMargin,
     netMarginPct: pricedLanded > 0 ? +(netMargin / pricedLanded).toFixed(4) : null,
