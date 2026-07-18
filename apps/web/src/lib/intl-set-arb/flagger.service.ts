@@ -126,7 +126,9 @@ export async function refreshCandidates(supabase: SupabaseClient, opts: { offers
     const weightG = weights.get(setNorm) ?? null;
     const news = (o.stock_offers?.new ?? []).filter((x) => x.price > 0);
     if (news.length === 0) continue;
-    const ukCheapest = news.filter((x) => !x.intl).reduce<number | null>((m, x) => (m == null || x.price < m ? x.price : m), null);
+    const isUkOffer = (x: RawOffer) =>
+      x.cc ? ['UK', 'GB'].includes(x.cc.toUpperCase()) : !x.intl;
+    const ukCheapest = news.filter(isUkOffer).reduce<number | null>((m, x) => (m == null || x.price < m ? x.price : m), null);
     // Buy-side pool: international offers that ship to us, PLUS domestic UK offers
     // (Chris 2026-07-18: UK re-enters as a first-class source zone — postage-only
     // landed cost, no import legs; the old page's domestic view folds in here).
@@ -141,9 +143,14 @@ export async function refreshCandidates(supabase: SupabaseClient, opts: { offers
       const quote = valuer.quote(setNorm);
       if (!quote) { skippedNoSellSide++; continue; }
       for (const off of buyable) {
-        const zone = off.intl ? zoneForCountry(off.cc, zones) : ukZone;
+        // Country flag beats the tilde heuristic: an intl store listing natively in
+        // GBP has no tilde (intl:false) but its cc is still foreign — route by cc
+        // whenever we have one (validation catch 2026-07-18: FunToGet cc=TH,
+        // intl:false — would otherwise be priced without import legs).
+        const zone = off.cc
+          ? zoneForCountry(off.cc, zones)
+          : off.intl ? zoneForCountry(null, zones) : ukZone;
         if (!zone) continue;
-        if (off.intl && zone.zone === 'UK') continue; // intl offer routed to UK cc = data noise, skip
         if (weightG == null) { skippedNoWeight++; continue; }
         const landed = landedUnitGbp(zone, off.price, weightG);
         if (!landed) continue;
