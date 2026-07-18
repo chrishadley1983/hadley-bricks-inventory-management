@@ -1,716 +1,403 @@
 'use client';
 
-import { useState, useCallback, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import dynamic from 'next/dynamic';
-import { AlertCircle, CheckCircle2, Clock, CalendarClock, RefreshCw, Store } from 'lucide-react';
-import { usePerfPage } from '@/hooks/use-perf';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+/**
+ * International Set Arbitrage — consignment-first purchase-decision view
+ * (intl-set-arb F7; replaces the retired BrickLink/eBay/Seeded tabbed page).
+ *
+ * The unit of decision is a per-seller consignment basket, not a lone set:
+ * shipping, duty, VAT and handling are basket-level realities, so the UI leads
+ * with seller manifests and opens into per-set detail. Channel tabs are wired
+ * for expansion — Amazon live now, eBay slot reserved.
+ */
+import { useMemo, useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertTriangle, Anchor, ChevronDown, ChevronRight, ExternalLink,
+  PackageCheck, PackageX, RefreshCw, Scale, Ship, Zap,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
-  ArbitrageFilters,
-  ArbitrageTable,
-  ArbitrageDetailModal,
-  ExcludedAsinsModal,
-} from '@/components/features/arbitrage';
-import { ExcludedBrickLinkStoresModal } from '@/components/features/arbitrage/ExcludedBrickLinkStoresModal';
-import { EbayDetailModal } from '@/components/features/arbitrage/EbayDetailModal';
-import {
-  useArbitrageData,
-  useArbitrageItem,
-  useSyncStatus,
-  useArbitrageSummary,
-  useExcludeAsin,
-  useAmazonInventorySyncWithProgress,
-} from '@/hooks/use-arbitrage';
-import type { SyncProgress } from '@/hooks/use-arbitrage';
-import type {
-  ArbitrageFilterOptions,
-  ArbitrageItem,
-  ArbitrageSortField,
-} from '@/lib/arbitrage/types';
-import {
-  SHOW_FILTER_OPTIONS_WITH_SEEDED,
-  EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED,
-  SORT_OPTIONS,
-  EBAY_SORT_OPTIONS,
-} from '@/lib/arbitrage/types';
-import { useToast } from '@/hooks/use-toast';
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
 
-// Dynamic import for Header to avoid SSR issues
-const Header = dynamic(
-  () => import('@/components/layout').then((mod) => ({ default: mod.Header })),
-  { ssr: false }
-);
+// ---------------------------------------------------------------------------
 
-// Dynamic import for SeededAsinManager
-const SeededAsinManager = dynamic(
-  () =>
-    import('@/components/features/arbitrage').then((mod) => ({
-      default: mod.SeededAsinManager,
-    })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="space-y-6">
-        <div className="grid grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-lg" />
-          ))}
-        </div>
-        <Skeleton className="h-12 rounded-lg" />
-        <Skeleton className="h-96 rounded-lg" />
+interface BasketItem {
+  candidateId: string;
+  itemNo: string;
+  name: string | null;
+  buyGbp: number;
+  landedShareGbp: number;
+  sellGbp: number | null;
+  sellNetGbp: number | null;
+  marginGbp: number | null;
+  drops90: number | null;
+  asin: string | null;
+  ukCheapestGbp: number | null;
+  weightG: number | null;
+  flags: Record<string, boolean>;
+}
+
+interface Basket {
+  storeId: number;
+  storeName: string | null;
+  country: string | null;
+  zone: string;
+  calibrated: boolean;
+  sets: number;
+  velocitySum: number;
+  breakdown: {
+    itemsGbp: number; shippingGbp: number; dutyGbp: number; vatGbp: number;
+    handlingGbp: number; landedGbp: number; sellNetGbp: number;
+    netMarginGbp: number; netMarginPct: number | null; clearsFloor: boolean; totalWeightG: number;
+  };
+  items: BasketItem[];
+}
+
+interface IntlArbResponse {
+  channel: string;
+  baskets: Basket[];
+  meta: { candidates: number; sellers: number; lastComputed: string | null; zones: { zone: string; calibrated: boolean }[] };
+}
+
+const ZONE_TINT: Record<string, string> = {
+  ASIA: 'bg-rose-500/10 text-rose-700 dark:text-rose-300 border-rose-500/30',
+  EU: 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/30',
+  US_CA: 'bg-violet-500/10 text-violet-700 dark:text-violet-300 border-violet-500/30',
+  ROW: 'bg-stone-500/10 text-stone-700 dark:text-stone-300 border-stone-500/30',
+};
+
+function flagEmoji(cc: string | null): string {
+  if (!cc || cc.length !== 2) return '🌐';
+  const base = 0x1f1e6;
+  const a = 'A'.charCodeAt(0);
+  return String.fromCodePoint(base + cc.toUpperCase().charCodeAt(0) - a, base + cc.toUpperCase().charCodeAt(1) - a);
+}
+
+function gbp(v: number | null | undefined, dp = 2): string {
+  if (v == null) return '—';
+  return `£${v.toLocaleString('en-GB', { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+}
+
+/** Stacked landed-cost waterfall: item / shipping / duty / VAT / handling. */
+function CostWaterfall({ b }: { b: Basket['breakdown'] }) {
+  const total = b.landedGbp || 1;
+  const segs = [
+    { v: b.itemsGbp, cls: 'bg-foreground/70', label: 'items' },
+    { v: b.shippingGbp, cls: 'bg-sky-500/80', label: 'shipping' },
+    { v: b.dutyGbp, cls: 'bg-amber-500/80', label: 'duty' },
+    { v: b.vatGbp, cls: 'bg-rose-500/80', label: 'VAT' },
+    { v: b.handlingGbp, cls: 'bg-stone-400/80', label: 'handling' },
+  ];
+  return (
+    <div>
+      <div className="flex h-2 w-full overflow-hidden rounded-full">
+        {segs.map((s) => (
+          <div key={s.label} className={s.cls} style={{ width: `${(100 * s.v) / total}%` }} title={`${s.label} ${gbp(s.v)}`} />
+        ))}
       </div>
-    ),
-  }
-);
-
-type MainTab = 'bricklink' | 'ebay' | 'seeded';
-
-// Inner component that uses useSearchParams
-function ArbitragePageContent() {
-  usePerfPage('UnifiedArbitragePage');
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const { toast } = useToast();
-
-  // Get tab from URL, default to 'bricklink'
-  const activeTab = (searchParams.get('tab') as MainTab) || 'bricklink';
-
-  // Modal states
-  const [selectedAsin, setSelectedAsin] = useState<string | null>(null);
-  const [excludedModalOpen, setExcludedModalOpen] = useState(false);
-  const [excludedStoresModalOpen, setExcludedStoresModalOpen] = useState(false);
-
-  // BrickLink filters (margin-based)
-  const [blFilters, setBlFilters] = useState<ArbitrageFilterOptions>({
-    show: 'all',
-    sortField: 'margin',
-    sortDirection: 'desc',
-    pageSize: 50,
-    page: 1,
-  });
-
-  // eBay filters
-  const [ebayFilters, setEbayFilters] = useState<ArbitrageFilterOptions>({
-    show: 'ebay_opportunities',
-    sortField: 'ebay_margin',
-    sortDirection: 'asc',
-    maxCog: 50,
-    pageSize: 50,
-    page: 1,
-  });
-
-  // Get current filters based on active tab
-  const currentFilters = activeTab === 'bricklink' ? blFilters : ebayFilters;
-
-  // Data hooks
-  const {
-    data: arbitrageData,
-    isLoading: dataLoading,
-    error: dataError,
-  } = useArbitrageData(activeTab !== 'seeded' ? currentFilters : undefined);
-  const { data: selectedItem } = useArbitrageItem(selectedAsin);
-  const { data: syncStatus, isLoading: syncLoading } = useSyncStatus();
-  const { data: summary, isLoading: summaryLoading } = useArbitrageSummary(
-    currentFilters.minMargin ?? 30,
-    currentFilters.maxCog ?? 100
-  );
-
-  // Mutations
-  const excludeMutation = useExcludeAsin();
-
-  // Update URL when tab changes
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      const params = new URLSearchParams(searchParams);
-      params.set('tab', tab);
-      router.push(`/arbitrage?${params.toString()}`);
-    },
-    [searchParams, router]
-  );
-
-  const handleBlFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setBlFilters(newFilters);
-  }, []);
-
-  const handleEbayFiltersChange = useCallback((newFilters: ArbitrageFilterOptions) => {
-    setEbayFilters(newFilters);
-  }, []);
-
-  const handleRowClick = useCallback((item: ArbitrageItem) => {
-    setSelectedAsin(item.asin);
-  }, []);
-
-  // Sort handlers for column header clicks
-  const handleBlSort = useCallback((field: ArbitrageSortField) => {
-    setBlFilters((prev) => ({
-      ...prev,
-      sortField: field,
-      sortDirection: prev.sortField === field && prev.sortDirection === 'asc' ? 'desc' : 'asc',
-      page: 1,
-    }));
-  }, []);
-
-  const handleEbaySort = useCallback((field: ArbitrageSortField) => {
-    setEbayFilters((prev) => ({
-      ...prev,
-      sortField: field,
-      sortDirection: prev.sortField === field && prev.sortDirection === 'asc' ? 'desc' : 'asc',
-      page: 1,
-    }));
-  }, []);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedAsin(null);
-  }, []);
-
-  const handleExclude = useCallback(
-    async (asin: string, reason?: string) => {
-      try {
-        await excludeMutation.mutateAsync({ asin, reason });
-        toast({ title: 'ASIN excluded from tracking' });
-        setSelectedAsin(null);
-      } catch {
-        toast({ title: 'Failed to exclude ASIN', variant: 'destructive' });
-      }
-    },
-    [excludeMutation, toast]
-  );
-
-  // Extract data
-  const items = arbitrageData?.items ?? [];
-  const totalCount = arbitrageData?.totalCount ?? 0;
-  const blOpportunityCount = summary?.opportunities ?? 0;
-  const ebayOpportunityCount = summary?.ebayOpportunities ?? 0;
-
-  // Get page title based on active tab
-  const getPageTitle = () => {
-    switch (activeTab) {
-      case 'bricklink':
-        return 'BrickLink → Amazon Arbitrage';
-      case 'ebay':
-        return 'eBay → Amazon Arbitrage';
-      case 'seeded':
-        return 'Seeded ASIN Discovery';
-      default:
-        return 'Arbitrage Tracker';
-    }
-  };
-
-  return (
-    <>
-      <Header title={getPageTitle()} />
-      <div className="p-6 space-y-6">
-        {/* Main Tabs - BrickLink, eBay, Seeded */}
-        <Tabs value={activeTab} onValueChange={handleTabChange}>
-          <TabsList className="grid w-full max-w-md grid-cols-3">
-            <TabsTrigger value="bricklink" className="flex items-center gap-2">
-              BrickLink
-              {blOpportunityCount > 0 && (
-                <Badge variant="secondary" className="ml-1 font-mono">
-                  {blOpportunityCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="ebay" className="flex items-center gap-2">
-              eBay
-              {ebayOpportunityCount > 0 && (
-                <Badge variant="secondary" className="ml-1 font-mono">
-                  {ebayOpportunityCount}
-                </Badge>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="seeded">Seeded</TabsTrigger>
-          </TabsList>
-
-          {/* BrickLink Tab Content */}
-          <TabsContent value="bricklink" className="mt-6 space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {summaryLoading ? (
-                <>
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                </>
-              ) : (
-                <>
-                  <SummaryCard
-                    label="Total ASINs"
-                    value={summary?.totalItems ?? 0}
-                    description="Tracked + seeded"
-                  />
-                  <SummaryCard
-                    label="Opportunities"
-                    value={blOpportunityCount}
-                    description={`≥${blFilters.minMargin ?? 30}% margin`}
-                    variant="success"
-                  />
-                  <SummaryCard
-                    label="Unmapped"
-                    value={summary?.unmapped ?? 0}
-                    description="Need manual linking"
-                    variant="warning"
-                  />
-                  <SummaryCard
-                    label="Excluded"
-                    value={summary?.excluded ?? 0}
-                    description="Manage excluded"
-                    onClick={() => setExcludedModalOpen(true)}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setExcludedStoresModalOpen(true)}
-                className="gap-1.5"
-              >
-                <Store className="h-3.5 w-3.5" />
-                Excluded Stores
-              </Button>
-            </div>
-
-            {/* Sync Status */}
-            <SyncStatusCard
-              syncStatus={syncStatus?.syncStatus}
-              isLoading={syncLoading}
-              tab="bricklink"
-            />
-
-            {/* Error Alert */}
-            {dataError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading arbitrage data</AlertTitle>
-                <AlertDescription>
-                  {dataError instanceof Error ? dataError.message : 'Failed to load data'}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Filters and Table */}
-            <ArbitrageFilters
-              filters={blFilters}
-              onFiltersChange={handleBlFiltersChange}
-              totalItems={totalCount}
-              opportunities={blOpportunityCount}
-              unmappedCount={summary?.unmapped ?? 0}
-              onOpenExcluded={() => setExcludedModalOpen(true)}
-              showFilterOptions={SHOW_FILTER_OPTIONS_WITH_SEEDED}
-              sortOptions={SORT_OPTIONS}
-              defaultSortField="margin"
-              hasMore={arbitrageData?.hasMore ?? false}
-              seededCount={arbitrageData?.seededCount}
-              inventoryCount={arbitrageData?.inventoryCount}
-            />
-            <ArbitrageTable
-              items={items}
-              isLoading={dataLoading}
-              minMargin={blFilters.minMargin ?? 0}
-              onRowClick={handleRowClick}
-              sortField={blFilters.sortField}
-              sortDirection={blFilters.sortDirection}
-              onSort={handleBlSort}
-            />
-          </TabsContent>
-
-          {/* eBay Tab Content */}
-          <TabsContent value="ebay" className="mt-6 space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {summaryLoading ? (
-                <>
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                  <SummaryCardSkeleton />
-                </>
-              ) : (
-                <>
-                  <SummaryCard
-                    label="Total ASINs"
-                    value={summary?.totalItems ?? 0}
-                    description="Tracked + seeded"
-                  />
-                  <SummaryCard
-                    label="eBay Opportunities"
-                    value={ebayOpportunityCount}
-                    description={`≤${ebayFilters.maxCog ?? 50}% COG (eBay)`}
-                    variant="success"
-                  />
-                  <SummaryCard
-                    label="Unmapped"
-                    value={summary?.unmapped ?? 0}
-                    description="Need manual linking"
-                    variant="warning"
-                  />
-                  <SummaryCard
-                    label="Excluded"
-                    value={summary?.excluded ?? 0}
-                    description="Manage excluded"
-                    onClick={() => setExcludedModalOpen(true)}
-                  />
-                </>
-              )}
-            </div>
-
-            {/* Sync Status */}
-            <SyncStatusCard
-              syncStatus={syncStatus?.syncStatus}
-              isLoading={syncLoading}
-              tab="ebay"
-            />
-
-            {/* Error Alert */}
-            {dataError && (
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error loading arbitrage data</AlertTitle>
-                <AlertDescription>
-                  {dataError instanceof Error ? dataError.message : 'Failed to load data'}
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Filters and Table */}
-            <ArbitrageFilters
-              filters={ebayFilters}
-              onFiltersChange={handleEbayFiltersChange}
-              totalItems={totalCount}
-              opportunities={ebayOpportunityCount}
-              unmappedCount={summary?.unmapped ?? 0}
-              onOpenExcluded={() => setExcludedModalOpen(true)}
-              showFilterOptions={EBAY_SHOW_FILTER_OPTIONS_WITH_SEEDED}
-              sortOptions={EBAY_SORT_OPTIONS}
-              defaultSortField="ebay_margin"
-              hasMore={arbitrageData?.hasMore ?? false}
-              seededCount={arbitrageData?.seededCount}
-              inventoryCount={arbitrageData?.inventoryCount}
-            />
-            <ArbitrageTable
-              items={items}
-              isLoading={dataLoading}
-              minMargin={100 - (ebayFilters.maxCog ?? 50)}
-              onRowClick={handleRowClick}
-              sortField={ebayFilters.sortField}
-              sortDirection={ebayFilters.sortDirection}
-              onSort={handleEbaySort}
-              mode="ebay"
-            />
-          </TabsContent>
-
-          {/* Seeded Tab Content */}
-          <TabsContent value="seeded" className="mt-6">
-            <SeededAsinManager />
-          </TabsContent>
-        </Tabs>
-
-        {/* Detail Modals */}
-        {activeTab === 'ebay' ? (
-          <EbayDetailModal
-            item={selectedItem ?? null}
-            isOpen={!!selectedAsin}
-            onClose={handleCloseDetail}
-            onExclude={handleExclude}
-          />
-        ) : (
-          <ArbitrageDetailModal
-            item={selectedItem ?? null}
-            isOpen={!!selectedAsin}
-            onClose={handleCloseDetail}
-            onExclude={handleExclude}
-          />
-        )}
-
-        {/* Excluded ASINs Modal */}
-        <ExcludedAsinsModal
-          isOpen={excludedModalOpen}
-          onClose={() => setExcludedModalOpen(false)}
-        />
-
-        {/* Excluded BrickLink Stores Modal */}
-        <ExcludedBrickLinkStoresModal
-          isOpen={excludedStoresModalOpen}
-          onClose={() => setExcludedStoresModalOpen(false)}
-        />
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground tabular-nums">
+        {segs.filter((s) => s.v > 0).map((s) => (
+          <span key={s.label} className="whitespace-nowrap">
+            <span className={`mr-1 inline-block h-2 w-2 rounded-sm align-middle ${s.cls}`} />
+            {s.label} {gbp(s.v, 0)}
+          </span>
+        ))}
       </div>
-    </>
-  );
-}
-
-// Main export with Suspense wrapper for useSearchParams
-export default function ArbitragePage() {
-  return (
-    <Suspense fallback={<ArbitragePageSkeleton />}>
-      <ArbitragePageContent />
-    </Suspense>
-  );
-}
-
-// Components
-
-function SummaryCard({
-  label,
-  value,
-  description,
-  variant,
-  onClick,
-}: {
-  label: string;
-  value: number;
-  description: string;
-  variant?: 'default' | 'success' | 'warning';
-  onClick?: () => void;
-}) {
-  const cardClasses = {
-    default: '',
-    success: 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20',
-    warning: '',
-  };
-
-  const valueClasses = {
-    default: '',
-    success: 'text-green-600 dark:text-green-400',
-    warning: 'text-amber-600 dark:text-amber-400',
-  };
-
-  return (
-    <Card className={cardClasses[variant ?? 'default']}>
-      <CardHeader className="pb-2">
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className={`text-2xl ${valueClasses[variant ?? 'default']}`}>
-          {value.toLocaleString()}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {onClick ? (
-          <button onClick={onClick} className="text-xs text-primary hover:underline">
-            {description}
-          </button>
-        ) : (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function SummaryCardSkeleton() {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <Skeleton className="h-4 w-24" />
-        <Skeleton className="h-8 w-16 mt-1" />
-      </CardHeader>
-      <CardContent>
-        <Skeleton className="h-3 w-32" />
-      </CardContent>
-    </Card>
-  );
-}
-
-function SyncStatusCard({
-  syncStatus,
-  isLoading,
-  tab,
-}: {
-  syncStatus:
-    | Record<
-        string,
-        { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null } | null
-      >
-    | undefined;
-  isLoading: boolean;
-  tab: 'bricklink' | 'ebay';
-}) {
-  const { toast } = useToast();
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
-  const amazonInventorySync = useAmazonInventorySyncWithProgress();
-
-  const handleSyncAmazonInventory = useCallback(() => {
-    setIsSyncing(true);
-    setSyncProgress(null);
-
-    amazonInventorySync.mutate(
-      (progress: SyncProgress) => {
-        setSyncProgress(progress);
-      },
-      {
-        onSuccess: () => {
-          toast({
-            title: 'Sync complete',
-            description: 'Amazon inventory has been synced successfully.',
-          });
-          setIsSyncing(false);
-          setSyncProgress(null);
-        },
-        onError: (error) => {
-          toast({
-            title: 'Sync failed',
-            description: error instanceof Error ? error.message : 'Failed to sync Amazon inventory',
-            variant: 'destructive',
-          });
-          setIsSyncing(false);
-          setSyncProgress(null);
-        },
-      }
-    );
-  }, [amazonInventorySync, toast]);
-
-  return (
-    <Card>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-base flex items-center gap-2">
-              <CalendarClock className="h-4 w-4" />
-              Sync Status
-            </CardTitle>
-            <CardDescription>
-              Data synced automatically. Shows actual last run time.
-            </CardDescription>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex gap-4">
-            <Skeleton className="h-10 w-48" />
-            <Skeleton className="h-10 w-48" />
-            <Skeleton className="h-10 w-48" />
-          </div>
-        ) : (
-          <div className="flex flex-wrap gap-4 items-center">
-            <SyncStatusBadge
-              label="Amazon Inventory"
-              syncData={syncStatus?.inventory_asins}
-              showSyncButton
-              isSyncing={isSyncing}
-              syncProgress={syncProgress}
-              onSync={handleSyncAmazonInventory}
-            />
-            <SyncStatusBadge label="Amazon Pricing" syncData={syncStatus?.amazon_pricing} />
-            {tab === 'bricklink' ? (
-              <SyncStatusBadge label="BrickLink" syncData={syncStatus?.bricklink_pricing} />
-            ) : (
-              <SyncStatusBadge label="eBay" syncData={syncStatus?.ebay_pricing} />
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function SyncStatusBadge({
-  label,
-  syncData,
-  showSyncButton,
-  isSyncing,
-  syncProgress,
-  onSync,
-}: {
-  label: string;
-  syncData:
-    | { lastRunAt?: string | null; lastSuccessAt?: string | null; status?: string | null }
-    | null
-    | undefined;
-  showSyncButton?: boolean;
-  isSyncing?: boolean;
-  syncProgress?: SyncProgress | null;
-  onSync?: () => void;
-}) {
-  const lastSync = syncData?.lastRunAt ?? syncData?.lastSuccessAt;
-  const status = syncData?.status;
-
-  const isStale = !lastSync || Date.now() - new Date(lastSync).getTime() > 3 * 24 * 60 * 60 * 1000;
-  const isRecent = lastSync && Date.now() - new Date(lastSync).getTime() < 24 * 60 * 60 * 1000;
-  const isError = status === 'failed';
-
-  const formatRelativeTime = (date: string | null | undefined) => {
-    if (!date) return 'Never synced';
-    const diff = Date.now() - new Date(date).getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(hours / 24);
-
-    if (hours < 1) return 'Just now';
-    if (hours < 24) return `${hours}h ago`;
-    if (days === 1) return 'Yesterday';
-    return `${days} days ago`;
-  };
-
-  const getStalenessColor = () => {
-    if (isError) return 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20';
-    if (isStale)
-      return 'border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20';
-    if (isRecent)
-      return 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20';
-    return '';
-  };
-
-  const getStatusText = () => {
-    if (isSyncing && syncProgress) {
-      return `${syncProgress.percent}%`;
-    }
-    return formatRelativeTime(lastSync);
-  };
-
-  return (
-    <div className={`flex items-center gap-2 border rounded-lg px-3 py-2 ${getStalenessColor()}`}>
-      {isSyncing ? (
-        <RefreshCw className="h-4 w-4 text-blue-500 animate-spin" />
-      ) : isError ? (
-        <AlertCircle className="h-4 w-4 text-destructive" />
-      ) : isStale ? (
-        <Clock className="h-4 w-4 text-amber-500" />
-      ) : (
-        <CheckCircle2 className="h-4 w-4 text-green-500" />
-      )}
-      <div className="flex flex-col">
-        <span className="text-sm font-medium">{label}</span>
-        <span className="text-xs text-muted-foreground">{getStatusText()}</span>
-      </div>
-      {showSyncButton && onSync && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 px-2 ml-1"
-          onClick={onSync}
-          disabled={isSyncing}
-        >
-          <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
-        </Button>
-      )}
     </div>
   );
 }
 
-function ArbitragePageSkeleton() {
+function VelocityBadge({ drops }: { drops: number | null }) {
+  if (drops == null) return <Badge variant="outline" className="text-muted-foreground">no data</Badge>;
+  if (drops === 0) return <Badge variant="outline" className="border-rose-500/40 text-rose-600 dark:text-rose-400">0 sales/90d</Badge>;
+  if (drops >= 20) return <Badge variant="outline" className="border-emerald-500/40 text-emerald-600 dark:text-emerald-400"><Zap className="mr-1 h-3 w-3" />{drops}/90d</Badge>;
+  return <Badge variant="outline">{drops}/90d</Badge>;
+}
+
+function BasketCard({ basket, onStatus }: { basket: Basket; onStatus: (id: string, status: 'excluded' | 'bought') => void }) {
+  const [open, setOpen] = useState(false);
+  const b = basket.breakdown;
+  const liveSets = basket.items.filter((i) => (i.drops90 ?? 0) > 0).length;
   return (
-    <div className="p-6 space-y-6">
-      <Skeleton className="h-10 w-48" />
-      <Skeleton className="h-10 w-96" />
-      <div className="grid grid-cols-4 gap-4">
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
+    <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: b.netMarginGbp >= 200 ? 'rgb(16 185 129)' : b.netMarginGbp >= 75 ? 'rgb(245 158 11)' : 'rgb(120 113 108)' }}>
+      <CardContent className="p-0">
+        <button className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-muted/40" onClick={() => setOpen(!open)}>
+          {open ? <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+          <span className="text-xl leading-none">{flagEmoji(basket.country)}</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="truncate font-semibold">{basket.storeName ?? `store ${basket.storeId}`}</span>
+              <Badge variant="outline" className={ZONE_TINT[basket.zone] ?? ''}>{basket.zone}</Badge>
+              {!basket.calibrated && (
+                <Badge variant="outline" className="border-amber-500/50 text-amber-600 dark:text-amber-400">
+                  <Scale className="mr-1 h-3 w-3" />uncalibrated
+                </Badge>
+              )}
+              {!b.clearsFloor && <Badge variant="outline" className="border-rose-500/40 text-rose-500">under £135 floor</Badge>}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground tabular-nums">
+              {basket.sets} set{basket.sets === 1 ? '' : 's'} · {liveSets} with velocity · {(b.totalWeightG / 1000).toFixed(1)}kg ·
+              {' '}landed {gbp(b.landedGbp, 0)} → sells {gbp(b.sellNetGbp, 0)} net
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="font-mono text-lg font-bold tabular-nums leading-tight">
+              {gbp(b.netMarginGbp, 0)}
+            </div>
+            <div className="text-xs text-muted-foreground tabular-nums">
+              {b.netMarginPct != null ? `${(100 * b.netMarginPct).toFixed(0)}% on landed` : '—'}
+            </div>
+          </div>
+        </button>
+
+        {open && (
+          <div className="border-t bg-muted/20 px-4 py-3">
+            <CostWaterfall b={b} />
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="py-1.5 pr-2 font-medium">Set</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">Buy</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">Landed share</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">Amazon</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">Margin</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">UK alt</th>
+                    <th className="py-1.5 pr-2 font-medium">Velocity</th>
+                    <th className="py-1.5 font-medium" />
+                  </tr>
+                </thead>
+                <tbody className="tabular-nums">
+                  {basket.items.map((i) => (
+                    <tr key={i.candidateId} className="border-b border-border/50 last:border-0">
+                      <td className="py-1.5 pr-2">
+                        <a
+                          href={`https://www.bricklink.com/v2/catalog/catalogitem.page?S=${encodeURIComponent(i.itemNo.includes('-') ? i.itemNo : `${i.itemNo}-1`)}`}
+                          target="_blank" rel="noreferrer"
+                          className="font-medium hover:underline"
+                        >
+                          {i.itemNo}
+                        </a>
+                        <span className="ml-2 hidden text-xs text-muted-foreground md:inline">{(i.name ?? '').slice(0, 44)}</span>
+                      </td>
+                      <td className="py-1.5 pr-2 text-right">{gbp(i.buyGbp)}</td>
+                      <td className="py-1.5 pr-2 text-right">{gbp(i.landedShareGbp)}</td>
+                      <td className="py-1.5 pr-2 text-right">
+                        {i.asin ? (
+                          <a href={`https://www.amazon.co.uk/dp/${i.asin}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline">
+                            {gbp(i.sellGbp)}<ExternalLink className="h-3 w-3 text-muted-foreground" />
+                          </a>
+                        ) : gbp(i.sellGbp)}
+                      </td>
+                      <td className={`py-1.5 pr-2 text-right font-semibold ${(i.marginGbp ?? 0) >= 50 ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{gbp(i.marginGbp)}</td>
+                      <td className="py-1.5 pr-2 text-right text-muted-foreground">{gbp(i.ukCheapestGbp)}</td>
+                      <td className="py-1.5 pr-2"><VelocityBadge drops={i.drops90} /></td>
+                      <td className="py-1.5">
+                        <div className="flex justify-end gap-1">
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" title="Mark bought" onClick={() => onStatus(i.candidateId, 'bought')}>
+                            <PackageCheck className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" title="Exclude" onClick={() => onStatus(i.candidateId, 'excluded')}>
+                            <PackageX className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mt-2 text-xs text-muted-foreground">
+              Store:{' '}
+              <a className="hover:underline" href={`https://store.bricklink.com/${basket.storeId}`} target="_blank" rel="noreferrer">
+                open on BrickLink <ExternalLink className="inline h-3 w-3" />
+              </a>
+              {' '}· margins are basket-allocated — removing sets changes every share.
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+type SortMode = 'velocityWeighted' | 'margin' | 'marginPct';
+
+export default function IntlSetArbPage() {
+  const qc = useQueryClient();
+  const [channel, setChannel] = useState('amazon');
+  const [zone, setZone] = useState('all');
+  const [minNet, setMinNet] = useState('50');
+  const [velocityOnly, setVelocityOnly] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sortMode, setSortMode] = useState<SortMode>('velocityWeighted');
+
+  const { data, isLoading, isError, error, refetch, isFetching } = useQuery<IntlArbResponse>({
+    queryKey: ['intl-set-arb', channel],
+    queryFn: async () => {
+      const res = await fetch(`/api/arbitrage/intl?channel=${channel}`);
+      if (!res.ok) throw new Error(`${res.status}: ${await res.text()}`);
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const res = await fetch('/api/arbitrage/intl', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidateId: id, status }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['intl-set-arb'] }),
+  });
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const minN = parseFloat(minNet) || 0;
+    const q = search.trim().toLowerCase();
+    const rows = data.baskets.filter((b) => {
+      if (zone !== 'all' && b.zone !== zone) return false;
+      if (b.breakdown.netMarginGbp < minN) return false;
+      if (velocityOnly && b.velocitySum === 0) return false;
+      if (q && !(
+        (b.storeName ?? '').toLowerCase().includes(q) ||
+        b.items.some((i) => i.itemNo.toLowerCase().includes(q) || (i.name ?? '').toLowerCase().includes(q))
+      )) return false;
+      return true;
+    });
+    const score = (b: Basket) => {
+      switch (sortMode) {
+        case 'margin': return b.breakdown.netMarginGbp;
+        case 'marginPct': return b.breakdown.netMarginPct ?? 0;
+        case 'velocityWeighted':
+        default:
+          // margin haircut when velocity is thin — the drops90-0 mirage guard
+          return b.breakdown.netMarginGbp * Math.min(1, b.velocitySum / 20 + 0.1);
+      }
+    };
+    return rows.sort((a, b) => score(b) - score(a));
+  }, [data, zone, minNet, velocityOnly, search, sortMode]);
+
+  const uncalibrated = data?.meta.zones.some((z) => z.zone !== 'UK' && !z.calibrated) ?? true;
+  const totalNet = filtered.reduce((a, b) => a + b.breakdown.netMarginGbp, 0);
+
+  return (
+    <div className="space-y-4 p-4 md:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Ship className="h-6 w-6" /> International Set Arbitrage
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            BrickLink consignments → Amazon UK. {data?.meta.candidates ?? '…'} candidates across {data?.meta.sellers ?? '…'} sellers
+            {data?.meta.lastComputed ? ` · computed ${new Date(data.meta.lastComputed).toLocaleString('en-GB')}` : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Tabs value={channel} onValueChange={setChannel}>
+            <TabsList>
+              <TabsTrigger value="amazon">Amazon</TabsTrigger>
+              <TabsTrigger value="ebay" disabled title="Channel slot reserved — valuation returns with the eBay rebuild">
+                eBay <span className="ml-1 text-[10px] text-muted-foreground">soon</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isFetching}>
+            <RefreshCw className={`h-4 w-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </Button>
+        </div>
       </div>
-      <Skeleton className="h-20" />
-      <Skeleton className="h-12" />
-      <Skeleton className="h-96" />
+
+      {uncalibrated && (
+        <Alert className="border-amber-500/40 bg-amber-500/5">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertTitle>Shipping bands are uncalibrated</AlertTitle>
+          <AlertDescription>
+            Landed costs use placeholder zone bands. Place one modest calibration consignment, then record actuals with{' '}
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">scripts/intl-arb/record-zone-actuals.ts</code> — every margin here firms up overnight.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Input placeholder="Search store or set…" value={search} onChange={(e) => setSearch(e.target.value)} className="h-9 w-56" />
+        <Select value={zone} onValueChange={setZone}>
+          <SelectTrigger className="h-9 w-32"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All zones</SelectItem>
+            <SelectItem value="ASIA">Asia</SelectItem>
+            <SelectItem value="EU">EU</SelectItem>
+            <SelectItem value="US_CA">US / CA</SelectItem>
+            <SelectItem value="ROW">Rest of world</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={minNet} onValueChange={setMinNet}>
+          <SelectTrigger className="h-9 w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="0">Any basket net</SelectItem>
+            <SelectItem value="50">Net ≥ £50</SelectItem>
+            <SelectItem value="100">Net ≥ £100</SelectItem>
+            <SelectItem value="250">Net ≥ £250</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={sortMode} onValueChange={(v: string) => setSortMode(v as SortMode)}>
+          <SelectTrigger className="h-9 w-52"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="velocityWeighted">Velocity-weighted margin</SelectItem>
+            <SelectItem value="margin">Raw margin £</SelectItem>
+            <SelectItem value="marginPct">Margin %</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          variant={velocityOnly ? 'default' : 'outline'} size="sm" className="h-9"
+          onClick={() => setVelocityOnly(!velocityOnly)}
+          title="Hide baskets where no set has a single Amazon sale in 90 days"
+        >
+          <Zap className="mr-1 h-4 w-4" /> Velocity only
+        </Button>
+        <div className="ml-auto text-sm text-muted-foreground tabular-nums">
+          {filtered.length} basket{filtered.length === 1 ? '' : 's'} · {gbp(totalNet, 0)} addressable net
+        </div>
+      </div>
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Failed to load candidates</AlertTitle>
+          <AlertDescription>{String(error)}</AlertDescription>
+        </Alert>
+      )}
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
+            <Anchor className="h-8 w-8" />
+            <p>No baskets match the filters. Candidates refresh nightly after the price-guide run.</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((b) => (
+            <BasketCard key={b.storeId} basket={b} onStatus={(id, status) => statusMutation.mutate({ id, status })} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
