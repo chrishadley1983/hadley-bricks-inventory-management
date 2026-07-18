@@ -23,8 +23,16 @@ describe('zoneForCountry', () => {
 });
 
 describe('landedUnitGbp', () => {
-  it('UK is item price only', () => {
-    expect(landedUnitGbp(UK, 200, 1500)!.landedGbp).toBe(200);
+  it('UK is item + domestic postage share, no import legs', () => {
+    const ukBands = { ...UK, ship_base_gbp: 4, ship_per_100g_gbp: 0.15 };
+    const l = landedUnitGbp(ukBands, 200, 1500)!;
+    // 1500g: marginal 15*0.15=2.25 + base 4/10 = £2.65
+    expect(l.shippingGbp).toBeCloseTo(2.65, 2);
+    expect(l.dutyGbp).toBe(0);
+    expect(l.vatGbp).toBe(0);
+    expect(l.handlingGbp).toBe(0);
+    expect(l.landedGbp).toBeCloseTo(202.65, 2);
+    expect(landedUnitGbp(ukBands, 200, null)).toBeNull();
   });
 
   it('Asia consignment example matches the spec formula', () => {
