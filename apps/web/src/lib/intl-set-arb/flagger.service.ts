@@ -173,13 +173,14 @@ export async function refreshCandidates(supabase: SupabaseClient, opts: { offers
 
   // 3. persist — preserve excluded/bought rows verbatim (a re-flagged excluded
   // candidate must NOT resurrect as active), refresh actives, stale the rest.
-  const { data: manual, error: mErr } = await supabase.from('bl_set_arb_candidates')
-    .select('item_no,condition,sell_channel,source_store_id').in('status', ['excluded', 'bought']);
-  if (mErr) throw new Error(mErr.message);
-  const manualKeys = new Set(
-    ((manual ?? []) as { item_no: string; condition: string; sell_channel: string; source_store_id: number }[])
-      .map((m) => `${m.item_no}|${m.condition}|${m.sell_channel}|${m.source_store_id}`),
+  // Paginated (PostgREST 1,000-row cap): an overflowing unpaginated read here
+  // would silently drop manual keys and resurrect excluded candidates.
+  const manual = await pageAll<{ item_no: string; condition: string; sell_channel: string; source_store_id: number }>(
+    (a, b) => supabase.from('bl_set_arb_candidates')
+      .select('item_no,condition,sell_channel,source_store_id')
+      .in('status', ['excluded', 'bought']).order('id').range(a, b),
   );
+  const manualKeys = new Set(manual.map((m) => `${m.item_no}|${m.condition}|${m.sell_channel}|${m.source_store_id}`));
   // A store can hold several lots of one set inside the cheapest-10 — keep the
   // cheapest per conflict key or the upsert hits the same row twice.
   const byKey = new Map<string, Record<string, unknown>>();

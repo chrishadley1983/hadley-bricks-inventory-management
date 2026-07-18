@@ -12,7 +12,7 @@ Asian sellers (HK / CN / MY / SG) whose volume lets us amortise shipping.
 
 ## Decisions (Chris, 2026-07-15)
 
-- **International only ABOVE £135.** Sub-£135 international is killed by shipping — don't
+- **International only AT OR ABOVE £135 (consignment value ≥ £135).** Sub-£135 international is killed by shipping — don't
   flag or model it. So we are ALWAYS in the border-VAT + handling + duty regime (no
   point-of-sale-VAT case to model). Below £135 = UK sourcing only.
 - **Store the top 15 cheapest listings THAT SHIP TO ME** per set (green square /
@@ -70,8 +70,8 @@ One row per source zone, read by the (deferred) arb calc.
 landed = Σ item_gbp
        + shipping(zone, total_weight_g)
        + duty_rate(zone) × (Σitem + shipping)
-       + (vat_recoverable ? 0 : 0.20 × (Σitem + shipping))   # false now → dead COG
-       + handling_fee                                          # once per consignment
+       + (vat_recoverable ? 0 : 0.20 × (Σitem + shipping + duty))  # duty IS in the VAT base; false now → dead COG
+       + handling_fee                                               # once per consignment
 ```
 The Asian item price must clear ~25%+ below UK just to absorb the unrecoverable VAT + duty
 before any real margin — which China-market pricing (often 30–50% under UK) can do, but
