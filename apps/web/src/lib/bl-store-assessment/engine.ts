@@ -697,6 +697,50 @@ export interface AssessArgs {
 }
 
 /**
+ * Store lots BL lists under "(Not Applicable)" colour — the store AJAX returns
+ * colorID=0 with a blank colorName (seller listed without a colour, common on
+ * printed/single-colour parts; BigSi 2026-07-18: 128 of 997 lots). The exact-key
+ * price-guide lookup then false-negatives even though the caches know the part.
+ * If the caches know the part in exactly ONE colour, that colour is unambiguous —
+ * resolve it. Multi-colour parts stay at 0 (guessing would misprice them).
+ */
+export function resolveColourZeroLots(lots: StoreLot[], knownColours: Map<string, number[]>): StoreLot[] {
+  return lots.map((l) => {
+    if (l.itemType !== 'P' || l.colourId !== 0) return l;
+    const cols = knownColours.get(l.itemNo);
+    if (cols && cols.length === 1 && cols[0] !== 0) return { ...l, colourId: cols[0], colourName: l.colourName ?? null };
+    return l;
+  });
+}
+
+/** Distinct cache colours per item_no (both layers) for colour-zero resolution. */
+async function readKnownColours(supabase: SupabaseClient, itemNos: string[]): Promise<Map<string, number[]>> {
+  const out = new Map<string, Set<number>>();
+  for (const table of ['bricklink_price_guide_cache', 'bricklink_pg_summary_cache']) {
+    for (let i = 0; i < itemNos.length; i += 300) {
+      const batch = itemNos.slice(i, i + 300);
+      let from = 0;
+      for (;;) {
+        const { data, error } = await supabase
+          .from(table)
+          .select('item_no,colour_id')
+          .eq('item_type', 'P')
+          .in('item_no', batch)
+          .range(from, from + 999);
+        if (error) throw new Error(`readKnownColours(${table}) failed: ${error.message}`);
+        for (const r of (data ?? []) as { item_no: string; colour_id: number }[]) {
+          if (!out.has(r.item_no)) out.set(r.item_no, new Set());
+          out.get(r.item_no)!.add(r.colour_id);
+        }
+        if (!data || data.length < 1000) break;
+        from += 1000;
+      }
+    }
+  }
+  return new Map([...out.entries()].map(([k, v]) => [k, [...v]]));
+}
+
+/**
  * AUTO lens: once ≥95% of a store's tuples have genuine UK price data (a full lane D
  * scan is in place), switch to grounded UK-only pricing — world calibration is
  * triage-of-gaps only (Chris 2026-07-14). Counts coverage==='uk' rows specifically:
@@ -717,6 +761,14 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
   // Resolve bare-CMF identities BEFORE building cache refs, so the per-figure guides
   // are what we read (assembleAssessment re-resolves idempotently).
   args = { ...args, lots: resolveBareCmfLots(args.lots).lots };
+
+  // Resolve "(Not Applicable)"-colour lots before building cache refs — see
+  // resolveColourZeroLots. One extra batched read, only when such lots exist.
+  const zeroNos = [...new Set(args.lots.filter((l) => l.itemType === 'P' && l.colourId === 0).map((l) => l.itemNo))];
+  if (zeroNos.length > 0) {
+    const known = await readKnownColours(supabase, zeroNos);
+    args = { ...args, lots: resolveColourZeroLots(args.lots, known) };
+  }
 
   // Dedupe item refs for the cache reads.
   const refs: ItemRef[] = [];

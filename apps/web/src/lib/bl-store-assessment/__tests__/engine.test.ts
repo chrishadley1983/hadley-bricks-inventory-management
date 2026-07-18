@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { assembleAssessment, autoUkGroundedOnly, WORLD_TO_UK_UPLIFT } from '../engine';
+import { assembleAssessment, autoUkGroundedOnly, resolveColourZeroLots, WORLD_TO_UK_UPLIFT } from '../engine';
 import { pgKey, type PriceGuideView, type SideView } from '../../bricklink/price-guide/read';
 import { DEFAULT_INPUTS, type StoreLot, type AssessmentInputs } from '../types';
 import { normalizeAssessment } from '../normalize';
@@ -370,5 +370,38 @@ describe('autoUkGroundedOnly', () => {
 
   it('is OFF for an empty store', () => {
     expect(autoUkGroundedOnly([], new Map())).toBe(false);
+  });
+});
+
+describe('resolveColourZeroLots', () => {
+  const zeroLot = (itemNo: string, over: Partial<StoreLot> = {}) =>
+    lot({ invID: 1, itemType: 'P', itemNo, colourId: 0, unitPriceGBP: 1, ...over });
+
+  it('resolves a colour-0 part known in exactly one cache colour (BigSi regression)', () => {
+    const out = resolveColourZeroLots([zeroLot('3754pb02')], new Map([['3754pb02', [9]]]));
+    expect(out[0].colourId).toBe(9);
+  });
+
+  it('leaves multi-colour parts unresolved — guessing would misprice', () => {
+    const out = resolveColourZeroLots([zeroLot('3941')], new Map([['3941', [1, 5, 11]]]));
+    expect(out[0].colourId).toBe(0);
+  });
+
+  it('leaves parts unknown to the caches at colour 0', () => {
+    const out = resolveColourZeroLots([zeroLot('99999xyz')], new Map());
+    expect(out[0].colourId).toBe(0);
+  });
+
+  it('never touches non-zero colours or non-part types', () => {
+    const p = lot({ invID: 2, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 1 });
+    const m = lot({ invID: 3, itemType: 'M', itemNo: 'sw0775', colourId: 0, unitPriceGBP: 1 });
+    const out = resolveColourZeroLots([p, m], new Map([['3001', [11]], ['sw0775', [77]]]));
+    expect(out[0].colourId).toBe(5);
+    expect(out[1].colourId).toBe(0);
+  });
+
+  it('a part cached only at colour 0 stays at 0 (exact match already works)', () => {
+    const out = resolveColourZeroLots([zeroLot('973c045')], new Map([['973c045', [0]]]));
+    expect(out[0].colourId).toBe(0);
   });
 });
