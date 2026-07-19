@@ -112,7 +112,7 @@ const NAV_DELAY_MS = Math.max(2500, parseInt(argv['nav-delay-ms'] ?? '4000', 10)
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 
 // Fee model — canonical home is src/lib/bricklink/fees.ts (BL 3% + Bricqer 3.5% + PayPal 2.9%).
-import { VAR_FEE_PCT } from '../src/lib/bricklink/fees';
+import { VAR_FEE_PCT, STR_GATES } from '../src/lib/bricklink/fees';
 // Personal velocity baseline (see bl-basket): 10% lot turnover per month.
 const PERSONAL_MONTHLY_LOT_RATE = 0.10;
 
@@ -1060,7 +1060,7 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): { md: string; summary
     L.push('');
     L.push('| Gate | Lots | Outlay | Net | Margin | ROI |');
     L.push('|---|---|---|---|---|---|');
-    for (const gate of [0, 0.25, 0.5, 0.75, 1.0]) {
+    for (const gate of STR_GATES) {
       const subset = passed.filter((o) => o.str >= gate);
       if (subset.length === 0) continue;
       const so = subset.reduce((s, o) => s + o.ask * o.qty, 0);
