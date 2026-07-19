@@ -113,6 +113,8 @@ const SKIP_PURCHASES_ROW = argv['skip-purchases-row'] === 'true';
 const RESUME_FROM_WANTED = argv['resume-from-wanted'] && argv['resume-from-wanted'] !== 'true' ? parseInt(argv['resume-from-wanted'], 10) : null;
 const RESUME_FROM_CART = argv['resume-from-cart'] === 'true';
 const AUTO_YES = argv['yes'] === 'true';
+// Benchmark-gap outcome for the report stamp (null = no gap).
+let enrichmentGap: { accepted: boolean; missing: number; of: number } | null = null;
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const USER_ID = argv['user-id'] ?? '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
@@ -658,10 +660,53 @@ async function enrichWithPrices(items: ScrapedItem[]): Promise<Map<string, { ukS
     else neededTuples.set(tk, { itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId, conditions: [t.condition] });
   }
   console.log(`  need to fetch: ${needed.size} condition-tuples (${neededTuples.size} distinct items) from BL API`);
+
+  // Benchmark-gap gate (Chris 2026-07-19, after the Blanco_Brix incident: a 12k-lot
+  // store enriched NOTHING on the default 0 budget and the report printed a confident
+  // verdict on 73 lots — the gap must be an explicit decision, never a silent default).
+  // When the gap exceeds the budget: STOP and ask — accept / API / scrape / abort.
+  // Automation path: --on-gap=accept|api|scrape|abort (--yes alone implies accept).
+  const callsNeeded = neededTuples.size * 4;
+  if (neededTuples.size > 0 && callsNeeded > API_BUDGET) {
+    const missingFile = path.join(OUT_DIR, 'missing-tuples.json');
+    writeJson(missingFile, {
+      tuples: [...neededTuples.values()].map((t) => ({ itemType: t.itemType, itemNo: t.itemNo, colourId: t.colourId })),
+    });
+    console.log(`\n  ⚠ BENCHMARK GAP: ${neededTuples.size} tuples lack UK data (would need ~${callsNeeded} API calls; budget ${API_BUDGET}).`);
+    console.log(`    Missing tuples exported: ${missingFile}`);
+    let choice = (argv['on-gap'] ?? (AUTO_YES ? 'accept' : '')).toLowerCase();
+    if (!choice) {
+      choice = (await rl.question(
+        `    [a]ccept gap (report stamped PARTIAL) / [f]etch via API (~${callsNeeded} calls) / [s]crape via page lane / a[b]ort? `,
+      )).trim().toLowerCase();
+    }
+    if (choice === 'f' || choice === 'fetch' || choice === 'api') {
+      console.log(`    Fetching all ${neededTuples.size} tuples via API (overrides --api-budget).`);
+      enrichmentGap = { accepted: false, missing: 0, of: neededTuples.size };
+      // fall through with an uncapped budget
+      (globalThis as { __gapBudgetOverride?: number }).__gapBudgetOverride = callsNeeded;
+    } else if (choice === 's' || choice === 'scrape') {
+      console.log(`    Run the quota-free page lane, then re-run this basket:`);
+      console.log(`      npx tsx scripts/pg/pg-page-sweep.ts --from-report=${missingFile}`);
+      rl.close();
+      process.exit(3);
+    } else if (choice === 'b' || choice === 'abort') {
+      rl.close();
+      process.exit(0);
+    } else {
+      console.log(`    Accepting the gap — the report will be stamped PARTIAL.`);
+      enrichmentGap = { accepted: true, missing: neededTuples.size, of: neededTuples.size };
+    }
+  }
+  const effectiveBudget = (globalThis as { __gapBudgetOverride?: number }).__gapBudgetOverride ?? API_BUDGET;
   let calls = 0;
   let tuplesFetched = 0;
   fetchLoop: for (const t of neededTuples.values()) {
-    if (calls + 4 > API_BUDGET) { console.warn(`  API budget reached (${calls}/${API_BUDGET})`); break; }
+    if (calls + 4 > effectiveBudget) {
+      console.warn(`  API budget reached (${calls}/${effectiveBudget})`);
+      if (!enrichmentGap) enrichmentGap = { accepted: true, missing: neededTuples.size - tuplesFetched, of: neededTuples.size };
+      break;
+    }
     try {
       await sleep(API_DELAY_MS);
       const view = await ensurePriceGuide(bl, supabase, { itemType: t.itemType as 'P' | 'M', itemNo: t.itemNo, colourId: t.colourId }, { ttlDays: CACHE_TTL_DAYS });
@@ -858,7 +903,13 @@ function renderReport(enriched: EnrichedItem[], meta: { storeName: string; count
     L.push(`  STR≥${gate.toFixed(2)} ${padL(a.lots, 5)}  ${money(a.outlay, 7)}  ${money(a.net, 5)}  ${padL(a.margin.toFixed(0) + '%', 4)}  ${padL(a.roi.toFixed(0) + '%', 4)}  ${padL(a.medianSTR.toFixed(2), 6)}  ${padL('£' + a.pPerLotMo.toFixed(3), 8)}`);
   }
   L.push('');
-  L.push(`  Buy: ${agg.net > 0 ? 'YES' : 'REVIEW'}  -  net ${money(agg.net, 0)} / ${agg.roi.toFixed(0)}% on ${money(agg.outlay, 0)}`);
+  if (enrichmentGap && enrichmentGap.accepted && enrichmentGap.missing > 0) {
+    L.push(`  Buy: PARTIAL DATA  -  net ${money(agg.net, 0)} / ${agg.roi.toFixed(0)}% on ${money(agg.outlay, 0)} from PRICED lots only`);
+    L.push(`       ${enrichmentGap.missing} of ${enrichmentGap.of} gap tuples UNPRICED - real basket may be larger (or contain traps).`);
+    L.push(`       Close the gap: pg-page-sweep --from-report=tmp/stores/<slug>/missing-tuples.json, then re-run.`);
+  } else {
+    L.push(`  Buy: ${agg.net > 0 ? 'YES' : 'REVIEW'}  -  net ${money(agg.net, 0)} / ${agg.roi.toFixed(0)}% on ${money(agg.outlay, 0)}`);
+  }
   L.push('');
   return L.join('\n');
 }
