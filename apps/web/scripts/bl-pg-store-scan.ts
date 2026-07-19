@@ -111,8 +111,8 @@ const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 1
 const NAV_DELAY_MS = Math.max(2500, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 
-// Fee model — identical to bl-basket (BL 3% + Bricqer 3.5% + PayPal 2.9%).
-const VAR_FEE_PCT = 0.094;
+// Fee model — canonical home is src/lib/bricklink/fees.ts (BL 3% + Bricqer 3.5% + PayPal 2.9%).
+import { VAR_FEE_PCT } from '../src/lib/bricklink/fees';
 // Personal velocity baseline (see bl-basket): 10% lot turnover per month.
 const PERSONAL_MONTHLY_LOT_RATE = 0.10;
 

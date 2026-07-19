@@ -26,6 +26,30 @@ Both share the scrape helper (`scripts/lib/store-scrape.ts`) and the cached
 price-guide / STR / worldwide-supply layers, so a fresh
 `tmp/stores/<slug>/inventory.json` from either is reused by the other.
 
+## Standard decision report (MANDATORY output layer, 2026-07-19)
+
+**Every store-review answer — from either lens OR a conversational question —
+renders through `src/lib/bl-store-report` (`renderDecisionCli` / `renderDecisionMd`).
+Never improvise a table in chat.** The module IS Chris's decision set: the
+honesty ladder (raw → demand-capped → **LIQUID** = STR≥0.25, DUPs excluded,
+capped, full standalone postage), the lot table (ask / bench with † provenance /
+STR qty-basis / list / net / capped net / months-cover / overlap / magnet &
+ceiling flags), and the gate ladder × overlap. Median STR first, always.
+
+```bash
+# Conversational queries over PERSISTED data — no Chrome, no API:
+cd apps/web && npx tsx scripts/store-report.ts --slug=<name>            # full standard report
+cd apps/web && npx tsx scripts/store-report.ts --slug=<name> --magnets  # "show me the magnets"
+cd apps/web && npx tsx scripts/store-report.ts --slug=<name> --min-str=1 --no-dups
+cd apps/web && npx tsx scripts/store-report.ts --slug=<name> --pricing-lens=grounded
+```
+
+It re-scores the stored scrape (`bl_store_scrapes`) with the current engine and
+writes `tmp/stores/<slug>/store-report-<date>.md`. Both lens CLIs emit the same
+report automatically; the Discord card leads with the LIQUID figure. Constants
+(9.4% fee stack, STR gates, magnet def, liquid gate) live ONLY in
+`src/lib/bricklink/fees.ts`.
+
 ## Assess lens (store scorecard)
 
 ```bash

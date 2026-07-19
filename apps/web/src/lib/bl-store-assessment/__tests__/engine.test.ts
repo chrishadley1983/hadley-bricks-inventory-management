@@ -124,7 +124,7 @@ describe('assembleAssessment', () => {
   });
 
   it('stamps the engine version and defaults scanTruncated false', () => {
-    expect(a.engineVersion).toBe(6);
+    expect(a.engineVersion).toBe(7);
     expect(a.scanTruncated).toBe(false);
   });
 
