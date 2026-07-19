@@ -227,3 +227,19 @@ P0+P1 are ordinary repo feature work (branch → `/define-done` → `/build-feat
    scan. Guard: when 2+ distinct lot names resolve to one S-tuple, mark the benchmark
    unusable ("identity ambiguous") instead of scoring; longer-term, recover the true
    variant ID from the store AJAX payload. Same failure family as POV's is_aggregate_listing.
+
+---
+
+## Cycle policy amendment (2026-07-19, Chris)
+
+Supersedes the 28-day active cycle above:
+
+- **Active tier: 60-day cycle**, EXCEPT items whose catalogue year = current year
+  (**new-for-year: 28-day** — fast price movement is where monthly deltas matter).
+- **Tail: 90-day UK-grade cycle via lane D** (previously worldwide-only via lane B).
+  The whole 149k queue universe is now UK-refreshed; lane B ritual remains optional
+  top-up for worldwide context.
+- Steady state ≈ 2,000 pages/day — sustainable on the nightly cadence alone. Day
+  runs remain growth/top-up only, contingent on scrape health (monotonic session
+  failure climbs = back off).
+- Claim order: due active tuples always before due tail tuples.
