@@ -56,6 +56,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession
 const PAGE = 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
+const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000; // active cycle (2026-07-19 policy: 60d, new-for-year 28d)
 
 function tupleLabel(r: { item_type: string; item_no: string; colour_id: number }): string {
   return r.item_type === 'P' ? `${r.item_type} ${r.item_no} c${r.colour_id}` : `${r.item_type} ${r.item_no}`;
