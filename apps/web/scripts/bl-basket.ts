@@ -772,8 +772,12 @@ function scoreAll(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: numbe
 // Phase 5: Render report
 // ---------------------------------------------------------------------------
 
-/** Aggregate basket totals + capacity-efficiency stats for a set of passed lots. */
-function aggregate(passed: EnrichedItem[], inputs: RunInputs): {
+/** Aggregate basket totals + capacity-efficiency stats for a set of passed lots.
+ * `standaloneShipping` — treat the subset as its own order: strip each lot's
+ * full-basket postage share and charge the ENTIRE inbound shipping to the
+ * subset (Chris 2026-07-19: gate rows understated postage, flattering cut-down
+ * baskets — a £3 ship spread over 73 lots left the 31-lot cut carrying ~40p). */
+function aggregate(passed: EnrichedItem[], inputs: RunInputs, standaloneShipping = false): {
   lots: number; pieces: number; outlay: number; list: number; net: number; margin: number; roi: number;
   meanSTR: number; medianSTR: number; outlayWeightedSTR: number;
   pPerLotMo: number; pPerPcMo: number; avgMonthsToClear: number;
@@ -782,7 +786,9 @@ function aggregate(passed: EnrichedItem[], inputs: RunInputs): {
   if (n === 0) return { lots: 0, pieces: 0, outlay: 0, list: 0, net: 0, margin: 0, roi: 0, meanSTR: 0, medianSTR: 0, outlayWeightedSTR: 0, pPerLotMo: 0, pPerPcMo: 0, avgMonthsToClear: 0 };
   const outlay = passed.reduce((s, o) => s + o.unitPriceGBP * o.invQty, 0);
   const list = passed.reduce((s, o) => s + (o.listPrice ?? 0) * o.invQty, 0);
-  const net = passed.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
+  const net = standaloneShipping
+    ? passed.reduce((s, o) => s + (o.lotProfit ?? 0) + (o.inboundPerUnit ?? 0) * o.invQty, 0) - inputs.shipping
+    : passed.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
   const pieces = passed.reduce((s, o) => s + o.invQty, 0);
   const margin = list > 0 ? (net / list) * 100 : 0;
   const roi = outlay > 0 ? (net / outlay) * 100 : 0;
@@ -842,13 +848,13 @@ function renderReport(enriched: EnrichedItem[], meta: { storeName: string; count
 
   // D3: gate-comparison table — same data, common cutoffs, helps decide --min-str.
   L.push('');
-  L.push('  Gate-comparison (filters applied AFTER current min-margin/min-ask, on top of basket):');
+  L.push('  Gate-comparison (each row = STANDALONE order: full inbound shipping charged to the subset):');
   L.push('  Gate     Lots   Outlay   Net    Mgn   ROI   medSTR  £/lot/mo');
   L.push('  -------  -----  -------  -----  ----  ----  ------  --------');
   for (const gate of [0, 0.25, 0.50, 0.75, 1.00]) {
     const subset = passed.filter((o) => (o.sellThru || 0) >= gate);
     if (subset.length === 0) continue;
-    const a = aggregate(subset, inputs);
+    const a = aggregate(subset, inputs, true);
     L.push(`  STR≥${gate.toFixed(2)} ${padL(a.lots, 5)}  ${money(a.outlay, 7)}  ${money(a.net, 5)}  ${padL(a.margin.toFixed(0) + '%', 4)}  ${padL(a.roi.toFixed(0) + '%', 4)}  ${padL(a.medianSTR.toFixed(2), 6)}  ${padL('£' + a.pPerLotMo.toFixed(3), 8)}`);
   }
   L.push('');
