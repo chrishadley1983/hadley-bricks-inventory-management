@@ -45,6 +45,7 @@ export function renderDecisionMd(rep: DecisionReport): string {
   L.push(`**${m.slug}** (${m.country ?? '?'}) · lens **${m.lens}**${m.engineVersion ? ` · engine v${m.engineVersion}` : ''} · scanned ${ts(m.scannedAt)} · generated ${ts(m.generatedAt)} · ${m.ukGroundedOnly === false ? 'ESTIMATE lens (world† fills gaps)' : 'UK-grounded'}`);
   if (m.scanTruncated) L.push('\n> ⚠ **Scan truncated** — every total understates the store.');
   if (m.partialRows) L.push('\n> ⚠ **Partial rows** — built from a persisted assessment\'s top-N lists; recompute from the stored scrape for the full table.');
+  if (m.dataGapNote) L.push(`\n> ⚠ ${m.dataGapNote}`);
   L.push('');
 
   L.push('## Headline');

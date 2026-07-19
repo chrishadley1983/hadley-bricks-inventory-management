@@ -67,6 +67,7 @@ export function renderDecisionCli(rep: DecisionReport, opts: { maxRows?: number;
   L.push(`scanned ${ts(m.scannedAt)} · generated ${ts(m.generatedAt)} · ${m.ukGroundedOnly === false ? 'ESTIMATE lens (world† fills gaps)' : 'UK-grounded'}`);
   if (m.scanTruncated) L.push('⚠ SCAN TRUNCATED — every total understates the store.');
   if (m.partialRows) L.push('⚠ PARTIAL ROWS — built from a persisted assessment\'s top-N lists; recompute from the stored scrape for the full table.');
+  if (m.dataGapNote) L.push(`⚠ ${m.dataGapNote}`);
   L.push(rule);
 
   L.push('');

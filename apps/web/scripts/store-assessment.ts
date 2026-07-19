@@ -26,9 +26,10 @@ import * as path from 'path';
 import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
-import { computeStoreAssessment, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
+import { computeStoreAssessmentWithLots, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
 import { renderAssessment } from '../src/lib/bl-store-assessment/format';
 import type { StoreLot, AssessMode } from '../src/lib/bl-store-assessment/types';
+import { buildDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -201,11 +202,27 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     log(`  ⚠ ${(e as Error).message} — overlap tagging disabled`);
     return null;
   });
-  const assessment = await computeStoreAssessment(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, scanTruncated: truncated, userId, inputs });
-  const report = renderAssessment(assessment);
+  const { assessment, scoredLots } = await computeStoreAssessmentWithLots(supabase, { slug: STORE_SLUG!, storeMeta: meta, lots, profile, mode: MODE, scanTruncated: truncated, userId, inputs });
+
+  // Common decision report (lib/bl-store-report) — THE table + honesty ladder every
+  // surface shares. Stamped onto the assessment so the Discord card and UI lead
+  // with the liquid figure, appended to report_md, and written as its own md.
+  const decision = buildDecisionReport(assessment, {}, scoredLots);
+  assessment.decision = {
+    rawNet: decision.summary.rawNet,
+    cappedNet: decision.summary.cappedNet,
+    liquidNet: decision.summary.liquidNet,
+    liquidLots: decision.summary.liquidLots,
+    liquidOutlay: decision.summary.liquidOutlay,
+    liquidGate: decision.summary.liquidGate,
+    inboundPostage: decision.summary.inboundPostage,
+  };
+  const report = `${renderAssessment(assessment)}\n\n${renderDecisionCli(decision)}`;
 
   const reportFile = path.join(OUT_DIR, `assessment-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(reportFile, report);
+  const decisionFile = path.join(OUT_DIR, `store-report-${new Date().toISOString().slice(0, 10)}.md`);
+  fs.writeFileSync(decisionFile, renderDecisionMd(decision));
 
   if (!NO_PERSIST && userId) {
     const freshTags = assessment.overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');

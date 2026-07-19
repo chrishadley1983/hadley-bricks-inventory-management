@@ -135,6 +135,9 @@ export interface DecisionReportMeta {
   /** True when rows were reconstructed from a persisted assessment's section top-N
    * lists (full scored set unavailable) — the table understates the store. */
   partialRows?: boolean;
+  /** Data-gap caveat carried from the producing lens (e.g. bl-basket's PARTIAL DATA
+   * gap gate, PR #619: N tuples accepted unpriced) — rendered as a warning. */
+  dataGapNote?: string;
 }
 
 export interface DecisionReport {

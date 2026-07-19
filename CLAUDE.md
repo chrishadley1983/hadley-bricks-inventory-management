@@ -168,3 +168,31 @@ bl-basket, offline re-scores, and future runs all read the same cache.
   (Origin: 2026-07-13 Andrew toys verification — sold-only first pass, ~640 quadrants
   re-bought. Chris: "every price call needs to follow the standard pattern as we want
   it to enrich the data too.")
+
+---
+
+## BL Store Review Reporting — Standard Pattern (MANDATORY)
+
+**Every answer about a BrickLink store — skill runs AND conversational queries —
+renders through the common decision report (`src/lib/bl-store-report`). Never
+improvise a table, summary, or verdict format in chat.** One contract, one
+formatter set, one honesty ladder; runs stay comparable day to day.
+
+- Conversational entry point (persisted data, no Chrome/API):
+  `cd apps/web; npx tsx scripts/store-report.ts --slug=<store>`
+  (views: `--magnets`, `--min-str=`, `--no-dups`, `--pricing-lens=grounded|estimate`;
+  writes `tmp/stores/<slug>/store-report-<date>.md`).
+- The headline is the **honesty ladder**: raw (uncapped) → demand-capped →
+  **LIQUID** (STR≥0.25, DUPs excluded, capped, FULL standalone inbound postage).
+  Lead with LIQUID; the raw figure flatters (Beeble "£5,000" lesson).
+- Decision columns (Chris's actual set — nothing else leads): STR (qty basis,
+  median first), honest net, ask-vs-6MA with provenance (uk/world†/none),
+  overlap tags (NEW/R-OUT/R-THIN/DUP), magnets, coverage split, demand-cap
+  ADVISORY (never a filter), sold-price ceiling ▲, gate ladder × overlap.
+  The 0–100 grade and seller stats are context, never the lead.
+- Constants (9.4% fee stack, STR gates, liquid gate, magnet def, price bands)
+  live ONLY in `src/lib/bricklink/fees.ts` — never re-declare or hardcode.
+  (Origin: 2026-07-19 audit — five improvised formats in 20 minutes on
+  Blanco_Brix while the headline moved £1,151 → £17; Chris: "I thought we had
+  built a skill with a clear table definition." Full audit:
+  `docs/features/bl-store-report/audit-2026-07-19.md`.)

@@ -353,6 +353,22 @@ export interface StoreAssessment {
   sets?: SetsSection;
   /** STR × coverage band breakdown (Chris 2026-07-14: wanted on every store summary). */
   strCoverage?: StrCoverageSection;
+  /**
+   * Common decision-report headline (lib/bl-store-report, 2026-07-19): the honesty
+   * ladder raw → demand-capped → liquid (STR≥gate, no DUPs, capped, standalone
+   * postage). Stamped by the CLI after assembly; the Discord card leads with
+   * liquidNet instead of the flattering uncapped figure. Inline shape (not the
+   * module's type) to avoid an import cycle. Absent on pre-v7 rows.
+   */
+  decision?: {
+    rawNet: number;
+    cappedNet: number;
+    liquidNet: number;
+    liquidLots: number;
+    liquidOutlay: number;
+    liquidGate: number;
+    inboundPostage: number;
+  };
 }
 
 export const DEFAULT_INPUTS: AssessmentInputs = {

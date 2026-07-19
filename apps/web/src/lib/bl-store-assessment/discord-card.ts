@@ -53,7 +53,14 @@ export function buildStoreAlertCard(
   const wm = a.pricing.weightedMedianAskVsMarket;
 
   const descLines: string[] = alerts.map((al) => `• ${al.headline}`);
-  descLines.push('', `**${v.headline}**`);
+  // Honesty ladder first (2026-07-19 audit): the uncapped net flattered stores with
+  // one deep slow lot (Beeble's "£5,000") — lead with the liquid figure when stamped.
+  if (a.decision) {
+    const d = a.decision;
+    descLines.push('', `**LIQUID ${gbp(d.liquidNet)}** (${d.liquidLots} lots, STR≥${d.liquidGate}, no DUPs, capped) · capped ${gbp(d.cappedNet)} · raw ${gbp(d.rawNet)}`);
+  } else {
+    descLines.push('', `**${v.headline}**`);
+  }
   // Reasons repeat the field numbers below — keep only the caveat/warning ones.
   for (const r of v.reasons) if (r.startsWith('⚠')) descLines.push(r);
   if (a.scanTruncated) descLines.push('⚠ Scan truncated at page cap — all totals understate the store.');
@@ -67,8 +74,11 @@ export function buildStoreAlertCard(
   const fields: object[] = [
     {
       name: '💰 Buyable basket',
-      value: `${a.withinMargin.lots} lots · outlay ${gbp(a.withinMargin.outlay)} → **${gbp(a.withinMargin.projectedNet)} net**\n` +
-        `margin ${a.withinMargin.blendedMarginPct != null ? a.withinMargin.blendedMarginPct.toFixed(1) : '—'}% · ROI ${a.withinMargin.roiPct != null ? Math.round(a.withinMargin.roiPct) : '—'}%`,
+      value: a.decision
+        ? `**${gbp(a.decision.liquidNet)} liquid** (${a.decision.liquidLots} lots · ${gbp(a.decision.liquidOutlay)})\n` +
+          `raw ${gbp(a.decision.rawNet)} → capped ${gbp(a.decision.cappedNet)} · ${a.withinMargin.lots} lots in margin`
+        : `${a.withinMargin.lots} lots · outlay ${gbp(a.withinMargin.outlay)} → **${gbp(a.withinMargin.projectedNet)} net**\n` +
+          `margin ${a.withinMargin.blendedMarginPct != null ? a.withinMargin.blendedMarginPct.toFixed(1) : '—'}% · ROI ${a.withinMargin.roiPct != null ? Math.round(a.withinMargin.roiPct) : '—'}%`,
       inline: true,
     },
     {

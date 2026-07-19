@@ -62,6 +62,7 @@ import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 import { DAMAGE_KEYWORDS } from '../src/lib/bl-store-assessment/engine';
 import { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT, STR_GATES } from '../src/lib/bricklink/fees';
+import { buildBasketDecisionReport, renderDecisionMd } from '../src/lib/bl-store-report';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -1791,6 +1792,31 @@ async function main() {
     console.log('\n[5/10] Report:');
     console.log(reportText);
     console.log(`Saved to ${REPORT_FILE}`);
+
+    // Common decision report (lib/bl-store-report) — same honesty ladder + table
+    // every store surface shares, written alongside the basket's own report.
+    try {
+      const decision = buildBasketDecisionReport(
+        enriched.map((e) => ({
+          itemType: e.itemType, itemNo: e.itemNo, colourName: e.colourName, itemName: e.itemName,
+          condition: e.condition, invQty: e.invQty, unitPriceGBP: e.unitPriceGBP,
+          ukSoldAvg: e.ukSoldAvg, ukSoldQty: e.ukSoldQty, ukStockQty: e.ukStockQty,
+          sellThru: e.sellThru, listPrice: e.listPrice, netPerUnit: e.netPerUnit,
+          inboundPerUnit: e.inboundPerUnit, marginPct: e.marginPct, passed: e.passed,
+        })),
+        { slug: STORE_SLUG ?? '', storeName: meta.storeName, country: meta.country, inputs: { minMargin: inputs.minMargin, minStr: inputs.minStr, shipping: inputs.shipping } },
+      );
+      // Carry the gap gate's PARTIAL DATA state (PR #619) into the common report.
+      if (enrichmentGap && enrichmentGap.accepted && enrichmentGap.missing > 0) {
+        decision.meta.dataGapNote = `PARTIAL DATA — ${enrichmentGap.missing} of ${enrichmentGap.of} benchmark-gap tuples accepted UNPRICED; the real basket may be larger (close the gap via pg-page-sweep, then re-run).`;
+      }
+      const decisionFile = path.join(OUT_DIR, `store-report-${new Date().toISOString().slice(0, 10)}.md`);
+      fs.writeFileSync(decisionFile, renderDecisionMd(decision));
+      const ds = decision.summary;
+      console.log(`Decision report: raw £${ds.rawNet.toFixed(2)} → capped £${ds.cappedNet.toFixed(2)} → LIQUID £${ds.liquidNet.toFixed(2)} (${ds.liquidLots} lots) → ${decisionFile}`);
+    } catch (e) {
+      console.error(`[decision-report] failed (non-fatal): ${(e as Error).message}`);
+    }
   }
 
   const passed = enriched.filter((e) => e.passed);
