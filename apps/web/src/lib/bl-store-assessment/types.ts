@@ -9,6 +9,8 @@
  * scraped inventory + store profile and reads the Supabase caches.
  */
 
+import { FEE_MODEL, MAGNET } from '../bricklink/fees';
+
 export type ItemTypeCode = 'P' | 'S' | 'M';
 export type Condition = 'N' | 'U';
 export type AssessMode = 'light' | 'full';
@@ -105,6 +107,12 @@ export interface ScoredLot {
   overlap: OverlapTagValue | null;
   ourQty: number | null; // our current stocked qty for this (item, colour, condition)
   ourSoldWindow: number | null; // units WE sold in the sales window
+  // Liquidity / ceiling advisories (engine v7; absent on older persisted rows)
+  /** Market 6-mo sold qty for this condition — the demand-cap input. Null = no benchmark. */
+  marketSoldQty6mo?: number | null;
+  /** Share of 6-mo sold QTY at/above our projected list (UK histogram; null when unavailable).
+   * Low share = the sw0775 trap: STR says it sells, but not at our price. */
+  soldShareAtList?: number | null;
 }
 
 /** Mirror of overlap.ts OverlapTag (kept here so section shapes don't import the loader). */
@@ -291,6 +299,11 @@ export interface StrGateColumn {
   /** Lots additional to OUR store (overlap NEW + RESTOCK_OUT); 0 when no overlap index. */
   addlLots: number;
   addlNet: number;
+  /** P/M vs S split of the gate (engine emits these; formalised in v7). */
+  pmLots?: number;
+  pmNet?: number;
+  setLots?: number;
+  setNet?: number;
 }
 
 export interface StrCoverageSection {
@@ -345,9 +358,9 @@ export interface StoreAssessment {
 export const DEFAULT_INPUTS: AssessmentInputs = {
   minAsk: 0.10,
   minMargin: 0.20,
-  minStr: 0.5,
-  magnetMaxSupplyLots: 3,
+  minStr: MAGNET.minStr,
+  magnetMaxSupplyLots: MAGNET.maxSupplyLots,
   inboundPerUnit: 0,
   cacheTtlDays: 90,
-  feeModel: { blFee: 0.03, bricqerFee: 0.035, paypalPct: 0.029 },
+  feeModel: { ...FEE_MODEL },
 };

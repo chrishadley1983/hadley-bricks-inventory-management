@@ -61,6 +61,7 @@ import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completenes
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 import { DAMAGE_KEYWORDS } from '../src/lib/bl-store-assessment/engine';
+import { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT, STR_GATES } from '../src/lib/bricklink/fees';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -118,11 +119,7 @@ let enrichmentGap: { accepted: boolean; missing: number; of: number } | null = n
 const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const USER_ID = argv['user-id'] ?? '4b6e94b4-661c-4462-9d14-b21df7d51e5b';
 
-// Fee + velocity constants (Hadley Bricks verified — see memory)
-const BL_FEE = 0.03;
-const BRICQER_FEE = 0.035;
-const PAYPAL_PCT = 0.029;
-const VAR_FEE_PCT = BL_FEE + BRICQER_FEE + PAYPAL_PCT; // 9.4%
+// Fee constants — canonical home is src/lib/bricklink/fees.ts (2026-07-19 audit).
 const PERSONAL_MONTHLY_LOT_RATE = 0.10; // midpoint of Oct 2025 peak (19.5%) and current ramp (1.2%)
 const CART_VALIDATION_TOLERANCE = 0.05; // 5% of outlay
 
@@ -896,7 +893,7 @@ function renderReport(enriched: EnrichedItem[], meta: { storeName: string; count
   L.push('  Gate-comparison (each row = STANDALONE order: full inbound shipping charged to the subset):');
   L.push('  Gate     Lots   Outlay   Net    Mgn   ROI   medSTR  £/lot/mo');
   L.push('  -------  -----  -------  -----  ----  ----  ------  --------');
-  for (const gate of [0, 0.25, 0.50, 0.75, 1.00]) {
+  for (const gate of STR_GATES) {
     const subset = passed.filter((o) => (o.sellThru || 0) >= gate);
     if (subset.length === 0) continue;
     const a = aggregate(subset, inputs, true);

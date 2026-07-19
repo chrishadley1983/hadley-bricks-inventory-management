@@ -17,11 +17,9 @@ export { bricqerMultiplier, BRICQER_PRICE_FLOOR } from '../bricklink/bricqer-pri
 
 export type ItemCondition = BricqerCondition;
 
-/** Hadley Bricks variable-fee model (verified — see bl-basket.ts). */
-export const BL_FEE = 0.03; // BrickLink platform fee
-export const BRICQER_FEE = 0.035; // Bricqer fee
-export const PAYPAL_PCT = 0.029; // PayPal fee
-export const VAR_FEE_PCT = BL_FEE + BRICQER_FEE + PAYPAL_PCT; // 9.4%
+/** Hadley Bricks variable-fee model — canonical home is `../bricklink/fees`. */
+export { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT } from '../bricklink/fees';
+import { VAR_FEE_PCT } from '../bricklink/fees';
 
 /** Convert a 'New'/'Used' label to the 'N'/'U' code the multiplier expects. */
 export function conditionCode(condition: string | null | undefined): ItemCondition {

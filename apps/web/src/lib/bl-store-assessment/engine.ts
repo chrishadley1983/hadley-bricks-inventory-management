@@ -36,8 +36,12 @@ import { resolveBareCmfLots, isBareCmf } from './cmf-resolve';
  *      (bl-basket cart scope); Table B = SETS by sales method incl. CMF identity rows.
  *      Bare-CMF listings are name-RESOLVED to per-figure ids (cmf-resolve.ts);
  *      incomplete S-lots never price against complete-set guides.
+ * v7 = liquidity advisories on ScoredLot (2026-07-19 reporting audit): marketSoldQty6mo
+ *      (demand-cap input — the Beeble £5,000 lesson: lotProfit × full qty with no demand
+ *      check) and soldShareAtList (price-ceiling signal — the sw0775 lesson: high STR but
+ *      the ask WAS the 6-mo max). Consumed by lib/bl-store-report.
  */
-export const ENGINE_VERSION = 6;
+export const ENGINE_VERSION = 7;
 
 /** Complete CMFs are BL-typed as sets but are commercially minifigs — they stay in the
  * normal Bricqer lot universe and NEVER enter the sets decision. */
@@ -139,8 +143,9 @@ function weightedMedian(pairs: { value: number; weight: number }[]): number | nu
 }
 
 // One price scale everywhere: per-lot buckets, the store label, and the verdict's
-// price signal all break at the same points.
-export const PRICE_BANDS = { under: 0.70, keen: 0.95, atMarket: 1.15, premium: 1.50 };
+// price signal all break at the same points. Canonical home: ../bricklink/fees.
+export { PRICE_BANDS } from '../bricklink/fees';
+import { PRICE_BANDS, STR_GATES as CANONICAL_STR_GATES } from '../bricklink/fees';
 
 function classifyPosition(askVsMarket: number | null): PricePosition {
   if (askVsMarket == null) return 'UNKNOWN';
@@ -260,6 +265,10 @@ function scoreLot(
     // Overlap is a post-pass (assembleAssessment) — scoring never depends on it.
     overlap: null, ourQty: null, ourSoldWindow: null,
     cmfResolved: lot.cmfResolved ?? false,
+    // v7 liquidity advisories: demand-cap input + price-ceiling signal.
+    marketSoldQty6mo: benchmarkAvg != null && side ? side.soldQty : null,
+    soldShareAtList:
+      priceSource === 'uk' && ourList != null && pv ? pv.qtyShareAtOrAbove(condition, ourList) : null,
   };
 }
 
@@ -511,7 +520,7 @@ function buildVerdict(
 
 // ---- STR × coverage: inclusive gate columns (Chris 2026-07-14) ----
 
-const STR_GATES = [0, 0.25, 0.5, 0.75, 1.0];
+const STR_GATES = [...CANONICAL_STR_GATES];
 
 /** Null-propagating median (the file's shared `median` returns 0 on empty, which would
  * render as a real value in the gate table). */
@@ -756,6 +765,15 @@ export function autoUkGroundedOnly(refs: ItemRef[], pgMap: Map<string, PriceGuid
 }
 
 export async function computeStoreAssessment(supabase: SupabaseClient, args: AssessArgs): Promise<StoreAssessment> {
+  return (await computeStoreAssessmentWithLots(supabase, args)).assessment;
+}
+
+/** As computeStoreAssessment, but also returns the FULL scored lot set — the input
+ * the common decision report (lib/bl-store-report) renders from. */
+export async function computeStoreAssessmentWithLots(
+  supabase: SupabaseClient,
+  args: AssessArgs,
+): Promise<{ assessment: StoreAssessment; scoredLots: ScoredLot[] }> {
   const inputs: AssessmentInputs = { ...DEFAULT_INPUTS, ...(args.inputs ?? {}), feeModel: { ...DEFAULT_INPUTS.feeModel, ...(args.inputs?.feeModel ?? {}) } };
 
   // Resolve bare-CMF identities BEFORE building cache refs, so the per-figure guides
@@ -792,7 +810,7 @@ export async function computeStoreAssessment(supabase: SupabaseClient, args: Ass
     inputs.ukGroundedOnly = autoUkGroundedOnly(refs, pgMap);
   }
 
-  return assembleAssessment({ ...args, inputs, pgMap, supplyMap, ownStock, setsIntel });
+  return assembleAssessmentWithLots({ ...args, inputs, pgMap, supplyMap, ownStock, setsIntel });
 }
 
 export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
@@ -809,6 +827,12 @@ export interface AssembleArgs extends Omit<AssessArgs, 'inputs'> {
  * two cache reads lives here; `computeStoreAssessment` is just those reads + this.
  */
 export function assembleAssessment(args: AssembleArgs): StoreAssessment {
+  return assembleAssessmentWithLots(args).assessment;
+}
+
+/** As assembleAssessment, but also returns the FULL scored lot set for the common
+ * decision report (lib/bl-store-report). */
+export function assembleAssessmentWithLots(args: AssembleArgs): { assessment: StoreAssessment; scoredLots: ScoredLot[] } {
   const { inputs, pgMap, supplyMap } = args;
   // Bare-CMF name resolution (idempotent — computeStoreAssessment already resolved so
   // its cache reads used the right ids; direct assemble callers get it here).
@@ -875,7 +899,7 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     );
   }
 
-  return {
+  const assessment: StoreAssessment = {
     engineVersion: ENGINE_VERSION,
     store: { slug: args.slug, storeId: args.storeMeta.storeId, storeName: args.storeMeta.storeName, country: args.storeMeta.country },
     mode: args.mode,
@@ -885,4 +909,5 @@ export function assembleAssessment(args: AssembleArgs): StoreAssessment {
     verdict, size, pricing, feedback: args.profile, partMix,
     withinMargin, highStr, magnets, confidence, ageing, concentration, overlap, sets, strCoverage,
   };
+  return { assessment, scoredLots: scored };
 }
