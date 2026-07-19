@@ -56,6 +56,7 @@ const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession
 const PAGE = 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
+const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000; // active cycle (2026-07-19 policy: 60d, new-for-year 28d)
 
 function tupleLabel(r: { item_type: string; item_no: string; colour_id: number }): string {
   return r.item_type === 'P' ? `${r.item_type} ${r.item_no} c${r.colour_id}` : `${r.item_type} ${r.item_no}`;
@@ -213,7 +214,7 @@ async function loadCoverageHealth(): Promise<{
   growth7d: { total: number; storeDiscovered: number; newRelease: number; backfill: number };
 }> {
   const nowIso = new Date().toISOString();
-  const cutoff28d = new Date(Date.now() - TWENTY_EIGHT_DAYS_MS).toISOString();
+  const cutoff28d = new Date(Date.now() - SIXTY_DAYS_MS).toISOString(); // within-cycle = 60d policy window
   const cutoff7dIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
   const growth7d = await loadQueueGrowth7d(cutoff7dIso);
 
@@ -340,7 +341,7 @@ async function main(): Promise<void> {
     '',
     `- L1 total: **${coverage.l1Total.toLocaleString()}**`,
     `- Active tier: **${coverage.activeTierCount.toLocaleString()}**`,
-    `- Within 28-day cycle: **${coverage.activeWithin28dPct.toFixed(1)}%**`,
+    `- Within 60-day cycle: **${coverage.activeWithin28dPct.toFixed(1)}%**`,
     `- Past due (next_due_at elapsed): **${coverage.pastDueCount.toLocaleString()}**`,
     `- Queue grew **+${coverage.growth7d.total.toLocaleString()}** (7d): ${coverage.growth7d.storeDiscovered.toLocaleString()} store-discovered · ${coverage.growth7d.newRelease.toLocaleString()} new-release · ${coverage.growth7d.backfill.toLocaleString()} backfill`,
     '',

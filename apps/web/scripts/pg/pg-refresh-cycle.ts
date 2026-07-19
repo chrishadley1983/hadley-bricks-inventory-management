@@ -99,8 +99,45 @@ const BLOCK_RETRY_MS = parseFloat(argv['block-retry-secs'] ?? '20') * 1000;
 const WARMUP_ATTEMPTS = Math.max(1, parseInt(argv['warmup-attempts'] ?? '5', 10));
 const WARMUP_WAITS_MS = [30_000, 60_000, 120_000, 300_000, 600_000];
 const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are reclaimable
-const ACTIVE_CYCLE_DAYS = 28;
+// Cycle policy (Chris 2026-07-19): active 60d, EXCEPT new-for-the-year items at 28d
+// (fast price movement + clean monthly deltas where they matter); tail joins lane D
+// at 90d UK-grade — the whole queue universe is now UK-refreshed, sustainable on the
+// nightly cadence alone once the backlog clears (~2,000 pages/day steady state).
+const ACTIVE_CYCLE_DAYS = 60;
+const NEW_RELEASE_CYCLE_DAYS = 28;
+const TAIL_CYCLE_DAYS = 90;
 const NO_DATA_REQUEUE_DAYS = 90;
+
+/** Item keys (T:no) whose catalogue year is the current year — loaded at run start. */
+let newForYearKeys: Set<string> = new Set();
+
+function cycleDaysFor(t: { item_type: string; item_no: string; tier: string }): number {
+  const bare = t.item_no.split('-')[0];
+  if (newForYearKeys.has(`${t.item_type}:${t.item_no}`) || newForYearKeys.has(`${t.item_type}:${bare}`)) {
+    return NEW_RELEASE_CYCLE_DAYS;
+  }
+  return t.tier === 'tail' ? TAIL_CYCLE_DAYS : ACTIVE_CYCLE_DAYS;
+}
+
+async function loadNewForYearKeys(sb: SupabaseClient): Promise<void> {
+  const year = new Date().getFullYear();
+  const out = new Set<string>();
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await sb
+      .from('bl_catalog_items')
+      .select('item_type,item_no')
+      .gte('year_released', year)
+      .range(from, from + 999);
+    if (error) throw new Error(`loadNewForYearKeys failed: ${error.message}`);
+    for (const r of (data ?? []) as { item_type: string; item_no: string }[]) {
+      out.add(`${r.item_type}:${r.item_no}`);
+      out.add(`${r.item_type}:${r.item_no.split('-')[0]}`);
+    }
+    if (!data || data.length < 1000) break;
+  }
+  newForYearKeys = out;
+  console.log(`[pg-refresh-cycle] new-for-${year} fast-cycle items: ${out.size / 2} (28d cadence)`);
+}
 const FLUSH_AT = 50;
 
 const RUN_ID = `pgrefresh-${os.hostname()}-${process.pid}-${Date.now()}`;
@@ -234,8 +271,8 @@ async function countDue(sb: SupabaseClient): Promise<number> {
     // tier condition (a grace-listed tuple is claimable even if somehow demoted to
     // tail) — it must never bypass the 28-day cadence, or every new release gets
     // re-scraped nightly for 6 months (review finding #1).
-    .lte('next_due_at', nowIso)
-    .or(`tier.eq.active,grace_until.gt.${nowIso}`);
+    // 2026-07-19 policy: tail is lane D work too (90d UK cycle) — due-ness alone gates.
+    .lte('next_due_at', nowIso);
   if (error) throw new Error(`countDue failed: ${error.message}`);
   return count ?? 0;
 }
@@ -246,13 +283,26 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
     .from('bl_pg_refresh_queue')
     .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts')
     .is('locked_by', null)
-    // Same due-ness semantics as countDue (see comment there).
+    // Same due-ness semantics as countDue. Active tier drains before tail: a due
+    // active tuple always outranks a due tail tuple (tail is the 90d background fill).
     .lte('next_due_at', nowIso)
-    .or(`tier.eq.active,grace_until.gt.${nowIso}`)
+    .eq('tier', 'active')
     .order('next_due_at', { ascending: true })
     .limit(limit);
   if (error) throw new Error(`claimBatch select failed: ${error.message}`);
-  const rows = (data ?? []) as QueueRow[];
+  let rows = (data ?? []) as QueueRow[];
+  if (rows.length < limit) {
+    const { data: tailData, error: tailErr } = await sb
+      .from('bl_pg_refresh_queue')
+      .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts')
+      .is('locked_by', null)
+      .lte('next_due_at', nowIso)
+      .eq('tier', 'tail')
+      .order('next_due_at', { ascending: true })
+      .limit(limit - rows.length);
+    if (tailErr) throw new Error(`claimBatch tail select failed: ${tailErr.message}`);
+    rows = rows.concat((tailData ?? []) as QueueRow[]);
+  }
   if (rows.length === 0) return [];
 
   const filter = rows.map(tupleFilterGroup).join(',');
@@ -372,7 +422,7 @@ function toOkQueueUpdate(t: QueueRow): Record<string, unknown> {
     item_no: t.item_no,
     colour_id: t.colour_id,
     last_refreshed_at: nowIso,
-    next_due_at: addDaysIso(ACTIVE_CYCLE_DAYS),
+    next_due_at: addDaysIso(cycleDaysFor(t)),
     attempts: 0,
     last_error: null,
     locked_by: null,
@@ -555,6 +605,7 @@ async function main(): Promise<void> {
   const reclaimed = await reclaimStaleLocks(supabase);
   if (reclaimed > 0) console.log(`[pg-refresh-cycle] reclaimed ${reclaimed} stale lock(s) (>8h old)`);
 
+  await loadNewForYearKeys(supabase);
   const dueCount = await countDue(supabase);
   const designCadence = SESSION_SIZE * MAX_SESSIONS;
   const eta = dueCount > 0 ? Math.ceil(dueCount / designCadence) : 0;
