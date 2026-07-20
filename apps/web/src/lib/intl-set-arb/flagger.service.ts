@@ -38,8 +38,14 @@ import { KeepaClient } from '../keepa/keepa-client';
 
 const ASIN_TRUST_MIN = 95; // sets-intel provenance rule (2026-07-13)
 const CONSIGNMENT_FLOOR_GBP = 135;
-const SNAPSHOT_WINDOW_DAYS = 30;   // fold window — beyond this a quote is unusable
-const SNAPSHOT_FRESH_DAYS = 7;     // older than this → Keepa top-up wanted
+// The PROACTIVE refresher of amazon_arbitrage_pricing is the Keepa arbitrage
+// sync (Cloud Scheduler, every 30 min, ~2,700 ASINs/day) whose RPC already
+// includes arb-set ASINs as a third UNION arm (20260718110000) — it cycles the
+// ~1.8k arb pool every 1–2 weeks. The flagger top-up here is only a BACKSTOP
+// for ASINs the scheduler hasn't reached in 28 days (Chris 2026-07-20), so it
+// rarely fires and never fights the scheduler for tokens.
+const SNAPSHOT_WINDOW_DAYS = 45;   // fold window — beyond this a quote is unusable
+const SNAPSHOT_FRESH_DAYS = 28;    // older than this → backstop Keepa top-up
 const KEEPA_TOPUP_MAX_ASINS = 400; // ~120 tokens/run at 3 per 10-ASIN batch
 
 interface OfferRow {
