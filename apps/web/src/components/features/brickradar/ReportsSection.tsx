@@ -88,12 +88,20 @@ function DigestCard({ report }: { report: ReportRow | null }) {
                   <MiniStat icon={Boxes} label="Fig movers" value={s.figMoversCount} />
                   <MiniStat icon={PackageSearch} label="L1 total" value={s.l1Total?.toLocaleString?.() ?? s.l1Total} />
                   <MiniStat icon={ClipboardList} label="Active tier" value={s.activeTierCount?.toLocaleString?.() ?? s.activeTierCount} />
-                  <MiniStat
-                    icon={ClipboardList}
-                    label="Within 28d"
-                    value={`${Number(s.activeWithin28dPct).toFixed(0)}%`}
-                    tone={Number(s.activeWithin28dPct) >= 90 ? 'good' : Number(s.activeWithin28dPct) >= 70 ? 'warn' : 'serious'}
-                  />
+                  {(() => {
+                    // New records (2026-07-20+) carry the true L3-based coverage %;
+                    // older ones only have the retired queue-stamp metric.
+                    const isTrueCoverage = s.activeCoveredFreshPct != null;
+                    const pct = Number(s.activeCoveredFreshPct ?? s.activeWithin28dPct ?? 0);
+                    return (
+                      <MiniStat
+                        icon={ClipboardList}
+                        label={isTrueCoverage ? 'Covered (fresh)' : 'Within 28d'}
+                        value={`${pct.toFixed(0)}%`}
+                        tone={pct >= 90 ? 'good' : pct >= 70 ? 'warn' : 'serious'}
+                      />
+                    );
+                  })()}
                   <MiniStat icon={ClipboardList} label="Past due" value={s.pastDueCount} tone={s.pastDueCount > 0 ? 'warn' : 'good'} />
                 </div>
               );
