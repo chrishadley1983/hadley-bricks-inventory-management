@@ -32,7 +32,7 @@
  *   --min-str=<ratio>        Buy-list gate on UK sell-through (default 0)
  *   --cache-ttl-days=<n>     UK-detail (L3) read window (default 45 — Chris 2026-07-08:
  *                            "use the best type available"; stale-but-UK beats fresh-worldwide
- *                            for pricing, and the 28-day refresh cycle keeps active tuples
+ *                            for pricing, and the 60-day refresh cycle keeps active tuples
  *                            well inside this window. Buy candidates get a live UK check
  *                            before purchase regardless, so the window is triage-safe.
  *                            Revisit if the cycle's freshness ratio slips — see the digest)

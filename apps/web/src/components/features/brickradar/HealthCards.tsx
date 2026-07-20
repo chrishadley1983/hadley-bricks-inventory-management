@@ -49,14 +49,16 @@ export function HealthCards({ health }: { health: HealthSummary }) {
         <CardHeader className="pb-2">
           <CardDescription className="flex items-center gap-1.5">
             <Gauge className="h-3.5 w-3.5" />
-            Active-tier freshness
-            <InfoTip text="Active-tier freshness = % of the top-60k value tuples refreshed within their 28-day cycle." />
+            Active-tier coverage
+            <InfoTip text="True coverage from pg_coverage_report: % of the top-60k value tuples with a real UK scrape (or confirmed no-data) inside the 60-day cycle. Not a due-date proxy." />
           </CardDescription>
           <CardTitle className={`text-2xl tabular-nums ${STATUS_TEXT[freshnessTone]}`}>{pct(health.activeFreshPct)}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-xs text-muted-foreground">
-            {health.activeTierTotal.toLocaleString()} active tuples inside the 28d cycle
+            {health.activeCoveredFreshCount != null
+              ? `${health.activeCoveredFreshCount.toLocaleString()} of ${health.activeTierTotal.toLocaleString()} active tuples covered fresh`
+              : `${health.activeTierTotal.toLocaleString()} active tuples — coverage view unreadable`}
           </p>
         </CardContent>
       </Card>

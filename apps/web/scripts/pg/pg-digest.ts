@@ -5,7 +5,7 @@
  *   - Top-10 STR risers/fallers from pg_screen_trend_movers (combined sold6m qty delta).
  *   - Top-10 fig-radar movers (same view, item_type='M').
  *   - Coverage/freshness health: L1 total, active-tier size + % refreshed within the
- *     28-day cycle, tuples past next_due_at, and the last-7-days lane telemetry
+ *     60/90-day cycle (via pg_coverage_report), due backlog, and the last-7-days lane telemetry
  *     (requests/ok/fail + a first-block-position trend summary) per lane.
  *   - If a tmp/pg-reports/own-store-audit-*.md report exists from the last 7 days, its
  *     top-5 lines per section (most recent report wins if more than one).
@@ -146,9 +146,14 @@ interface CoverageReportRow {
 }
 
 async function loadCoverageReport(): Promise<CoverageReportRow[]> {
-  const { data, error } = await supabase.from('pg_coverage_report').select('*');
-  if (error) throw new Error(`pg_coverage_report read failed: ${error.message}`);
-  return (data ?? []) as CoverageReportRow[];
+  // Retry once: a cold plan can (rarely, post-20260720170000 rewrite) still brush the
+  // PostgREST statement timeout; the second read runs warm.
+  for (let attempt = 1; ; attempt++) {
+    const { data, error } = await supabase.from('pg_coverage_report').select('*');
+    if (!error) return (data ?? []) as CoverageReportRow[];
+    if (attempt >= 2) throw new Error(`pg_coverage_report read failed: ${error.message}`);
+    console.warn(`[pg-digest] pg_coverage_report cold read failed (${error.message}) — retrying once`);
+  }
 }
 
 interface TelemetryRow {

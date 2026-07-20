@@ -22,7 +22,11 @@ export interface DailySparklinePoint {
 export interface HealthSummary {
   l1TuplesTotal: number;
   activeTierTotal: number;
+  /** True active-tier coverage % from pg_coverage_report (fresh + no_data_fresh over the
+   * tier) — NOT a next_due_at proxy (2026-07-20 coverage audit). Null = view unreadable. */
   activeFreshPct: number | null;
+  /** Absolute count behind activeFreshPct. Null = view unreadable. */
+  activeCoveredFreshCount: number | null;
   activePastDueCount: number;
   snapshotsCount: number;
   lastTelemetryRunDate: string | null;

@@ -34,10 +34,10 @@ How we actually get BrickLink's price-guide data — five separate "lanes", each
 ## Key concepts
 
 - **STR (Sell-Through Rate)** = sold lots ÷ stock lots. Above 1 sells faster than it's stocked; below 0.5 is oversupplied/slow.
-- **Tiers — Active vs Tail.** Active = the top ~60k tuples by 6-month sold value, refreshed on a 28-day cycle with UK-grade detail. Tail = everything else, refreshed slower with worldwide summary only.
+- **Tiers — Active vs Tail.** Active = the top ~60k tuples by 6-month sold value, refreshed on a 60-day UK-grade cycle (28 days for new-for-the-year items). Tail = everything else, on a 90-day UK cycle.
 - **L1 vs L3.** L1 = worldwide summary (broad, cheap to hold — every tuple gets one). L3 = UK-specific detail (precise — this is what buy decisions actually use).
 - **POV (Part-Out Value).** What a sealed set is worth broken into its individual parts.
-- **Freshness.** The % of active-tier tuples currently sitting inside their 28-day refresh window.
+- **Coverage.** The % of active-tier tuples with a real UK scrape (or confirmed no-data) inside the 60-day cycle — from the pg_coverage_report view, never the queue's due-dates.
 - **Parse version / histogram.** Rows scraped before the price-histogram feature (parse v2) show UK averages but no price distribution. v3+ rows (scraped from 8 Jul 2026 on) include the "STR at my price" sold-price histogram.
 - **Block-rate / first-block.** The tripwire metric that tells us to throttle a lane down before a real ban — how many requests a scrape session survives before BrickLink challenges it. Higher is safer.
 `.trim();
