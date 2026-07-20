@@ -75,6 +75,7 @@ import {
   toPgCacheRow,
 } from '../src/lib/bricklink/price-guide-cache.service';
 import { bricqerMultiplier, bricqerListPrice, BRICQER_PRICE_FLOOR } from '../src/lib/bricklink/bricqer-pricing';
+import { cycleDaysForTier } from '../src/lib/bricklink/pg-cycle-policy';
 import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completeness';
 import { PartOutValueCacheService } from '../src/lib/bricklink/part-out-value-cache.service';
 import { parseSetNumber, resolvePovOptions } from '../src/lib/bricklink/part-out-value';
@@ -440,8 +441,32 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
 
     const flush = async () => {
       if (pendingUpserts.length === 0) return;
-      await cacheService.upsert(pendingUpserts);
-      pendingUpserts.length = 0;
+      const flushed = pendingUpserts.splice(0);
+      await cacheService.upsert(flushed);
+      // Queue write-back (2026-07-20 audit): these tuples were just page-scraped in full,
+      // so stamp last_refreshed_at and push next_due_at out at the tier-correct cycle —
+      // otherwise tonight's lane D redoes today's work. Best-effort: tuples not in the
+      // queue simply match nothing (they'll be adopted by the orphan backfill/universe).
+      try {
+        const refs = flushed.map((r) => r.item);
+        const filter = refs
+          .map((r) => `and(item_type.eq.${r.itemType},item_no.eq."${r.itemNo}",colour_id.eq.${r.itemType === 'P' ? r.colourId : 0})`)
+          .join(',');
+        const { data } = await supabase
+          .from('bl_pg_refresh_queue')
+          .select('item_type,item_no,colour_id,tier')
+          .or(filter);
+        const nowIso = new Date().toISOString();
+        for (const row of (data ?? []) as { item_type: string; item_no: string; colour_id: number; tier: 'active' | 'tail' }[]) {
+          const due = new Date(Date.now() + cycleDaysForTier(row.tier) * 24 * 3600 * 1000).toISOString();
+          await supabase
+            .from('bl_pg_refresh_queue')
+            .update({ last_refreshed_at: nowIso, next_due_at: due })
+            .eq('item_type', row.item_type).eq('item_no', row.item_no).eq('colour_id', row.colour_id);
+        }
+      } catch (e) {
+        console.warn(`  ⚠ queue write-back failed (non-fatal): ${(e as Error).message}`);
+      }
     };
 
     try {
@@ -1138,6 +1163,7 @@ function buildReport(meta: ScanMeta, scored: ScoredLot[]): { md: string; summary
 
 async function persistScanReport(storeSlug: string, summary: ScanReportSummary, md: string): Promise<void> {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { error } = await (supabase as any).from('bl_pg_scan_reports').insert({
       store_slug: storeSlug,
       verdict: summary.verdict,

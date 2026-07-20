@@ -58,6 +58,13 @@ import {
 } from '../../src/lib/bricklink/price-guide-page';
 import { PriceGuideCacheService } from '../../src/lib/bricklink/price-guide-cache.service';
 import { planNight, nextAction, type PlannerState } from '../../src/lib/bricklink/pg-session-planner';
+import {
+  ACTIVE_CYCLE_DAYS,
+  NEW_RELEASE_CYCLE_DAYS,
+  NO_DATA_REQUEUE_DAYS,
+  TAIL_CYCLE_DAYS,
+} from '../../src/lib/bricklink/pg-cycle-policy';
+import { EMPTY_PG_SUMMARY_QUAD, toSummaryCacheRow as toPgSummaryRow } from '../../src/lib/bricklink/pg-summary';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
 
@@ -103,10 +110,7 @@ const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are
 // (fast price movement + clean monthly deltas where they matter); tail joins lane D
 // at 90d UK-grade — the whole queue universe is now UK-refreshed, sustainable on the
 // nightly cadence alone once the backlog clears (~2,000 pages/day steady state).
-const ACTIVE_CYCLE_DAYS = 60;
-const NEW_RELEASE_CYCLE_DAYS = 28;
-const TAIL_CYCLE_DAYS = 90;
-const NO_DATA_REQUEUE_DAYS = 90;
+// Constants live in pg-cycle-policy.ts — shared with every other queue writer.
 
 /** Item keys (T:no) whose catalogue year is the current year — loaded at run start. */
 let newForYearKeys: Set<string> = new Set();
@@ -445,19 +449,54 @@ function toUnlockOnlyQueueUpdate(t: QueueRow): Record<string, unknown> {
   };
 }
 
-function toNoDataQueueUpdate(t: QueueRow, err: Error): Record<string, unknown> {
+function toNoDataQueueUpdate(t: QueueRow): Record<string, unknown> {
+  // A confirmed no-data page IS a successful scrape whose answer is empty (audit
+  // 2026-07-20): stamp it refreshed, clear the failure ladder, and re-check on the
+  // no-data cycle. The evidence record is the zero L1 row written alongside this.
+  const nowIso = new Date().toISOString();
+  return {
+    item_type: t.item_type,
+    item_no: t.item_no,
+    colour_id: t.colour_id,
+    last_refreshed_at: nowIso,
+    next_due_at: addDaysIso(NO_DATA_REQUEUE_DAYS),
+    attempts: 0,
+    last_error: null,
+    locked_by: null,
+    locked_at: null,
+    updated_at: nowIso,
+  };
+}
+
+function toNotFoundQueueUpdate(t: QueueRow, err: Error): Record<string, unknown> {
+  // Not in the BL catalog is permanent — park it (100y) instead of the old 90d recycle.
+  // last_error keeps the provenance; pg_coverage_report surfaces these as not_in_catalog.
   const nowIso = new Date().toISOString();
   return {
     item_type: t.item_type,
     item_no: t.item_no,
     colour_id: t.colour_id,
     last_error: err.message.slice(0, 500),
-    next_due_at: addDaysIso(NO_DATA_REQUEUE_DAYS),
-    attempts: (t.attempts ?? 0) + 1,
+    next_due_at: addDaysIso(365 * 100),
     locked_by: null,
     locked_at: null,
     updated_at: nowIso,
   };
+}
+
+/** Zero L1 summary row recording a confirmed no-data scrape (mirrors lane C's empty path). */
+function toNoDataSummaryRow(t: QueueRow): Record<string, unknown> {
+  return toPgSummaryRow(
+    { itemType: t.item_type, itemNo: t.item_no, colourId: t.colour_id },
+    {
+      soldN: EMPTY_PG_SUMMARY_QUAD,
+      soldU: EMPTY_PG_SUMMARY_QUAD,
+      stockN: EMPTY_PG_SUMMARY_QUAD,
+      stockU: EMPTY_PG_SUMMARY_QUAD,
+    },
+    'catalogpg',
+    'catalogpg_cdp',
+  ) as unknown as Record<string, unknown>;
 }
 
 function toErrorQueueUpdate(t: QueueRow, err: unknown): Record<string, unknown> {
@@ -489,6 +528,10 @@ interface SessionCounts {
   requests: number;
   ok: number;
   failed: number;
+  /** Confirmed empty price guides this session (counted inside `ok`). */
+  noData: number;
+  /** Not-in-catalog tuples parked this session (counted inside `ok`). */
+  notFound: number;
 }
 
 async function insertTelemetry(
@@ -679,7 +722,7 @@ async function main(): Promise<void> {
   };
   const runStart = Date.now();
   let sessionStartedAt = new Date().toISOString();
-  let sessionCounts: SessionCounts = { requests: 0, ok: 0, failed: 0 };
+  let sessionCounts: SessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0 };
   let firstBlockAtRequest: number | null = null;
   let totalProcessed = 0;
   let reestablishes = 0;
@@ -725,7 +768,7 @@ async function main(): Promise<void> {
         state.blockedSessions = action === 'backoff' ? state.blockedSessions + 1 : 0;
         state.requestsThisSession = 0;
         state.consecutiveFails = 0;
-        sessionCounts = { requests: 0, ok: 0, failed: 0 };
+        sessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0 };
         firstBlockAtRequest = null;
         sessionStartedAt = new Date().toISOString();
         continue;
@@ -805,9 +848,19 @@ async function main(): Promise<void> {
           if (firstBlockAtRequest === null) firstBlockAtRequest = sessionCounts.requests;
           batches.queueUpdates.push(toUnlockOnlyQueueUpdate(tuple)); // not the tuple's fault — retry later
           console.warn(`[pg-refresh-cycle] BLOCK on ${tupleLabel(item)}: ${err.message}`);
-        } else if (err instanceof PgNotFoundError || err instanceof PgNoDataError) {
-          sessionCounts.failed += 1;
-          batches.queueUpdates.push(toNoDataQueueUpdate(tuple, err));
+        } else if (err instanceof PgNoDataError) {
+          // Successful determination, not a failure: record the zero L1 row and stamp
+          // the queue refreshed (audit 2026-07-20 — these used to vanish from coverage).
+          sessionCounts.ok += 1;
+          sessionCounts.noData += 1;
+          batches.summaryRows.push(toNoDataSummaryRow(tuple));
+          batches.queueUpdates.push(toNoDataQueueUpdate(tuple));
+          state.consecutiveFails = 0;
+        } else if (err instanceof PgNotFoundError) {
+          sessionCounts.ok += 1;
+          sessionCounts.notFound += 1;
+          batches.queueUpdates.push(toNotFoundQueueUpdate(tuple, err));
+          state.consecutiveFails = 0;
         } else if (err instanceof PgLoginError || err instanceof PgCurrencyError) {
           console.error(
             `[pg-refresh-cycle] FATAL on ${tupleLabel(item)}: ${err.message} — the CDP session is unusable ` +

@@ -146,12 +146,21 @@ export interface PgDigestLaneTelemetry {
   firstBlockTrend: string;
 }
 
-/** Coverage/freshness health block (spec §5.3/§5.4). */
+/** Coverage/freshness health block (spec §5.3/§5.4), sourced from the canonical
+ * pg_coverage_report view — truth is L3 presence + fetched_at, never the queue's
+ * last_refreshed_at (2026-07-20 coverage audit). */
 export interface PgDigestCoverageHealth {
   l1Total: number;
   activeTierCount: number;
-  /** % of the active tier refreshed within the last 28 days. */
-  activeWithin28dPct: number;
+  /** % of the active tier genuinely covered within its cycle (real UK scrape or
+   * recorded no-data, fresh per the 60d policy). */
+  activeCoveredFreshPct: number;
+  /** % of the active tier with UK-native sold data (the usable-price yield). */
+  activeUkSoldPct: number;
+  /** Active-tier tuples never scraped — the first-touch backlog. */
+  activeNeverScraped: number;
+  /** Tuples (both tiers) whose scrape has outlived its 60/90d cycle. */
+  staleCount: number;
   /** Active-tier tuples whose next_due_at has already passed. */
   pastDueCount: number;
   laneTelemetry: PgDigestLaneTelemetry[];
@@ -890,7 +899,7 @@ export class DiscordService {
     sections.push(
       '',
       '**🩺 Coverage & freshness**',
-      `L1 total: **${coverage.l1Total.toLocaleString()}** · Active tier: **${coverage.activeTierCount.toLocaleString()}** · within 28d cycle: **${coverage.activeWithin28dPct.toFixed(1)}%** · past due: **${coverage.pastDueCount.toLocaleString()}**`,
+      `L1 total: **${coverage.l1Total.toLocaleString()}** · Active tier: **${coverage.activeTierCount.toLocaleString()}** · covered+fresh: **${coverage.activeCoveredFreshPct.toFixed(1)}%** · UK-sold yield: **${coverage.activeUkSoldPct.toFixed(1)}%** · never scraped: **${coverage.activeNeverScraped.toLocaleString()}** · stale: **${coverage.staleCount.toLocaleString()}** · past due: **${coverage.pastDueCount.toLocaleString()}**`,
       `Queue grew **+${coverage.growth7d.total.toLocaleString()}** (7d): ${coverage.growth7d.storeDiscovered.toLocaleString()} store-discovered · ${coverage.growth7d.newRelease.toLocaleString()} new-release · ${coverage.growth7d.backfill.toLocaleString()} backfill`,
     );
     if (coverage.laneTelemetry.length > 0) {

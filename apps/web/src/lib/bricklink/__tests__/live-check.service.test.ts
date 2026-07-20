@@ -39,10 +39,11 @@ const noFetches: TupleFetches = {
   stockUsed: { requested: false },
 };
 
-/** Minimal supabase mock: `.from(table).upsert()/.insert()` resolve ok and record calls;
+/** Minimal supabase mock: `.from(table).upsert()/.insert()/.update()` resolve ok and record
+ *  calls (`update` returns an awaitable `.eq()` chain — the queue write-back stamp);
  *  `.select().eq().maybeSingle()` resolves empty (assertApiBudget's ledger read fails open). */
 function makeMockSupabase() {
-  const calls: Array<{ table: string; op: 'upsert' | 'insert'; payload: unknown; opts?: unknown }> = [];
+  const calls: Array<{ table: string; op: 'upsert' | 'insert' | 'update'; payload: unknown; opts?: unknown }> = [];
   const client = {
     from: (table: string) => ({
       upsert: (payload: unknown, opts?: unknown) => {
@@ -52,6 +53,14 @@ function makeMockSupabase() {
       insert: (payload: unknown) => {
         calls.push({ table, op: 'insert', payload });
         return Promise.resolve({ error: null });
+      },
+      update: (payload: unknown) => {
+        calls.push({ table, op: 'update', payload });
+        const chain = {
+          eq: () => chain,
+          then: (resolve: (v: { error: null }) => void) => resolve({ error: null }),
+        };
+        return chain;
       },
       select: () => ({
         eq: () => ({

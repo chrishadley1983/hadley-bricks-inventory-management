@@ -110,10 +110,13 @@ async function seedFromCache(): Promise<void> {
     colour_id: t.colour_id,
     tier: 'tail' as const,
     rank_score: 0,
-    // These tuples ARE covered (they come from L1) — stamp last_refreshed_at so
-    // gap-fill mode (`pg-residual-fill.ts`, which selects last_refreshed_at IS NULL)
-    // never has to wade through 111k covered rows to find genuine gaps.
-    last_refreshed_at: new Date(now).toISOString(),
+    // These tuples are L1-covered — stamp seeded_at so gap-fill mode
+    // (`pg-residual-fill.ts`, which selects last_refreshed_at IS NULL AND seeded_at
+    // IS NULL) never has to wade through 111k covered rows to find genuine gaps.
+    // NEVER last_refreshed_at: that field means "actually scraped" and pre-stamping
+    // it made ~78k rows read as UK-fresh when they'd never been fetched
+    // (2026-07-20 coverage audit — the whole seed-stamp lie).
+    seeded_at: new Date(now).toISOString(),
     // Spread next_due_at randomly over the next 90 days to avoid a thundering herd
     // when the tail rotation (lane B) first turns this queue on.
     next_due_at: new Date(now + Math.random() * NINETY_DAYS_MS).toISOString(),

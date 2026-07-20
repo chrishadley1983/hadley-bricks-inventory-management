@@ -58,6 +58,12 @@ import { createScriptBlContext, type ScriptBlContext } from '../_bl-client';
 import { RateLimitError } from '../../src/lib/bricklink/client';
 import type { BrickLinkItemType, BrickLinkPriceGuide } from '../../src/lib/bricklink/types';
 import { parseResidualFillConfig } from '../../src/lib/bricklink/pg-residual-fill-config';
+import {
+  ACTIVE_CYCLE_DAYS,
+  ERROR_PARK_ATTEMPTS,
+  TAIL_CYCLE_DAYS,
+  isThrottleShapedFailure,
+} from '../../src/lib/bricklink/pg-cycle-policy';
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const UA =
@@ -133,10 +139,11 @@ async function enqueueFromInventoryFile(): Promise<void> {
     seen.add(key);
     tuples.push({ item_type: l.itemType, item_no: l.itemNo, colour_id: colour });
   }
-  // Already-covered tuples get last_refreshed_at stamped at enqueue time (same
-  // contract as pg-universe --seed-from-cache) — otherwise thousands of covered
-  // rows sit NULL in the gap window, starving genuinely-uncovered tuples past
-  // --pool-size and looking instantly "due" to --due mode (E2E validation finding).
+  // Already-covered tuples get seeded_at stamped at enqueue time (same contract as
+  // pg-universe --seed-from-cache) — otherwise thousands of covered rows sit NULL in
+  // the gap window, starving genuinely-uncovered tuples past --pool-size and looking
+  // instantly "due" to --due mode (E2E validation finding). seeded_at, NOT
+  // last_refreshed_at: the stamp must never claim a scrape happened (2026-07-20 audit).
   const covered = await fetchCoveredSet([...new Set(tuples.map((t) => t.item_no))]);
   const nowIso = new Date().toISOString();
   const spreadDue = () => new Date(Date.now() + Math.random() * 90 * 86400000).toISOString();
@@ -145,11 +152,11 @@ async function enqueueFromInventoryFile(): Promise<void> {
     return {
       ...t,
       tier: 'tail',
-      last_refreshed_at: isCovered ? nowIso : null,
+      seeded_at: isCovered ? nowIso : null,
       next_due_at: isCovered ? spreadDue() : nowIso,
     };
   });
-  const uncoveredCount = rows.filter((r) => r.last_refreshed_at === null).length;
+  const uncoveredCount = rows.filter((r) => r.seeded_at === null).length;
   console.log(
     `[enqueue] ${rows.length} unique tuples from ${path.basename(INVENTORY_FILE)} (${uncoveredCount} uncovered, ${rows.length - uncoveredCount} covered/stamped)`,
   );
@@ -210,10 +217,11 @@ async function buildCandidatePool(): Promise<QueueRow[]> {
     return pool.slice(0, POOL_SIZE);
   }
 
-  // Gap-fill mode: unlocked, never-refreshed queue rows (last_refreshed_at IS NULL —
-  // seeded-from-cache rows are stamped at seed time, so this selects genuine gaps:
-  // store-scan enqueues and catalog new releases). The coverage check below stays as
-  // a second guard against tuples enqueued by paths that don't stamp.
+  // Gap-fill mode: unlocked, never-scraped, never-seeded queue rows. Post the
+  // 2026-07-20 coverage-truth migration, seeded/covered rows carry `seeded_at` (not
+  // last_refreshed_at), so genuine gaps = both NULL: store-scan enqueues and catalog
+  // new releases. The coverage check below stays as a second guard against tuples
+  // enqueued by paths that don't stamp.
   const candidates: QueueRow[] = [];
   for (let from = 0; candidates.length < POOL_SIZE; from += PAGE) {
     const { data, error } = await supabase
@@ -221,10 +229,11 @@ async function buildCandidatePool(): Promise<QueueRow[]> {
       .select('item_type,item_no,colour_id,tier,attempts')
       .is('locked_by', null)
       .is('last_refreshed_at', null)
+      .is('seeded_at', null)
       // Backstop against permanent-retry starvation: tuples that failed 8+ times
       // across runs (incl. lane-A attempts) are parked until an operator
       // investigates — visible via last_error, not silently retried forever.
-      .lt('attempts', 8)
+      .lt('attempts', ERROR_PARK_ATTEMPTS)
       .order('created_at', { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`gap-pool read failed: ${error.message}`);
@@ -291,6 +300,20 @@ async function releaseTuples(tuples: QueueRow[]): Promise<void> {
   if (error) throw new Error(`release failed: ${error.message}`);
 }
 
+/** Throttle/infra-shaped failure (HTTP status, network): NOT the tuple's fault — release
+ * the lock and note the reason without climbing the attempts ladder, so a run of 403s
+ * can never park a healthy tuple at ERROR_PARK_ATTEMPTS (2026-07-20 audit finding). */
+async function markThrottled(t: QueueRow, reason: string): Promise<void> {
+  const { error } = await supabase
+    .from('bl_pg_refresh_queue')
+    .update({ locked_by: null, locked_at: null, last_error: reason, updated_at: new Date().toISOString() })
+    .eq('locked_by', RUN_ID)
+    .eq('item_type', t.item_type)
+    .eq('item_no', t.item_no)
+    .eq('colour_id', t.colour_id);
+  if (error) console.error(`  ⚠ markThrottled update failed for ${tupleKey(t)}: ${error.message}`);
+}
+
 async function markFailure(t: QueueRow, reason: string): Promise<void> {
   const { error } = await supabase
     .from('bl_pg_refresh_queue')
@@ -304,7 +327,7 @@ async function markFailure(t: QueueRow, reason: string): Promise<void> {
 
 async function markSuccess(t: QueueRow): Promise<void> {
   const now = new Date();
-  const dueDays = t.tier === 'active' ? 28 : 90;
+  const dueDays = t.tier === 'active' ? ACTIVE_CYCLE_DAYS : TAIL_CYCLE_DAYS;
   const nextDue = new Date(now.getTime() + dueDays * 86400000).toISOString();
   const { error } = await supabase
     .from('bl_pg_refresh_queue')
@@ -598,7 +621,10 @@ async function runSession(sessionNo: number, requestedBatch: QueueRow[]): Promis
       consec++;
       stats.failed++;
       recentFails.push(t);
-      await markFailure(t, outcome.reason);
+      // consec/challenge detection still counts every failure (session health), but only
+      // tuple-shaped failures (parse/currency) climb the attempts ladder.
+      if (isThrottleShapedFailure(outcome.reason)) await markThrottled(t, outcome.reason);
+      else await markFailure(t, outcome.reason);
       if (stats.firstBlockAtRequest == null && consec === 1) {
         // Track the request number of the *first* failure this session — the
         // sessions-to-first-403 signal §4.4 wants, even when it doesn't escalate
