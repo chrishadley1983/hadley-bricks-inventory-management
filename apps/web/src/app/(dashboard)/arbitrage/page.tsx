@@ -37,7 +37,13 @@ interface BasketItem {
   sellGbp: number | null;
   sellNetGbp: number | null;
   marginGbp: number | null;
+  /** House decision number: NET margin ÷ SALE, conservative basis. */
+  marginPctSale: number | null;
+  grade: 'green' | 'amber' | null;
   drops90: number | null;
+  salesRank: number | null;
+  was90Gbp: number | null;
+  snapshotDate: string | null;
   asin: string | null;
   ukCheapestGbp: number | null;
   weightG: number | null;
@@ -55,7 +61,8 @@ interface Basket {
   breakdown: {
     itemsGbp: number; shippingGbp: number; dutyGbp: number; vatGbp: number;
     handlingGbp: number; landedGbp: number; sellNetGbp: number;
-    netMarginGbp: number; netMarginPct: number | null; clearsFloor: boolean; totalWeightG: number;
+    netMarginGbp: number; netMarginPct: number | null; netMarginPctSale: number | null;
+    clearsFloor: boolean; totalWeightG: number;
   };
   items: BasketItem[];
 }
@@ -122,6 +129,27 @@ function VelocityBadge({ drops }: { drops: number | null }) {
   return <Badge variant="outline">{drops}/90d</Badge>;
 }
 
+/** House margin grade: green >25% / amber >15% of sale (max-buy.ts bands). */
+function GradeBadge({ grade, pct }: { grade: 'green' | 'amber' | null; pct: number | null }) {
+  if (grade == null || pct == null) return null;
+  const cls = grade === 'green'
+    ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+    : 'border-amber-500/50 text-amber-600 dark:text-amber-400';
+  return <Badge variant="outline" className={cls}>{(100 * pct).toFixed(0)}%</Badge>;
+}
+
+/** Days since the Amazon quote's snapshot; badge when older than a week. */
+function QuoteAgeBadge({ snapshotDate }: { snapshotDate: string | null }) {
+  if (!snapshotDate) return null;
+  const days = Math.floor((Date.now() - new Date(snapshotDate).getTime()) / 864e5);
+  if (days <= 7) return null;
+  return (
+    <Badge variant="outline" className="ml-1 border-rose-500/40 text-rose-500" title={`Amazon price snapshotted ${snapshotDate}`}>
+      {days}d old
+    </Badge>
+  );
+}
+
 function BasketCard({ basket, onStatus }: { basket: Basket; onStatus: (id: string, status: 'excluded' | 'bought') => void }) {
   const [open, setOpen] = useState(false);
   const b = basket.breakdown;
@@ -153,7 +181,8 @@ function BasketCard({ basket, onStatus }: { basket: Basket; onStatus: (id: strin
               {gbp(b.netMarginGbp, 0)}
             </div>
             <div className="text-xs text-muted-foreground tabular-nums">
-              {b.netMarginPct != null ? `${(100 * b.netMarginPct).toFixed(0)}% on landed` : '—'}
+              {b.netMarginPctSale != null ? `${(100 * b.netMarginPctSale).toFixed(0)}% of sale`
+                : b.netMarginPct != null ? `${(100 * b.netMarginPct).toFixed(0)}% on landed` : '—'}
             </div>
           </div>
         </button>
@@ -162,15 +191,17 @@ function BasketCard({ basket, onStatus }: { basket: Basket; onStatus: (id: strin
           <div className="border-t bg-muted/20 px-4 py-3">
             <CostWaterfall b={b} />
             <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
+              <table className="w-full min-w-[860px] text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="py-1.5 pr-2 font-medium">Set</th>
                     <th className="py-1.5 pr-2 text-right font-medium">Buy</th>
                     <th className="py-1.5 pr-2 text-right font-medium">Landed share</th>
                     <th className="py-1.5 pr-2 text-right font-medium">Amazon</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">90d avg</th>
                     <th className="py-1.5 pr-2 text-right font-medium">Margin</th>
                     <th className="py-1.5 pr-2 text-right font-medium">UK alt</th>
+                    <th className="py-1.5 pr-2 text-right font-medium">BSR</th>
                     <th className="py-1.5 pr-2 font-medium">Velocity</th>
                     <th className="py-1.5 font-medium" />
                   </tr>
@@ -196,9 +227,17 @@ function BasketCard({ basket, onStatus }: { basket: Basket; onStatus: (id: strin
                             {gbp(i.sellGbp)}<ExternalLink className="h-3 w-3 text-muted-foreground" />
                           </a>
                         ) : gbp(i.sellGbp)}
+                        <QuoteAgeBadge snapshotDate={i.snapshotDate} />
                       </td>
-                      <td className={`py-1.5 pr-2 text-right font-semibold ${(i.marginGbp ?? 0) >= 50 ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>{gbp(i.marginGbp)}</td>
+                      <td className="py-1.5 pr-2 text-right text-muted-foreground">{gbp(i.was90Gbp)}</td>
+                      <td className={`py-1.5 pr-2 text-right font-semibold ${i.grade === 'green' ? 'text-emerald-600 dark:text-emerald-400' : ''}`}>
+                        <span className="mr-1">{gbp(i.marginGbp)}</span>
+                        <GradeBadge grade={i.grade} pct={i.marginPctSale} />
+                      </td>
                       <td className="py-1.5 pr-2 text-right text-muted-foreground">{gbp(i.ukCheapestGbp)}</td>
+                      <td className="py-1.5 pr-2 text-right text-muted-foreground">
+                        {i.salesRank == null ? '—' : i.salesRank >= 1000 ? `${Math.round(i.salesRank / 1000)}k` : String(i.salesRank)}
+                      </td>
                       <td className="py-1.5 pr-2"><VelocityBadge drops={i.drops90} /></td>
                       <td className="py-1.5">
                         <div className="flex justify-end gap-1">
@@ -281,7 +320,7 @@ export default function IntlSetArbPage() {
     const score = (b: Basket) => {
       switch (sortMode) {
         case 'margin': return b.breakdown.netMarginGbp;
-        case 'marginPct': return b.breakdown.netMarginPct ?? 0;
+        case 'marginPct': return b.breakdown.netMarginPctSale ?? b.breakdown.netMarginPct ?? 0;
         case 'velocityWeighted':
         default:
           // margin haircut when velocity is thin — the drops90-0 mirage guard

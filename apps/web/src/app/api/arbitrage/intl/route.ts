@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { buildConsignment, type ConsignmentItem } from '@/lib/intl-set-arb/consignment';
 import type { ZoneCosts } from '@/lib/intl-set-arb/landed-cost';
+import { MAX_BUY_GREEN_MARGIN } from '@/lib/investment/max-buy';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,9 @@ interface CandRow {
   velocity_drops90: number | null;
   amazon_asin: string | null;
   uk_cheapest_gbp: number | null;
+  was_price_90d: number | null;
+  sales_rank: number | null;
+  amazon_snapshot_date: string | null;
   flags: Record<string, boolean>;
   status: string;
   computed_at: string;
@@ -84,6 +88,8 @@ export async function GET(request: NextRequest) {
       if (!zone || cItems.length === 0) return null;
       const b = buildConsignment(zone, cItems);
       const velocities = items.map((i) => i.velocity_drops90 ?? 0);
+      // House basket %: NET margin ÷ total SALE (same basis as per-set grading).
+      const totalSaleGbp = items.reduce((a, c) => a + (c.sell_price_gbp == null ? 0 : Number(c.sell_price_gbp)), 0);
       return {
         storeId,
         storeName: items[0].source_store_name,
@@ -94,7 +100,9 @@ export async function GET(request: NextRequest) {
         breakdown: {
           itemsGbp: b.itemsGbp, shippingGbp: b.shippingGbp, dutyGbp: b.dutyGbp,
           vatGbp: b.vatGbp, handlingGbp: b.handlingGbp, landedGbp: b.landedGbp,
-          sellNetGbp: b.sellNetGbp, netMarginGbp: b.netMarginGbp, netMarginPct: b.netMarginPct,
+          sellNetGbp: b.sellNetGbp, netMarginGbp: b.netMarginGbp,
+          netMarginPct: b.netMarginPct,
+          netMarginPctSale: totalSaleGbp > 0 ? +(b.netMarginGbp / totalSaleGbp).toFixed(4) : null,
           clearsFloor: b.clearsFloor, totalWeightG: b.totalWeightG,
         },
         velocitySum: velocities.reduce((a, v) => a + v, 0),
@@ -110,7 +118,13 @@ export async function GET(request: NextRequest) {
             sellGbp: row.sell_price_gbp,
             sellNetGbp: row.sell_net_gbp,
             marginGbp: pi.itemMarginGbp,
+            marginPctSale: row.net_margin_pct == null ? null : Number(row.net_margin_pct),
+            grade: row.net_margin_pct == null ? null
+              : Number(row.net_margin_pct) >= MAX_BUY_GREEN_MARGIN ? 'green' : 'amber',
             drops90: row.velocity_drops90,
+            salesRank: row.sales_rank,
+            was90Gbp: row.was_price_90d == null ? null : Number(row.was_price_90d),
+            snapshotDate: row.amazon_snapshot_date,
             asin: row.amazon_asin,
             ukCheapestGbp: row.uk_cheapest_gbp,
             weightG: row.weight_g,

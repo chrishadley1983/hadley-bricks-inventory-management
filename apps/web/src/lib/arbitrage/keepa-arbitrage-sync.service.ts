@@ -7,7 +7,9 @@
  * Budget-spread strategy (EUR 49 plan, 20 tokens/min):
  * - Called every 30 minutes by Cloud Scheduler (48 invocations/day)
  * - Each invocation processes a fixed ASIN budget (~56 ASINs)
- * - Priority: in-stock ASINs first (same-day freshness), then stalest items
+ * - Priority: in-stock ASINs first when due their WEEKLY refresh (daily buy-box
+ *   truth for stock comes from the SP-API overlay cron — Keepa-only fields move
+ *   slowly; Chris 2026-07-20), then stalest items
  * - Leaves ~40% token headroom for other Keepa-consuming processes
  *
  * Token economics (EUR 49):
