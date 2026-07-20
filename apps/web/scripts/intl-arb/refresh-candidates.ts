@@ -22,6 +22,6 @@ const supabase = createClient(
 
 refreshCandidates(supabase, { offersMaxAgeDays: parseFloat(argv['offers-max-age-days'] ?? '10') })
   .then((r) => {
-    console.log(`[refresh-candidates] sets scanned ${r.setsScanned} · candidates ${r.candidatesWritten} · staled ${r.staleMarked} · no-weight ${r.skippedNoWeight} · no-sell-side ${r.skippedNoSellSide}`);
+    console.log(`[refresh-candidates] sets scanned ${r.setsScanned} · candidates ${r.candidatesWritten} · staled ${r.staleMarked} · no-weight ${r.skippedNoWeight} · no-sell-side ${r.skippedNoSellSide} · below-amber ${r.skippedBelowAmber} · keepa-topups ${r.keepaToppedUp}`);
   })
   .catch((e) => { console.error('[refresh-candidates] fatal:', e); process.exit(1); });

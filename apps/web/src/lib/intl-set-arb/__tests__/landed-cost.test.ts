@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   landedUnitGbp, zoneForCountry, makeAmazonValuer, marginalShippingGbp,
-  HANDLING_AMORTISE_UNITS, AMAZON_FEE_SHARE, type ZoneCosts,
+  HANDLING_AMORTISE_UNITS, AMAZON_FEE_SHARE, AMAZON_OUTBOUND_SHIP_GBP, type ZoneCosts,
 } from '../landed-cost';
+import { MAX_BUY_FEE, MAX_BUY_SHIP } from '../../investment/max-buy';
 
 const ASIA: ZoneCosts = {
   zone: 'ASIA', countries: ['HK', 'CN', 'MY', 'SG'], duty_rate: 0.04, vat_rate: 0.20,
@@ -60,13 +61,20 @@ describe('landedUnitGbp', () => {
 
 describe('makeAmazonValuer', () => {
   const v = makeAmazonValuer(new Map([
-    ['10307-1', { asin: 'B0TEST', buyBox: 100, drops90: 42, asinConfidence: 99 }],
-    ['10308-1', { asin: 'B0NOPX', buyBox: null, drops90: null, asinConfidence: 99 }],
+    ['10307-1', { asin: 'B0TEST', buyBox: 100, was90: 95, drops90: 42, salesRank: 12_345, snapshotDate: '2026-07-20', asinConfidence: 99 }],
+    ['10308-1', { asin: 'B0NOPX', buyBox: null, was90: null, drops90: null, salesRank: null, snapshotDate: null, asinConfidence: 99 }],
   ]));
-  it('quotes net of the 17% fee share', () => {
+  it('house constants are the max-buy ones, never re-declared', () => {
+    expect(AMAZON_FEE_SHARE).toBe(MAX_BUY_FEE);
+    expect(AMAZON_OUTBOUND_SHIP_GBP).toBe(MAX_BUY_SHIP);
+  });
+  it('quotes HOUSE net: fees and outbound ship off the sale price', () => {
     const q = v.quote('10307-1')!;
-    expect(q.sellNetGbp).toBeCloseTo(100 * (1 - AMAZON_FEE_SHARE), 2);
+    expect(q.sellNetGbp).toBeCloseTo(100 * (1 - AMAZON_FEE_SHARE) - AMAZON_OUTBOUND_SHIP_GBP, 2);
     expect(q.velocityDrops90).toBe(42);
+    expect(q.was90Gbp).toBe(95);
+    expect(q.salesRank).toBe(12_345);
+    expect(q.snapshotDate).toBe('2026-07-20');
   });
   it('null without a buy box or unknown set', () => {
     expect(v.quote('10308-1')).toBeNull();

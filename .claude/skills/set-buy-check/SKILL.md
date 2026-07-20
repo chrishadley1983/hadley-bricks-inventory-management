@@ -107,8 +107,13 @@ expected_sale = 180d median buy box   (fallback: current buy box; never a
                 buy box that is >20% above the 180d median — that's a spike)
 max_buy       = 0.58 × expected_sale   (established formula, covers fees+margin)
 ```
-Velocity gate: drops90 < 15 (or missing with BSR > 200k) → demote Route B to
-context; it can't be the recommended route however good the margin looks.
+Decision is MARGIN-ONLY (Chris, ratified 2026-07-20): NET margin % of sale —
+GREEN >25%, AMBER >15%, drop below (bands live in
+`src/lib/investment/max-buy.ts`; net = sale×(1−fees) − outbound ship − all-in
+cost). drops90 and BSR are ALWAYS displayed against each set as information —
+they are never a gate and never demote a route. (An earlier version of this
+skill carried an invented "drops90 < 15 / BSR > 200k" gate — Chris never set
+those thresholds; do not reintroduce them.)
 
 **Route C — BL part-out** (signal, not a valuation). MANDATORY for every set,
 new and used — compute and DISPLAY the POV multiple on every row, whatever the

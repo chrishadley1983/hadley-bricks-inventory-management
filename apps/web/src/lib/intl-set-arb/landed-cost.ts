@@ -10,6 +10,7 @@
  * an assumed consignment of `handlingAmortiseUnits` (default 10 — a realistic
  * Asia basket; the consignment builder recomputes exactly per real basket).
  */
+import { MAX_BUY_FEE, MAX_BUY_SHIP } from '../investment/max-buy';
 
 export interface ZoneCosts {
   zone: string;
@@ -90,8 +91,13 @@ export type SellChannel = 'amazon' | 'ebay';
 export interface ChannelQuote {
   channel: SellChannel;
   sellPriceGbp: number;
-  sellNetGbp: number;      // after channel fees
+  sellNetGbp: number;      // NET: after channel fees AND outbound ship (house convention)
+  /** 90-day average sale basis (Keepa avg90 buy box); null when unknown. */
+  was90Gbp: number | null;
   velocityDrops90: number | null;
+  salesRank: number | null;
+  /** Snapshot date the quote was priced from (YYYY-MM-DD) — consumers badge age. */
+  snapshotDate: string | null;
   meta: Record<string, unknown>;
 }
 
@@ -101,12 +107,26 @@ export interface ChannelValuer {
   quote(setNorm: string): ChannelQuote | null;
 }
 
-/** Amazon FBM fee share (platform-fee-structure memory: ~17% all-in). */
-export const AMAZON_FEE_SHARE = 0.17;
+/** House Amazon constants — single source is investment/max-buy.ts; never re-declare. */
+export const AMAZON_FEE_SHARE = MAX_BUY_FEE;
+export const AMAZON_OUTBOUND_SHIP_GBP = MAX_BUY_SHIP;
 
-export function makeAmazonValuer(
-  bySet: Map<string, { asin: string; buyBox: number | null; drops90: number | null; asinConfidence: number | null }>,
-): ChannelValuer {
+/** House NET back for one unit: sale less fees less outbound ship. */
+export function amazonNetGbp(saleGbp: number): number {
+  return +(saleGbp * (1 - AMAZON_FEE_SHARE) - AMAZON_OUTBOUND_SHIP_GBP).toFixed(2);
+}
+
+export interface AmazonSetIntel {
+  asin: string;
+  buyBox: number | null;
+  was90: number | null;
+  drops90: number | null;
+  salesRank: number | null;
+  snapshotDate: string | null;
+  asinConfidence: number | null;
+}
+
+export function makeAmazonValuer(bySet: Map<string, AmazonSetIntel>): ChannelValuer {
   return {
     channel: 'amazon',
     quote(setNorm) {
@@ -115,8 +135,11 @@ export function makeAmazonValuer(
       return {
         channel: 'amazon',
         sellPriceGbp: r.buyBox,
-        sellNetGbp: +(r.buyBox * (1 - AMAZON_FEE_SHARE)).toFixed(2),
+        sellNetGbp: amazonNetGbp(r.buyBox),
+        was90Gbp: r.was90 != null && r.was90 > 0 ? r.was90 : null,
         velocityDrops90: r.drops90,
+        salesRank: r.salesRank,
+        snapshotDate: r.snapshotDate,
         meta: { asin: r.asin, asinConfidence: r.asinConfidence },
       };
     },
