@@ -166,9 +166,9 @@ predicted 1yr price) and, if present, the latest
 | `UNIDENTIFIED` | couldn't resolve a set number |
 
 **Sub-£15 asks**: suppress LOW-CONF warnings and the Stage 5 machinery —
-verdict quality there doesn't justify the spend — **except**: if Route B
-(Amazon) is the recommended route and profitable, the BSR/velocity gate above
-is still mandatory. A £8 set with a 900k BSR is not a BUY.
+verdict quality there doesn't justify the spend. The margin-only decision
+rule applies at every price point; as always, display drops90 + BSR beside
+the verdict so slow movers are visible (information, never a gate).
 
 ## Stage 5 — Gotcha pass (optional, on request: "check the big ones")
 
