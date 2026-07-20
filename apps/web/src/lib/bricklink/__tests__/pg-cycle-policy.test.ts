@@ -24,11 +24,12 @@ describe('pg-cycle-policy', () => {
   });
 
   describe('isThrottleShapedFailure', () => {
-    it('treats HTTP status and network failures as throttle-shaped (no attempts climb)', () => {
+    it('treats HTTP status, network and HTTP-200 challenge-page failures as throttle-shaped (no attempts climb)', () => {
       expect(isThrottleShapedFailure('HTTP 403')).toBe(true);
       expect(isThrottleShapedFailure('HTTP 429')).toBe(true);
       expect(isThrottleShapedFailure('HTTP 503')).toBe(true);
       expect(isThrottleShapedFailure('network: fetch failed')).toBe(true);
+      expect(isThrottleShapedFailure('challenge-page (len=331)')).toBe(true);
     });
 
     it('treats tuple-shaped failures as real failures (attempts climb)', () => {

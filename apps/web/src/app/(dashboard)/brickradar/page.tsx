@@ -150,6 +150,7 @@ export default async function BrickRadarPage() {
     recentScansRes,
     ownStoreAuditRes,
     digestRes,
+    coverageReportRes,
     ...bucketRes
   ] = await Promise.all([
     supabase.from('bricklink_pg_summary_cache').select('*', { count: 'exact', head: true }),
@@ -211,6 +212,9 @@ export default async function BrickRadarPage() {
       .limit(1),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- table not yet in generated Database types
     (supabase as any).from('bl_pg_reports').select('*').eq('kind', 'digest').order('generated_at', { ascending: false }).limit(1),
+    // Canonical coverage truth (pg_coverage_report view, migration 20260720150000/170000):
+    // L3-presence based — the queue's next_due_at is a scheduling signal, not coverage.
+    supabase.from('pg_coverage_report').select('*'),
     ...bucketDefs.map((b) => {
       let q = supabase.from('bl_pg_refresh_queue').select('*', { count: 'exact', head: true }).eq('tier', 'active');
       if (b.fromMs != null) q = q.gte('next_due_at', new Date(now.getTime() + b.fromMs).toISOString());
@@ -231,10 +235,28 @@ export default async function BrickRadarPage() {
   const activeTierTotal = activeTotalRes.count ?? 0;
   const activePastDueCount = activePastDueRes.count ?? 0;
 
+  // True freshness from the view: fresh + no_data_fresh over the active tier. The old
+  // computation ((total - pastDue) / total) was a next_due_at proxy that read as
+  // "refreshed" — retired by the 2026-07-20 coverage audit. Null (card shows —) if the
+  // view read failed rather than falling back to the misleading proxy.
+  const coverageRows = (coverageReportRes.data ?? []) as { tier: string; status: string; tuples: number }[];
+  const activeCoverage = coverageRows.filter((r) => r.tier === 'active');
+  const activeCoverageTotal = activeCoverage.reduce((s, r) => s + r.tuples, 0);
+  const activeCoveredFreshCount =
+    coverageReportRes.error || activeCoverageTotal === 0
+      ? null
+      : activeCoverage
+          .filter((r) => r.status === 'fresh' || r.status === 'no_data_fresh')
+          .reduce((s, r) => s + r.tuples, 0);
+
   const health: HealthSummary = {
     l1TuplesTotal: l1TotalRes.count ?? 0,
     activeTierTotal,
-    activeFreshPct: activeTierTotal > 0 ? ((activeTierTotal - activePastDueCount) / activeTierTotal) * 100 : null,
+    activeFreshPct:
+      activeCoveredFreshCount != null && activeCoverageTotal > 0
+        ? (activeCoveredFreshCount / activeCoverageTotal) * 100
+        : null,
+    activeCoveredFreshCount,
     activePastDueCount,
     snapshotsCount: snapshotsTotalRes.count ?? 0,
     lastTelemetryRunDate,

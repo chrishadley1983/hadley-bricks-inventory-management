@@ -1,12 +1,22 @@
 {
-  "commit": "57318312",
-  "branch": "feature/investment-pages-redesign",
-  "prNumber": 559,
-  "mergedAt": "2026-07-10T09:20:00Z",
-  "previousCommit": "96bacc0a",
+  "commit": "aa742d1f",
+  "branch": "fix/pg-coverage-truth",
+  "prNumber": 623,
+  "mergedAt": "2026-07-20T10:55:00Z",
+  "previousCommit": "ccbe0b35",
+  "mergeCommit": "f440f217",
   "deploymentVerified": true,
-  "verifiedAt": "2026-07-10T10:25:00+01:00",
-  "testsRun": ["typecheck", "eslint-clean", "vitest-3490-of-3490", "ci-typecheck-lint-test-pass", "prod-critical-paths-4-of-4", "prod-investment-smoke-4-of-4"],
+  "verifiedAt": "2026-07-20T11:05:00Z",
+  "testsRun": [
+    "ci-typecheck-lint-test-GREEN-on-aa742d1f",
+    "full-vitest-3537of3537-local",
+    "typecheck-and-typecheck-scripts-clean",
+    "vercel-production-READY-on-f440f217",
+    "prod-home-307-dashboard-redirect-200-login",
+    "local-nssm-rebuilt-restarted-pid-13016-home-307",
+    "migration-20260720150000-applied-view-reconciles-153384"
+  ],
   "testsPassed": true,
-  "notes": "Investment pages redesign: /investment dashboard (model-status strip w/ honest holdout metrics, top-picks preview w/ max buy, 12-month retirement radar, pattern charts), /investment/top-picks deal sheet (max buy green/amber, tier, rationale chips, filters), /investment/sets browser, sidebar Dashboard/Top Picks/All Sets. Max-buy formula shared in lib/investment/max-buy.ts. Fixed /api/investment/predictions filter-totals bug (filters now applied before pagination; verified on prod: filtered.total <= all.total). New APIs: model-status, patterns, retirement-radar. Rollback: revert 57318312 (no schema changes)."
+  "notes": "PG coverage truth (audit 2026-07-20): seeded_at split from last_refreshed_at (~78k fake stamps corrected), no-data recorded as scraped (731 backfilled, PgNotFound parked), cycle constants centralised in pg-cycle-policy.ts, ad-hoc scrape queue write-back (store-scan/page-sweep/lane-A), 1,927 orphan L3 tuples adopted, 32,905 never-scraped active tuples made due for first-touch, canonical pg_coverage_report view + digest rewired. Migration pushed pre-merge and verified live (view total 153,384 = queue count). Local server rebuilt (live-check.service ships to both prod and NSSM). Rollback: revert f440f217; note migration data corrections are one-way (seed stamps moved to seeded_at) — old code tolerates the new column, so code rollback is safe without DB rollback.",
+  "deployment": "vercel production READY on f440f217"
 }

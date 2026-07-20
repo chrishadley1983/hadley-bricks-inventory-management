@@ -33,11 +33,12 @@ export function cycleDaysForTier(tier: 'active' | 'tail'): number {
 
 /**
  * Lane C (anon curl) failure triage: is this failure shaped like throttling /
- * infrastructure (HTTP status, network error) rather than something wrong with the
- * tuple itself? Throttle-shaped failures must NOT increment `attempts` — attempts is
- * the "this tuple is broken" ladder that parks rows at ERROR_PARK_ATTEMPTS, and a run
- * of 403s used to park perfectly healthy tuples (audit 2026-07-20 finding).
+ * infrastructure (HTTP status, network error, HTTP-200 challenge page) rather than
+ * something wrong with the tuple itself? Throttle-shaped failures must NOT increment
+ * `attempts` — attempts is the "this tuple is broken" ladder that parks rows at
+ * ERROR_PARK_ATTEMPTS, and a run of 403s (or soft-block challenge pages) used to park
+ * perfectly healthy tuples (audit 2026-07-20 finding + follow-up).
  */
 export function isThrottleShapedFailure(reason: string): boolean {
-  return /^HTTP \d{3}$/.test(reason) || reason.startsWith('network:');
+  return /^HTTP \d{3}$/.test(reason) || reason.startsWith('network:') || reason.startsWith('challenge-page');
 }

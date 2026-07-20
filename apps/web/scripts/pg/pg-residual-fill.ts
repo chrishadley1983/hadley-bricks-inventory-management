@@ -411,6 +411,14 @@ async function fetchOne(t: QueueRow): Promise<FetchOutcome> {
   const quads = parsePgSummarySnippet(html);
   if (!quads) {
     if (html.length < 200) return { kind: 'empty' }; // genuine no-data shell, not a block
+    // HTTP-200 soft block: BL serves challenge/interstitial pages with a 200 status.
+    // Detect them explicitly (same markers as classifyPgPage) so they read as
+    // throttle-shaped, not tuple failures — an unmarked-but-unparseable page still
+    // climbs the attempts ladder (real parse regressions must surface). (2026-07-20
+    // follow-up: sustained soft-blocks were parking healthy tuples at 8 attempts.)
+    if (/captcha|unusual traffic|are you a human|verify you are|access denied|cloudflare/i.test(html)) {
+      return { kind: 'fail', reason: `challenge-page (len=${html.length})` };
+    }
     return { kind: 'fail', reason: `unparseable response (len=${html.length})` };
   }
   const row = toSummaryCacheRow({ itemType: t.item_type, itemNo: t.item_no, colourId: t.colour_id }, quads, 'pg_summary', 'anon_curl');

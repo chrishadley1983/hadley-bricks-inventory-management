@@ -158,11 +158,11 @@ export function QueueFreshness({
       <CardHeader>
         <CardTitle className="flex items-center gap-1.5">
           Queue &amp; freshness
-          <InfoTip text="Section overview: how the refresh queue is split into tiers, how safely each lane is scraping, and how the active tier's 28-day cycle is spread across time." />
+          <InfoTip text="Section overview: how the refresh queue is split into tiers, how safely each lane is scraping, and how the active tier's 60-day cycle is spread across time." />
         </CardTitle>
         <CardDescription>
           Refresh-queue tier composition, the sessions-to-first-403 trend (the tripwire for throttling down before a
-          real ban), and how the active tier&apos;s 28-day refresh cycle is spread out.
+          real ban), and how the active tier&apos;s 60-day refresh cycle is spread out.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -171,8 +171,8 @@ export function QueueFreshness({
             icon={ListTree}
             label="Active tier"
             value={tiers.activeTotal}
-            hint="on the 28d cycle"
-            info="Tuples on the 28-day refresh cycle — the highest-value, most closely tracked slice of the catalogue."
+            hint="on the 60d cycle"
+            info="Tuples on the 60-day refresh cycle (28 days for new-for-the-year items) — the highest-value, most closely tracked slice of the catalogue."
           />
           <TierStat
             icon={ShieldCheck}
@@ -223,7 +223,7 @@ export function QueueFreshness({
           <div>
             <h4 className="mb-2 flex items-center gap-1.5 text-sm font-medium">
               Next-due distribution — active tier
-              <InfoTip text="How the active tier's 28-day refresh cycle is spread across time buckets — a healthy queue has most tuples not yet due." />
+              <InfoTip text="How the active tier's 60-day refresh cycle is spread across time buckets — a healthy queue has most tuples not yet due (the first-touch backlog sits in Past due until it drains)." />
             </h4>
             <NextDueDistributionChart buckets={buckets} />
           </div>

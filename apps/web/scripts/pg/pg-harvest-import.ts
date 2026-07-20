@@ -37,7 +37,7 @@
  *
  * Also updates `bl_pg_refresh_queue` for imported TAIL-tier tuples only
  * (last_refreshed_at=now, next_due_at=+90d). Active-tier tuples are deliberately
- * left alone: their 28-day clock schedules lane D's UK-grade L3 refresh, which a
+ * left alone: their 60-day clock (28d new-for-year) schedules lane D's UK-grade L3 refresh, which a
  * worldwide-only lane B import doesn't satisfy. Tuples with no queue row yet are
  * left for `pg-universe.ts --seed-from-cache` to pick up.
  *
@@ -199,7 +199,7 @@ async function updateQueueRows(rows: PgSummaryCacheRow[], tiers: Map<string, 'ac
     const key = `${row.item_type}:${row.item_no}:${row.colour_id}`;
     const tier = tiers.get(key);
     if (!tier) continue; // no queue row yet — pg-universe.ts --seed-from-cache will create one later
-    // Lane B only refreshes L1 (worldwide summary). Active-tier tuples' 28-day clock
+    // Lane B only refreshes L1 (worldwide summary). Active-tier tuples' 60-day clock
     // schedules lane D's UK-grade L3 refresh — a worldwide-only import must NOT
     // satisfy it (review finding #3), so active rows keep their next_due_at.
     if (tier !== 'tail') continue;
