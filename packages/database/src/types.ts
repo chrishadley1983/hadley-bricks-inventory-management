@@ -1454,6 +1454,48 @@ export type Database = {
           },
         ]
       }
+      bl_catalog_items: {
+        Row: {
+          category_id: number | null
+          category_name: string | null
+          dim_x_cm: number | null
+          dim_y_cm: number | null
+          dim_z_cm: number | null
+          imported_at: string
+          item_name: string
+          item_no: string
+          item_type: string
+          weight_g: number | null
+          year_released: number | null
+        }
+        Insert: {
+          category_id?: number | null
+          category_name?: string | null
+          dim_x_cm?: number | null
+          dim_y_cm?: number | null
+          dim_z_cm?: number | null
+          imported_at?: string
+          item_name: string
+          item_no: string
+          item_type: string
+          weight_g?: number | null
+          year_released?: number | null
+        }
+        Update: {
+          category_id?: number | null
+          category_name?: string | null
+          dim_x_cm?: number | null
+          dim_y_cm?: number | null
+          dim_z_cm?: number | null
+          imported_at?: string
+          item_name?: string
+          item_no?: string
+          item_type?: string
+          weight_g?: number | null
+          year_released?: number | null
+        }
+        Relationships: []
+      }
       bl_catalog_names: {
         Row: {
           fetched_at: string
@@ -1475,6 +1517,48 @@ export type Database = {
           item_type?: string
           name?: string
           source?: string
+        }
+        Relationships: []
+      }
+      bl_import_zone_costs: {
+        Row: {
+          calibrated_at: string | null
+          countries: string[]
+          duty_rate: number
+          handling_fee_gbp: number
+          notes: string | null
+          ship_base_gbp: number
+          ship_per_100g_gbp: number
+          updated_at: string
+          vat_rate: number
+          vat_recoverable: boolean
+          zone: string
+        }
+        Insert: {
+          calibrated_at?: string | null
+          countries?: string[]
+          duty_rate?: number
+          handling_fee_gbp?: number
+          notes?: string | null
+          ship_base_gbp: number
+          ship_per_100g_gbp: number
+          updated_at?: string
+          vat_rate?: number
+          vat_recoverable?: boolean
+          zone: string
+        }
+        Update: {
+          calibrated_at?: string | null
+          countries?: string[]
+          duty_rate?: number
+          handling_fee_gbp?: number
+          notes?: string | null
+          ship_base_gbp?: number
+          ship_per_100g_gbp?: number
+          updated_at?: string
+          vat_rate?: number
+          vat_recoverable?: boolean
+          zone?: string
         }
         Relationships: []
       }
@@ -1535,6 +1619,7 @@ export type Database = {
           next_due_at: string
           rank_floor: string | null
           rank_score: number
+          seeded_at: string | null
           tier: string
           updated_at: string
         }
@@ -1552,6 +1637,7 @@ export type Database = {
           next_due_at?: string
           rank_floor?: string | null
           rank_score?: number
+          seeded_at?: string | null
           tier?: string
           updated_at?: string
         }
@@ -1569,6 +1655,7 @@ export type Database = {
           next_due_at?: string
           rank_floor?: string | null
           rank_score?: number
+          seeded_at?: string | null
           tier?: string
           updated_at?: string
         }
@@ -1661,6 +1748,122 @@ export type Database = {
           store_slug?: string
           variant_recovered?: number | null
           verdict?: string | null
+        }
+        Relationships: []
+      }
+      bl_set_arb_candidates: {
+        Row: {
+          amazon_asin: string | null
+          buy_price_gbp: number
+          buy_qty: number
+          computed_at: string
+          condition: string
+          flags: Json
+          id: string
+          item_no: string
+          landed_unit_gbp: number | null
+          net_margin_gbp: number | null
+          net_margin_pct: number | null
+          sell_channel: string
+          sell_net_gbp: number | null
+          sell_price_gbp: number | null
+          source_country: string | null
+          source_store_id: number | null
+          source_store_name: string | null
+          source_zone: string
+          status: string
+          uk_cheapest_gbp: number | null
+          velocity_drops90: number | null
+          weight_g: number | null
+        }
+        Insert: {
+          amazon_asin?: string | null
+          buy_price_gbp: number
+          buy_qty?: number
+          computed_at?: string
+          condition: string
+          flags?: Json
+          id?: string
+          item_no: string
+          landed_unit_gbp?: number | null
+          net_margin_gbp?: number | null
+          net_margin_pct?: number | null
+          sell_channel?: string
+          sell_net_gbp?: number | null
+          sell_price_gbp?: number | null
+          source_country?: string | null
+          source_store_id?: number | null
+          source_store_name?: string | null
+          source_zone: string
+          status?: string
+          uk_cheapest_gbp?: number | null
+          velocity_drops90?: number | null
+          weight_g?: number | null
+        }
+        Update: {
+          amazon_asin?: string | null
+          buy_price_gbp?: number
+          buy_qty?: number
+          computed_at?: string
+          condition?: string
+          flags?: Json
+          id?: string
+          item_no?: string
+          landed_unit_gbp?: number | null
+          net_margin_gbp?: number | null
+          net_margin_pct?: number | null
+          sell_channel?: string
+          sell_net_gbp?: number | null
+          sell_price_gbp?: number | null
+          source_country?: string | null
+          source_store_id?: number | null
+          source_store_name?: string | null
+          source_zone?: string
+          status?: string
+          uk_cheapest_gbp?: number | null
+          velocity_drops90?: number | null
+          weight_g?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bl_set_arb_candidates_source_zone_fkey"
+            columns: ["source_zone"]
+            isOneToOne: false
+            referencedRelation: "bl_import_zone_costs"
+            referencedColumns: ["zone"]
+          },
+        ]
+      }
+      bl_store_scrapes: {
+        Row: {
+          created_at: string
+          lot_count: number
+          lots: Json
+          scanned_at: string
+          store_id: number | null
+          store_slug: string
+          truncated: boolean
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          lot_count: number
+          lots: Json
+          scanned_at?: string
+          store_id?: number | null
+          store_slug: string
+          truncated?: boolean
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          lot_count?: number
+          lots?: Json
+          scanned_at?: string
+          store_id?: number | null
+          store_slug?: string
+          truncated?: boolean
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -2234,6 +2437,8 @@ export type Database = {
           item_no: string
           item_type: string
           parse_version: number
+          source: string | null
+          stock_offers: Json | null
           uk_detail: Json | null
           uk_sold_avg_new: number | null
           uk_sold_avg_used: number | null
@@ -2265,6 +2470,8 @@ export type Database = {
           item_no: string
           item_type: string
           parse_version?: number
+          source?: string | null
+          stock_offers?: Json | null
           uk_detail?: Json | null
           uk_sold_avg_new?: number | null
           uk_sold_avg_used?: number | null
@@ -2296,6 +2503,8 @@ export type Database = {
           item_no?: string
           item_type?: string
           parse_version?: number
+          source?: string | null
+          stock_offers?: Json | null
           uk_detail?: Json | null
           uk_sold_avg_new?: number | null
           uk_sold_avg_used?: number | null
@@ -3067,7 +3276,11 @@ export type Database = {
           age_max: number | null
           age_min: number | null
           amazon_asin: string | null
+          asin_confidence: number | null
+          asin_source: string | null
+          asin_verified_at: string | null
           availability: string | null
+          barcode_source: string | null
           bricklink_sold_price_new: number | null
           bricklink_sold_price_used: number | null
           brickset_id: number | null
@@ -3128,7 +3341,11 @@ export type Database = {
           age_max?: number | null
           age_min?: number | null
           amazon_asin?: string | null
+          asin_confidence?: number | null
+          asin_source?: string | null
+          asin_verified_at?: string | null
           availability?: string | null
+          barcode_source?: string | null
           bricklink_sold_price_new?: number | null
           bricklink_sold_price_used?: number | null
           brickset_id?: number | null
@@ -3189,7 +3406,11 @@ export type Database = {
           age_max?: number | null
           age_min?: number | null
           amazon_asin?: string | null
+          asin_confidence?: number | null
+          asin_source?: string | null
+          asin_verified_at?: string | null
           availability?: string | null
+          barcode_source?: string | null
           bricklink_sold_price_new?: number | null
           bricklink_sold_price_used?: number | null
           brickset_id?: number | null
@@ -13971,6 +14192,53 @@ export type Database = {
           },
         ]
       }
+      store_assessment_watchlist: {
+        Row: {
+          created_at: string
+          directory_items: number | null
+          enabled: boolean
+          id: string
+          notes: string | null
+          region: string | null
+          source: string | null
+          store_name: string | null
+          store_slug: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          directory_items?: number | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          region?: string | null
+          source?: string | null
+          store_name?: string | null
+          store_slug: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          directory_items?: number | null
+          enabled?: boolean
+          id?: string
+          notes?: string | null
+          region?: string | null
+          source?: string | null
+          store_name?: string | null
+          store_slug?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_assessment_watchlist_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_assessments: {
         Row: {
           assessment: Json | null
@@ -14074,53 +14342,6 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "store_assessments_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      store_assessment_watchlist: {
-        Row: {
-          created_at: string
-          directory_items: number | null
-          enabled: boolean
-          id: string
-          notes: string | null
-          region: string | null
-          source: string | null
-          store_name: string | null
-          store_slug: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          directory_items?: number | null
-          enabled?: boolean
-          id?: string
-          notes?: string | null
-          region?: string | null
-          source?: string | null
-          store_name?: string | null
-          store_slug: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          directory_items?: number | null
-          enabled?: boolean
-          id?: string
-          notes?: string | null
-          region?: string | null
-          source?: string | null
-          store_name?: string | null
-          store_slug?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "store_assessment_watchlist_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -16717,6 +16938,18 @@ export type Database = {
           platform: string | null
           sold_value: number | null
           user_id: string | null
+        }
+        Relationships: []
+      }
+      pg_coverage_report: {
+        Row: {
+          due_now: number | null
+          pct_of_tier: number | null
+          status: string | null
+          tier: string | null
+          tuples: number | null
+          with_uk_sold: number | null
+          with_uk_stock: number | null
         }
         Relationships: []
       }

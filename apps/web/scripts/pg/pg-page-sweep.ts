@@ -48,6 +48,8 @@ import {
   type PgScrapeResult,
 } from '../../src/lib/bricklink/price-guide-page';
 import { PriceGuideCacheService } from '../../src/lib/bricklink/price-guide-cache.service';
+import { NO_DATA_REQUEUE_DAYS, cycleDaysForTier } from '../../src/lib/bricklink/pg-cycle-policy';
+import { EMPTY_PG_SUMMARY_QUAD, toSummaryCacheRow } from '../../src/lib/bricklink/pg-summary';
 
 const argv = process.argv.slice(2).reduce<Record<string, string[]>>((acc, a) => {
   const [k, v] = a.replace(/^--/, '').split('=');
@@ -122,20 +124,67 @@ async function main(): Promise<void> {
 
   const results: PgScrapeResult[] = [];
   const okRefs: PgItemRef[] = [];
+  const noDataRefs: PgItemRef[] = [];
   let ok = 0, noData = 0, notFound = 0, failed = 0, reestablishes = 0;
   const startMs = Date.now();
   let stoppedEarly = false;
 
+  /** Tier lookup for a batch of refs (missing rows default to tail's 90d horizon). */
+  const fetchTiers = async (refs: PgItemRef[]): Promise<Map<string, 'active' | 'tail'>> => {
+    const out = new Map<string, 'active' | 'tail'>();
+    if (!refs.length) return out;
+    const filter = refs
+      .map((r) => `and(item_type.eq.${r.itemType},item_no.eq."${r.itemNo}",colour_id.eq.${r.colourId})`)
+      .join(',');
+    const { data } = await supabase
+      .from('bl_pg_refresh_queue')
+      .select('item_type,item_no,colour_id,tier')
+      .or(filter);
+    for (const row of (data ?? []) as { item_type: string; item_no: string; colour_id: number; tier: 'active' | 'tail' }[]) {
+      out.set(`${row.item_type}:${row.item_no}:${row.colour_id}`, row.tier);
+    }
+    return out;
+  };
+
   const flush = async () => {
-    if (!results.length) return;
-    await cacheService.upsert(results.splice(0));
-    // Best-effort: push matching queue rows out so tonight's lane doesn't redo this work.
-    const due = new Date(Date.now() + 28 * 24 * 3600 * 1000).toISOString();
-    for (const r of okRefs.splice(0)) {
+    if (!results.length && !noDataRefs.length) return;
+    if (results.length) await cacheService.upsert(results.splice(0));
+    // Best-effort: push matching queue rows out at the TIER-CORRECT cycle (60d active /
+    // 90d tail — was a flat 28d, 2026-07-20 audit) so tonight's lane doesn't redo this work.
+    const okBatch = okRefs.splice(0);
+    const ndBatch = noDataRefs.splice(0);
+    const tiers = await fetchTiers([...okBatch, ...ndBatch]);
+    const nowIso = new Date().toISOString();
+    for (const r of okBatch) {
+      const tier = tiers.get(`${r.itemType}:${r.itemNo}:${r.colourId}`) ?? 'tail';
+      const due = new Date(Date.now() + cycleDaysForTier(tier) * 24 * 3600 * 1000).toISOString();
       await supabase
         .from('bl_pg_refresh_queue')
-        .update({ last_refreshed_at: new Date().toISOString(), next_due_at: due })
+        .update({ last_refreshed_at: nowIso, next_due_at: due })
         .eq('item_type', r.itemType).eq('item_no', r.itemNo).eq('colour_id', r.colourId);
+    }
+    // Confirmed no-data is a successful scrape whose answer is empty: record the zero L1
+    // row and stamp the queue, same contract as the nightly lane (2026-07-20 audit).
+    if (ndBatch.length) {
+      const zeroRows = ndBatch.map((r) =>
+        toSummaryCacheRow(
+          { itemType: r.itemType, itemNo: r.itemNo, colourId: r.colourId },
+          { soldN: EMPTY_PG_SUMMARY_QUAD, soldU: EMPTY_PG_SUMMARY_QUAD, stockN: EMPTY_PG_SUMMARY_QUAD, stockU: EMPTY_PG_SUMMARY_QUAD },
+          'catalogpg',
+          'catalogpg_cdp',
+        ),
+      );
+      const { error } = await supabase
+        .from('bricklink_pg_summary_cache')
+        .upsert(zeroRows, { onConflict: 'item_type,item_no,colour_id' });
+      if (error) console.warn(`  ⚠ no-data L1 upsert failed: ${error.message}`);
+      const ndDue = new Date(Date.now() + NO_DATA_REQUEUE_DAYS * 24 * 3600 * 1000).toISOString();
+      for (const r of ndBatch) {
+        await supabase
+          .from('bl_pg_refresh_queue')
+          .update({ last_refreshed_at: nowIso, next_due_at: ndDue, attempts: 0, last_error: null })
+          .eq('item_type', r.itemType).eq('item_no', r.itemNo).eq('colour_id', r.colourId);
+      }
     }
   };
 
@@ -160,7 +209,7 @@ async function main(): Promise<void> {
           ok++;
           break;
         } catch (err) {
-          if (err instanceof PgNoDataError) { noData++; break; }
+          if (err instanceof PgNoDataError) { noData++; noDataRefs.push(item); break; }
           if (err instanceof PgNotFoundError) { notFound++; console.warn(`  not in catalog: ${label}`); break; }
           const transient = err instanceof PgBlockError && attempt < 2;
           const sessionShaped = (err instanceof PgLoginError || err instanceof PgCurrencyError) && reestablishes < 3;

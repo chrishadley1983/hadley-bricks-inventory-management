@@ -124,7 +124,14 @@ export interface DigestSummary {
   figMoversCount: number;
   l1Total: number;
   activeTierCount: number;
-  activeWithin28dPct: number;
+  /** Post 2026-07-20 (pg_coverage_report view): true L3-based active coverage %. */
+  activeCoveredFreshPct?: number;
+  activeUkSoldPct?: number;
+  activeNeverScraped?: number;
+  staleCount?: number;
+  /** Pre 2026-07-20 records only (queue-stamp based — the metric the coverage audit
+   * retired). Kept so old persisted digests still render. */
+  activeWithin28dPct?: number;
   pastDueCount: number;
 }
 

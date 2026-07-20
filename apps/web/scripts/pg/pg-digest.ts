@@ -55,8 +55,6 @@ const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession
 
 const PAGE = 1000;
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
-const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
-const SIXTY_DAYS_MS = 60 * 24 * 60 * 60 * 1000; // active cycle (2026-07-19 policy: 60d, new-for-year 28d)
 
 function tupleLabel(r: { item_type: string; item_no: string; colour_id: number }): string {
   return r.item_type === 'P' ? `${r.item_type} ${r.item_no} c${r.colour_id}` : `${r.item_type} ${r.item_no}`;
@@ -133,33 +131,24 @@ async function countL1Total(): Promise<number> {
   return count ?? 0;
 }
 
-async function countActiveTier(): Promise<number> {
-  const { count, error } = await supabase
-    .from('bl_pg_refresh_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('tier', 'active');
-  if (error) throw new Error(`count(bl_pg_refresh_queue, active) failed: ${error.message}`);
-  return count ?? 0;
+/** One row of the canonical pg_coverage_report view (migration 20260720150000).
+ * THE coverage/staleness/yield source of truth — L3-presence based, never the queue's
+ * last_refreshed_at (2026-07-20 coverage audit). Ad-hoc question = same statement:
+ *   SELECT * FROM pg_coverage_report ORDER BY tier, tuples DESC; */
+interface CoverageReportRow {
+  tier: 'active' | 'tail';
+  status: 'fresh' | 'stale' | 'no_data_fresh' | 'no_data_stale' | 'not_in_catalog' | 'error_parked' | 'never_scraped';
+  tuples: number;
+  due_now: number;
+  with_uk_sold: number;
+  with_uk_stock: number;
+  pct_of_tier: number;
 }
 
-async function countActiveWithin28d(cutoffIso: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('bl_pg_refresh_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('tier', 'active')
-    .gte('last_refreshed_at', cutoffIso);
-  if (error) throw new Error(`count(bl_pg_refresh_queue, active within 28d) failed: ${error.message}`);
-  return count ?? 0;
-}
-
-async function countPastDue(nowIso: string): Promise<number> {
-  const { count, error } = await supabase
-    .from('bl_pg_refresh_queue')
-    .select('*', { count: 'exact', head: true })
-    .eq('tier', 'active')
-    .lt('next_due_at', nowIso);
-  if (error) throw new Error(`count(bl_pg_refresh_queue, past due) failed: ${error.message}`);
-  return count ?? 0;
+async function loadCoverageReport(): Promise<CoverageReportRow[]> {
+  const { data, error } = await supabase.from('pg_coverage_report').select('*');
+  if (error) throw new Error(`pg_coverage_report read failed: ${error.message}`);
+  return (data ?? []) as CoverageReportRow[];
 }
 
 interface TelemetryRow {
@@ -208,24 +197,36 @@ async function loadQueueGrowth7d(cutoff7dIso: string): Promise<{ total: number; 
 async function loadCoverageHealth(): Promise<{
   l1Total: number;
   activeTierCount: number;
-  activeWithin28dPct: number;
+  activeCoveredFreshPct: number;
+  activeUkSoldPct: number;
+  activeNeverScraped: number;
+  staleCount: number;
   pastDueCount: number;
   laneTelemetry: PgDigestLaneTelemetry[];
   growth7d: { total: number; storeDiscovered: number; newRelease: number; backfill: number };
+  reportRows: CoverageReportRow[];
 }> {
-  const nowIso = new Date().toISOString();
-  const cutoff28d = new Date(Date.now() - SIXTY_DAYS_MS).toISOString(); // within-cycle = 60d policy window
   const cutoff7dIso = new Date(Date.now() - SEVEN_DAYS_MS).toISOString();
   const growth7d = await loadQueueGrowth7d(cutoff7dIso);
 
-  const [l1Total, activeTierCount, activeWithin28d, pastDueCount] = await Promise.all([
-    countL1Total(),
-    countActiveTier(),
-    countActiveWithin28d(cutoff28d),
-    countPastDue(nowIso),
-  ]);
+  const [l1Total, reportRows] = await Promise.all([countL1Total(), loadCoverageReport()]);
 
-  const activeWithin28dPct = activeTierCount > 0 ? (activeWithin28d / activeTierCount) * 100 : 0;
+  const active = reportRows.filter((r) => r.tier === 'active');
+  const sum = (rows: CoverageReportRow[], pick: (r: CoverageReportRow) => number) =>
+    rows.reduce((a, r) => a + pick(r), 0);
+  const activeTierCount = sum(active, (r) => r.tuples);
+  const activeCoveredFresh = sum(
+    active.filter((r) => r.status === 'fresh' || r.status === 'no_data_fresh'),
+    (r) => r.tuples,
+  );
+  const activeCoveredFreshPct = activeTierCount > 0 ? (activeCoveredFresh / activeTierCount) * 100 : 0;
+  const activeUkSoldPct = activeTierCount > 0 ? (sum(active, (r) => r.with_uk_sold) / activeTierCount) * 100 : 0;
+  const activeNeverScraped = sum(active.filter((r) => r.status === 'never_scraped'), (r) => r.tuples);
+  const staleCount = sum(
+    reportRows.filter((r) => r.status === 'stale' || r.status === 'no_data_stale'),
+    (r) => r.tuples,
+  );
+  const pastDueCount = sum(active, (r) => r.due_now);
 
   // Lane telemetry, last 7 days.
   const cutoff7dDate = new Date(Date.now() - SEVEN_DAYS_MS).toISOString().slice(0, 10);
@@ -257,7 +258,18 @@ async function loadCoverageHealth(): Promise<{
     return { lane, requests7d, ok7d, failed7d, firstBlockTrend: summariseFirstBlockTrend(readings) };
   });
 
-  return { l1Total, activeTierCount, activeWithin28dPct, pastDueCount, laneTelemetry, growth7d };
+  return {
+    l1Total,
+    activeTierCount,
+    activeCoveredFreshPct,
+    activeUkSoldPct,
+    activeNeverScraped,
+    staleCount,
+    pastDueCount,
+    laneTelemetry,
+    growth7d,
+    reportRows,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +319,11 @@ async function main(): Promise<void> {
 
   const [{ risers, fallers, figMovers }, coverage] = await Promise.all([loadTrendMovers(), loadCoverageHealth()]);
   console.log(`[pg-digest] trend movers: ${risers.length} risers, ${fallers.length} fallers, ${figMovers.length} fig movers`);
-  console.log(`[pg-digest] coverage: L1=${coverage.l1Total} active=${coverage.activeTierCount} within28d=${coverage.activeWithin28dPct.toFixed(1)}% pastDue=${coverage.pastDueCount}`);
+  console.log(
+    `[pg-digest] coverage: L1=${coverage.l1Total} active=${coverage.activeTierCount} ` +
+      `coveredFresh=${coverage.activeCoveredFreshPct.toFixed(1)}% ukSold=${coverage.activeUkSoldPct.toFixed(1)}% ` +
+      `neverScraped=${coverage.activeNeverScraped} stale=${coverage.staleCount} pastDue=${coverage.pastDueCount}`,
+  );
 
   const recentAudit = findRecentOwnStoreAudit();
   let ownStoreAuditExcerpts: PgDigestReportExcerpt[] = [];
@@ -339,11 +355,22 @@ async function main(): Promise<void> {
     '',
     '## Coverage & freshness health',
     '',
+    '_Source: `SELECT * FROM pg_coverage_report` — L3-truth, never the queue seed stamp._',
+    '',
     `- L1 total: **${coverage.l1Total.toLocaleString()}**`,
-    `- Active tier: **${coverage.activeTierCount.toLocaleString()}**`,
-    `- Within 60-day cycle: **${coverage.activeWithin28dPct.toFixed(1)}%**`,
-    `- Past due (next_due_at elapsed): **${coverage.pastDueCount.toLocaleString()}**`,
+    `- Active tier: **${coverage.activeTierCount.toLocaleString()}** — covered+fresh **${coverage.activeCoveredFreshPct.toFixed(1)}%**, UK-sold yield **${coverage.activeUkSoldPct.toFixed(1)}%**, never scraped **${coverage.activeNeverScraped.toLocaleString()}**`,
+    `- Stale (outlived 60/90d cycle, both tiers): **${coverage.staleCount.toLocaleString()}**`,
+    `- Active past due (next_due_at elapsed): **${coverage.pastDueCount.toLocaleString()}**`,
     `- Queue grew **+${coverage.growth7d.total.toLocaleString()}** (7d): ${coverage.growth7d.storeDiscovered.toLocaleString()} store-discovered · ${coverage.growth7d.newRelease.toLocaleString()} new-release · ${coverage.growth7d.backfill.toLocaleString()} backfill`,
+    '',
+    '| tier | status | tuples | due now | UK sold | UK stock | % of tier |',
+    '|---|---|---:|---:|---:|---:|---:|',
+    ...[...coverage.reportRows]
+      .sort((a, b) => (a.tier === b.tier ? b.tuples - a.tuples : a.tier.localeCompare(b.tier)))
+      .map(
+        (r) =>
+          `| ${r.tier} | ${r.status} | ${r.tuples.toLocaleString()} | ${r.due_now.toLocaleString()} | ${r.with_uk_sold.toLocaleString()} | ${r.with_uk_stock.toLocaleString()} | ${r.pct_of_tier}% |`,
+      ),
     '',
     '### Lane telemetry (last 7 days)',
     '',
@@ -385,7 +412,10 @@ async function main(): Promise<void> {
     figMoversCount: figMovers.length,
     l1Total: coverage.l1Total,
     activeTierCount: coverage.activeTierCount,
-    activeWithin28dPct: coverage.activeWithin28dPct,
+    activeCoveredFreshPct: coverage.activeCoveredFreshPct,
+    activeUkSoldPct: coverage.activeUkSoldPct,
+    activeNeverScraped: coverage.activeNeverScraped,
+    staleCount: coverage.staleCount,
     pastDueCount: coverage.pastDueCount,
   }, md.join('\n'));
 
@@ -404,7 +434,10 @@ interface DigestSummary {
   figMoversCount: number;
   l1Total: number;
   activeTierCount: number;
-  activeWithin28dPct: number;
+  activeCoveredFreshPct: number;
+  activeUkSoldPct: number;
+  activeNeverScraped: number;
+  staleCount: number;
   pastDueCount: number;
 }
 

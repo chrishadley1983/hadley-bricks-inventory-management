@@ -450,6 +450,21 @@ export async function liveCheckTuple(
       console.warn(`[liveCheckTuple] ukCache upsert failed for ${pgCacheKey(tuple)}:`, error.message);
     } else {
       wroteToUkCache = true;
+      // Queue write-back (2026-07-20 audit): record that this tuple WAS scraped —
+      // last_refreshed_at only. Deliberately do NOT push next_due_at: an API live-check
+      // fetches 4 quadrants but not median/monthly/histogram, so the scheduled page
+      // scrape must still happen on its normal cycle. Best-effort; never fails the check.
+      try {
+        const { error: queueErr } = await supabase
+          .from('bl_pg_refresh_queue')
+          .update({ last_refreshed_at: new Date().toISOString() })
+          .eq('item_type', tuple.itemType)
+          .eq('item_no', tuple.itemNo)
+          .eq('colour_id', tuple.itemType === 'P' ? tuple.colourId : 0);
+        if (queueErr) console.warn(`[liveCheckTuple] queue stamp failed for ${pgCacheKey(tuple)}:`, queueErr.message);
+      } catch (e) {
+        console.warn(`[liveCheckTuple] queue stamp failed for ${pgCacheKey(tuple)}:`, (e as Error).message);
+      }
     }
   }
 
