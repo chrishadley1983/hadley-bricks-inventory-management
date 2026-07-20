@@ -19,12 +19,12 @@
  *    flag floor = amber band (15%) on the CONSERVATIVE basis (worse of current
  *    buy box vs 90-day avg). Bands come from investment/max-buy.ts only.
  *  - Velocity/BSR are INFORMATION (displayed), never a gate.
- *  - Amazon snapshots: per-field latest-non-null fold over a 30-day window
- *    (a null drops90 on the newest snapshot must not erase older truth), and
- *    ASINs with live BL offers whose snapshot is older than 7 days are topped
- *    up via Keepa BEFORE flagging (capped per run) — candidates drive the
- *    refresh queue, not the other way round. Aged quotes are stamped with
- *    amazon_snapshot_date so the page can badge them instead of hiding rows.
+ *  - Amazon snapshots: per-field latest-non-null fold over a 45-day window
+ *    (a null drops90 on the newest snapshot must not erase older truth). The
+ *    every-30-min Keepa scheduler is the proactive refresher; the flagger only
+ *    BACKSTOPS ASINs it hasn't reached in 28 days (capped per run). Aged quotes
+ *    are stamped with amazon_snapshot_date so the page badges them instead of
+ *    hiding rows.
  *  - Excluded/bought statuses are preserved across refreshes; stale actives
  *    for sets no longer flagged are marked 'stale'.
  */
