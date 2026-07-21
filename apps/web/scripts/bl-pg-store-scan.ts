@@ -62,6 +62,7 @@ import {
   PgCurrencyError,
   PgNotFoundError,
   PgNoDataError,
+  PgSoldUnavailableError,
   isPgCdpReachable,
   type PgItemRef,
   type PgItemType,
@@ -498,6 +499,12 @@ async function enrich(lots: StoreLot[]): Promise<EnrichOutcome> {
             continue;
           }
           if (err instanceof PgNotFoundError) { notFound++; continue; }
+          if (err instanceof PgSoldUnavailableError) {
+            // BL site-side sold-data outage (2026-07-21): skip WITHOUT caching an empty
+            // result — a zero row here would read as confirmed-dead on every later run.
+            console.warn(`  ⚠ sold-unavailable (BL outage) — skipped, not cached: ${ref.itemType} ${ref.itemNo}`);
+            continue;
+          }
           if (err instanceof PgBlockError) {
             if (!blockRetried) {
               console.warn(`  ⚠ block signal (${(err as Error).message.slice(0, 100)}) — 60s breather, one retry...`);

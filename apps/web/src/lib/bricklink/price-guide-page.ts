@@ -172,6 +172,10 @@ export class PgLoginError extends PgError {}
 export class PgNotFoundError extends PgError {}
 /** Valid PG page but no transaction tables at all (item never sold/listed). Genuine no-data. */
 export class PgNoDataError extends PgError {}
+/** BL is serving the sold quadrants as "(Unavailable)" — a site-side outage state (first
+ * seen 2026-07-21: item-specific, affected the store API too, everyone sees it). NOT
+ * no-data: never write a zero row for this; retry after the outage clears. */
+export class PgSoldUnavailableError extends PgError {}
 /** Page rendered in a non-GBP display currency — UK extraction would be wrong. */
 export class PgCurrencyError extends PgError {}
 
@@ -334,7 +338,16 @@ export function qtyShareAtOrAbove(hist: Record<string, number> | undefined, pric
 // Page classification (pure, unit-tested)
 // ---------------------------------------------------------------------------
 
-export type PgPageKind = 'ok' | 'block' | 'captcha' | 'login' | 'notFound' | 'noData' | 'wrongCurrency' | 'transient';
+export type PgPageKind =
+  | 'ok'
+  | 'block'
+  | 'captcha'
+  | 'login'
+  | 'notFound'
+  | 'noData'
+  | 'soldUnavailable'
+  | 'wrongCurrency'
+  | 'transient';
 
 export interface PgPageProbe {
   url: string;
@@ -344,6 +357,10 @@ export interface PgPageProbe {
   hasQuadrants: boolean;
   /** True when any non-GBP currency token appears un-tilded (display currency ≠ GBP). */
   foreignNativeSeen: boolean;
+  /** True when the "Last 6 Months Sales" section renders BL's "(Unavailable)" marker —
+   * the 2026-07-21 site-side sold-data outage state. Optional: probes built before the
+   * marker existed (tests, cached captures) simply never set it. */
+  soldUnavailable?: boolean;
   /** Body text sample for captcha/login detection (first ~2000 chars). */
   textSample: string;
   /**
@@ -364,6 +381,12 @@ export function classifyPgPage(p: PgPageProbe): PgPageKind {
   if (/oops\.asp|err=403/i.test(p.url) || (p.textLen < 200 && !/Price Guide/i.test(p.title))) return 'block';
   if (/sign in|log in to|please log in/i.test(p.textSample) && /login|identity\.lego/i.test(p.url)) return 'login';
   if (!/Price Guide/i.test(p.title)) return 'transient';
+  // BL sold-data outage ("(Unavailable)" in the sales quadrants, 2026-07-21): the page
+  // is a real PG page but its sold side is withheld site-side. Must outrank noData —
+  // during the outage these pages have no month rows and would otherwise be recorded
+  // as confirmed-empty zero rows (poisoning STR silently). Also outranks 'ok': even if
+  // the quadrant row were found, a sold-withheld page must never be persisted.
+  if (p.soldUnavailable) return 'soldUnavailable';
   if (p.foreignNativeSeen) return 'wrongCurrency';
   // A rendered Price Guide page with no transaction tables = item never sold/listed
   // anywhere (small shell page, ~2KB). Genuine no-data, NOT a block (learned on old sets).
@@ -472,13 +495,19 @@ export const PG_EXTRACT_JS = `(function(){
     return out;
   }
   var stockOffersRaw = quadRow ? { newC: parseStockOffers(quadRow.children[2]), usedC: parseStockOffers(quadRow.children[3]) } : null;
+  var bodyText = document.body && document.body.innerText ? document.body.innerText : '';
+  // BL sold-data outage marker (2026-07-21): "(Unavailable)" rendered where the
+  // Last-6-Months-Sales quadrants belong. Anchored to the section header so a stray
+  // "(Unavailable)" elsewhere (e.g. in a store name) can't false-positive.
+  var soldUnavailable = /Last 6 Months Sales:?[\\s\\S]{0,300}\\(Unavailable\\)/.test(bodyText);
   return JSON.stringify({
     url: location.href,
     title: document.title,
-    textLen: (document.body && document.body.innerText ? document.body.innerText.length : 0),
-    textSample: (document.body && document.body.innerText ? document.body.innerText.slice(0, 2000) : ''),
+    textLen: bodyText.length,
+    textSample: bodyText.slice(0, 2000),
     hasQuadrants: !!quads,
     foreignNativeSeen: foreignNative,
+    soldUnavailable: soldUnavailable,
     navCount: document.querySelectorAll('nav').length,
     stockOffersRaw: stockOffersRaw,
     quads: quads
@@ -651,6 +680,10 @@ export class PgScraper {
         throw new PgNotFoundError(`Not in BL catalog: ${label} (url: ${page.url})`);
       case 'noData':
         throw new PgNoDataError(`Price guide has no sales/stock data: ${label}`);
+      case 'soldUnavailable':
+        throw new PgSoldUnavailableError(
+          `BL sold-price data "(Unavailable)" for ${label} — site-side outage, retry later (never record as no-data)`,
+        );
       case 'block':
         throw new PgBlockError(`Blocked/empty response for ${label} (len=${page.textLen}, url=${page.url})`);
       case 'captcha':

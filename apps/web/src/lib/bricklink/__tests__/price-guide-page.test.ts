@@ -282,4 +282,36 @@ describe('classifyPgPage', () => {
   it('transient for a non-PG page that is not an obvious block (retry once, then block)', () => {
     expect(classifyPgPage({ ...base, title: 'BrickLink', textLen: 5000, hasQuadrants: false })).toBe('transient');
   });
+
+  // BL sold-data outage (2026-07-21): "(Unavailable)" rendered in the sold quadrants,
+  // item-specific, everyone sees it, store API served zeros for the same items. These
+  // pages MUST NOT be recorded as confirmed no-data — that poisons STR with zero rows.
+  it('soldUnavailable outranks noData for the outage page shape (quadrantless, full-size body)', () => {
+    expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 14000, soldUnavailable: true })).toBe(
+      'soldUnavailable',
+    );
+  });
+
+  it('soldUnavailable outranks ok — a sold-withheld page must never be persisted', () => {
+    expect(classifyPgPage({ ...base, soldUnavailable: true })).toBe('soldUnavailable');
+  });
+
+  it('probes without the soldUnavailable field (pre-outage captures) classify as before', () => {
+    expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 1970 })).toBe('noData');
+    expect(classifyPgPage(base)).toBe('ok');
+  });
+
+  it('PG_EXTRACT_JS sold-unavailable regex survives template cooking (the \\s-became-s bug class)', () => {
+    const m = PG_EXTRACT_JS.match(/var soldUnavailable = (\/[^;]+\/)\.test\(bodyText\)/);
+    expect(m).not.toBeNull();
+    const re = new Function(`return ${m![1]}`)() as RegExp;
+    // Real innerText shape from the 2026-07-21 outage capture (S 60367).
+    expect(
+      re.test('Last 6 Months Sales:\nCurrent Items for Sale:\nNew\nUsed\nNew\nUsed\n(Unavailable)\n(Unavailable)\nTotal Lots: 53'),
+    ).toBe(true);
+    // Healthy page: months and prices follow the header, no marker.
+    expect(re.test('Last 6 Months Sales:\nJuly 2026\nQty Each\n1 GBP 500.00')).toBe(false);
+    // Marker far from the section header (e.g. deep in a store name) must not trip it.
+    expect(re.test(`Last 6 Months Sales:\n${'x'.repeat(400)}\n(Unavailable)`)).toBe(false);
+  });
 });

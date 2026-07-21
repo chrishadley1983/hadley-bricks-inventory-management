@@ -51,6 +51,7 @@ import {
   PgCurrencyError,
   PgNotFoundError,
   PgNoDataError,
+  PgSoldUnavailableError,
   isPgCdpReachable,
   type PgItemRef,
   type PgItemType,
@@ -499,6 +500,22 @@ function toNoDataSummaryRow(t: QueueRow): Record<string, unknown> {
   ) as unknown as Record<string, unknown>;
 }
 
+function toSoldUnavailableQueueUpdate(t: QueueRow): Record<string, unknown> {
+  // BL site-side sold-data outage (2026-07-21): not the tuple's fault, so attempts and
+  // last_refreshed_at are untouched (no park risk, coverage stays honest). +1d so this
+  // run and tonight's don't re-claim it; the outage marker in last_error keeps provenance.
+  return {
+    item_type: t.item_type,
+    item_no: t.item_no,
+    colour_id: t.colour_id,
+    last_error: 'sold_unavailable (BL site outage)',
+    next_due_at: addDaysIso(1),
+    locked_by: null,
+    locked_at: null,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 function toErrorQueueUpdate(t: QueueRow, err: unknown): Record<string, unknown> {
   const nowIso = new Date().toISOString();
   const attempts = (t.attempts ?? 0) + 1;
@@ -532,6 +549,8 @@ interface SessionCounts {
   noData: number;
   /** Not-in-catalog tuples parked this session (counted inside `ok`). */
   notFound: number;
+  /** BL sold-data-outage pages this session (counted inside `failed`). */
+  soldUnavailable: number;
 }
 
 async function insertTelemetry(
@@ -722,9 +741,10 @@ async function main(): Promise<void> {
   };
   const runStart = Date.now();
   let sessionStartedAt = new Date().toISOString();
-  let sessionCounts: SessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0 };
+  let sessionCounts: SessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0, soldUnavailable: 0 };
   let firstBlockAtRequest: number | null = null;
   let totalProcessed = 0;
+  let runSoldUnavailable = 0; // run-level (sessionCounts resets per session)
   let reestablishes = 0;
   let queue: QueueRow[] = [];
   const batches = emptyBatches();
@@ -768,7 +788,7 @@ async function main(): Promise<void> {
         state.blockedSessions = action === 'backoff' ? state.blockedSessions + 1 : 0;
         state.requestsThisSession = 0;
         state.consecutiveFails = 0;
-        sessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0 };
+        sessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0, soldUnavailable: 0 };
         firstBlockAtRequest = null;
         sessionStartedAt = new Date().toISOString();
         continue;
@@ -861,6 +881,16 @@ async function main(): Promise<void> {
           sessionCounts.notFound += 1;
           batches.queueUpdates.push(toNotFoundQueueUpdate(tuple, err));
           state.consecutiveFails = 0;
+        } else if (err instanceof PgSoldUnavailableError) {
+          // BL sold-data outage: a failure (never a zero row), and it feeds the
+          // consecutive-fail brake so a night where BL withholds sold data broadly
+          // winds the session down instead of burning the whole request budget.
+          sessionCounts.failed += 1;
+          sessionCounts.soldUnavailable += 1;
+          runSoldUnavailable += 1;
+          state.consecutiveFails += 1;
+          batches.queueUpdates.push(toSoldUnavailableQueueUpdate(tuple));
+          console.warn(`[pg-refresh-cycle] SOLD-UNAVAILABLE on ${tupleLabel(item)} — BL outage, requeued +1d`);
         } else if (err instanceof PgLoginError || err instanceof PgCurrencyError) {
           console.error(
             `[pg-refresh-cycle] FATAL on ${tupleLabel(item)}: ${err.message} — the CDP session is unusable ` +
@@ -907,6 +937,23 @@ async function main(): Promise<void> {
         });
       } catch (e) {
         console.error(`[pg-refresh-cycle] ops alert failed: ${e instanceof Error ? e.message : e}`);
+      }
+    }
+    // BL sold-data outage alert (2026-07-21 incident): sold quadrants served as
+    // "(Unavailable)". These tuples are requeued +1d, not zero-rowed — surface the
+    // outage so the day plan can adapt. Fire-and-forget, same as above.
+    if (runSoldUnavailable >= 25) {
+      try {
+        await discordService.sendPgOpsAlert({
+          title: 'BL sold-price data unavailable (site-side outage)',
+          lines: [
+            `Run **${RUN_ID}**: ${runSoldUnavailable}/${totalProcessed} tuple(s) returned "(Unavailable)" sold quadrants.`,
+            'These are requeued +1d with last_error=sold_unavailable — no zero rows were written.',
+            'Verify on any browser (catalogPG.asp for an affected item) — this is BL-side, not a session/block issue.',
+          ],
+        });
+      } catch (e) {
+        console.error(`[pg-refresh-cycle] sold-unavailable alert failed: ${e instanceof Error ? e.message : e}`);
       }
     }
   }

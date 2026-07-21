@@ -419,6 +419,11 @@ async function fetchOne(t: QueueRow): Promise<FetchOutcome> {
     if (/captcha|unusual traffic|are you a human|verify you are|access denied|cloudflare/i.test(html)) {
       return { kind: 'fail', reason: `challenge-page (len=${html.length})` };
     }
+    // BL sold-data outage (2026-07-21): the endpoint renders "(Unavailable)" where the
+    // sold summaries belong. Throttle-shaped (site-side) — must not climb attempts.
+    if (/\(Unavailable\)/.test(html)) {
+      return { kind: 'fail', reason: `sold-unavailable (BL outage, len=${html.length})` };
+    }
     return { kind: 'fail', reason: `unparseable response (len=${html.length})` };
   }
   const row = toSummaryCacheRow({ itemType: t.item_type, itemNo: t.item_no, colourId: t.colour_id }, quads, 'pg_summary', 'anon_curl');

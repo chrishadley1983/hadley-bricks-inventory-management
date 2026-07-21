@@ -40,5 +40,12 @@ export function cycleDaysForTier(tier: 'active' | 'tail'): number {
  * perfectly healthy tuples (audit 2026-07-20 finding + follow-up).
  */
 export function isThrottleShapedFailure(reason: string): boolean {
-  return /^HTTP \d{3}$/.test(reason) || reason.startsWith('network:') || reason.startsWith('challenge-page');
+  return (
+    /^HTTP \d{3}$/.test(reason) ||
+    reason.startsWith('network:') ||
+    reason.startsWith('challenge-page') ||
+    // BL site-side sold-data outage ("(Unavailable)" quadrants, 2026-07-21): site
+    // infrastructure state, never the tuple's fault.
+    reason.startsWith('sold-unavailable')
+  );
 }
