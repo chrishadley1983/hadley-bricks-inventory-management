@@ -79,11 +79,24 @@ describe('buildSummary', () => {
     // slow: cap ceil(10×0.25)=3 → £3; fast £4; dup £3 → capped 10 − 3 postage = 7
     expect(s.cappedNet).toBeCloseTo(7, 1);
   });
-  it('LIQUID excludes DUPs and sub-gate STR, keeps the cap', () => {
-    // liquid rows: fast only (dup excluded, slow at STR 0.1 < gate) → 4 − 3 = 1
+  it('STR≥gate band INCLUDES DUPs (Chris 2026-07-21: overlap advisory, never removes)', () => {
+    // liquid rows: fast + dup (both STR≥0.25); slow at 0.1 < gate excluded by STR only.
+    // fast capped £4 + dup capped £3 − £3 postage = £4, 2 lots.
     expect(s.liquidGate).toBe(LIQUID_STR_GATE);
-    expect(s.liquidLots).toBe(1);
-    expect(s.liquidNet).toBeCloseTo(1, 1);
+    expect(s.liquidLots).toBe(2);
+    expect(s.liquidNet).toBeCloseTo(4, 1);
+  });
+  it('F1 — DUP lots are counted in every headline figure (removing one drops it, not hides it)', () => {
+    const noDup = buildSummary(rows.filter((r) => r.overlap !== 'DUPLICATE'), rows.filter((r) => r.overlap !== 'DUPLICATE'), 3, 0);
+    expect(s.cappedNet - noDup.cappedNet).toBeCloseTo(3, 1); // dup's £3 IS in cappedNet
+    expect(s.liquidNet - noDup.liquidNet).toBeCloseTo(3, 1); // and in the STR≥gate band
+    expect(s.dupLots).toBe(1); // still flagged as advisory
+  });
+  it('F2 — the demand cap never changes the buyable lot count (advisory only)', () => {
+    const noDemandRows = rows.map((r) => ({ ...r, marketSoldQty6mo: null, cappedQty: null, cappedLotNet: r.lotNet }));
+    const noDemand = buildSummary(noDemandRows, noDemandRows, 3, 0);
+    expect(noDemand.lots).toBe(s.lots);
+    expect(noDemand.gates.find((g) => g.gate === 0)!.lots).toBe(s.gates.find((g) => g.gate === 0)!.lots);
   });
   it('leads STR stats with the median (house rule)', () => {
     expect(s.strMedian).toBeCloseTo(1.0, 2);
@@ -119,17 +132,38 @@ describe('renderers', () => {
   const scoredLots = [scored({ invID: 1, itemNo: '3001', invQty: 2, lotProfit: 2.44 })];
   const rep = buildDecisionReport(assessment, {}, scoredLots);
 
-  it('CLI render carries the honesty ladder and gate ladder', () => {
+  it('F3 — CLI leads with the all-band buy ladder, not a DUP-stripped "honest buy" line', () => {
     const out = renderDecisionCli(rep);
-    expect(out).toContain('LIQUID');
-    expect(out).toContain('GATE LADDER');
+    expect(out).toContain('BUY LADDER');
+    expect(out).toContain('STR≥0');
+    expect(out).toContain('STR≥1'); // all bands present
+    expect(out).not.toContain('the honest buy');
+    expect(out).not.toContain('no DUPs');
     expect(out).toContain('3001');
   });
-  it('md render carries every row + conventions', () => {
+  it('F5 — postage is named "Basket inbound postage"', () => {
+    expect(renderDecisionCli(rep)).toContain('Basket inbound postage');
+    expect(renderDecisionMd(rep)).toContain('Basket inbound postage');
+  });
+  it('md render carries every row + conventions, no dup-stripped headline', () => {
     const out = renderDecisionMd(rep);
     expect(out).toContain('## Decision table');
-    expect(out).toContain('## Gate ladder');
+    expect(out).toContain('## Buy ladder');
     expect(out).toContain('Demand cap');
+    expect(out).not.toContain('no DUPs');
+  });
+  it('F6 — sets render in their own section', () => {
+    const method = { lots: 1, outlay: 5, net: 3 };
+    const zero = { lots: 0, outlay: 0, net: 0 };
+    const withSets = buildDecisionReport(assessment, {}, scoredLots);
+    withSets.sets = {
+      lots: 3, askValue: 20, cmfResolvedCount: 0,
+      methods: { flipAmazon: method, sellBl: zero, partOut: zero, skip: { lots: 2, outlay: 15, net: 0 }, cmfIdentified: zero, cmfNoIdentity: zero },
+      totalSellable: method, decided: [],
+    };
+    expect(renderDecisionCli(withSets)).toContain('SETS');
+    expect(renderDecisionCli(withSets)).toContain('FLIP-AMAZON');
+    expect(renderDecisionMd(withSets)).toContain('## Sets');
   });
   it('flags a data-gap caveat when the lens sets one', () => {
     rep.meta.dataGapNote = 'PARTIAL DATA — 5 of 10 tuples unpriced';

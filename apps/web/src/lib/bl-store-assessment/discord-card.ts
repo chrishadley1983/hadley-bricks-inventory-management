@@ -57,7 +57,7 @@ export function buildStoreAlertCard(
   // one deep slow lot (Beeble's "£5,000") — lead with the liquid figure when stamped.
   if (a.decision) {
     const d = a.decision;
-    descLines.push('', `**LIQUID ${gbp(d.liquidNet)}** (${d.liquidLots} lots, STR≥${d.liquidGate}, no DUPs, capped) · capped ${gbp(d.cappedNet)} · raw ${gbp(d.rawNet)}`);
+    descLines.push('', `**STR≥${d.liquidGate}: ${gbp(d.liquidNet)}** (${d.liquidLots} lots, demand-capped, DUPs incl.) · all-band capped ${gbp(d.cappedNet)} · raw ${gbp(d.rawNet)}`);
   } else {
     descLines.push('', `**${v.headline}**`);
   }
@@ -75,7 +75,7 @@ export function buildStoreAlertCard(
     {
       name: '💰 Buyable basket',
       value: a.decision
-        ? `**${gbp(a.decision.liquidNet)} liquid** (${a.decision.liquidLots} lots · ${gbp(a.decision.liquidOutlay)})\n` +
+        ? `**${gbp(a.decision.liquidNet)} @STR≥${a.decision.liquidGate}** (${a.decision.liquidLots} lots · ${gbp(a.decision.liquidOutlay)})\n` +
           `raw ${gbp(a.decision.rawNet)} → capped ${gbp(a.decision.cappedNet)} · ${a.withinMargin.lots} lots in margin`
         : `${a.withinMargin.lots} lots · outlay ${gbp(a.withinMargin.outlay)} → **${gbp(a.withinMargin.projectedNet)} net**\n` +
           `margin ${a.withinMargin.blendedMarginPct != null ? a.withinMargin.blendedMarginPct.toFixed(1) : '—'}% · ROI ${a.withinMargin.roiPct != null ? Math.round(a.withinMargin.roiPct) : '—'}%`,

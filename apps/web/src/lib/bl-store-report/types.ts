@@ -23,7 +23,7 @@
  * The 0–100 grade and seller-quality stats are deliberately NOT here — a week of
  * transcripts showed zero decision weight on them.
  */
-import type { OverlapTagValue, Condition, ItemTypeCode } from '../bl-store-assessment/types';
+import type { OverlapTagValue, Condition, ItemTypeCode, SetsSection } from '../bl-store-assessment/types';
 
 export type Lens = 'assess' | 'basket';
 export type BenchProvenance = 'uk' | 'world' | 'none';
@@ -145,6 +145,9 @@ export interface DecisionReport {
   /** Buy view rows (withinMargin P/M), sorted capped-net desc. */
   rows: DecisionRow[];
   summary: DecisionSummary;
+  /** Sets are a SEPARATE buying decision (Amazon-flip / BL-sell / part-out / skip),
+   * never mixed into the P/M buy figure. Null when the lens has no sets data. */
+  sets?: SetsSection | null;
 }
 
 export interface BuildOptions {

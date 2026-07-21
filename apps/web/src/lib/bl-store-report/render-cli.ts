@@ -46,8 +46,8 @@ function gateLadder(gates: GateCol[]): string[] {
     row('Outlay', (g) => gbp(g.outlay)),
     row('Raw net', (g) => gbp(g.rawNet)),
     row('Capped net', (g) => gbp(g.cappedNet)),
-    row('Liquid (no DUPs)', (g) => gbp(g.cappedNetNoDups)),
-    row('DUP lots', (g) => String(g.dupLots)),
+    row('  ex-DUP (info)', (g) => gbp(g.cappedNetNoDups)),
+    row('  DUP lots (info)', (g) => String(g.dupLots)),
     row('Margin / ROI', (g) => `${g.marginPct != null ? Math.round(g.marginPct * 100) : '—'}/${g.roiPct != null ? Math.round(g.roiPct * 100) : '—'}%`),
     row('Median STR', (g) => num(g.medianStr)),
     row('Median mo cover', (g) => (g.medianMoCover == null ? '—' : g.medianMoCover.toFixed(1))),
@@ -71,16 +71,15 @@ export function renderDecisionCli(rep: DecisionReport, opts: { maxRows?: number;
   L.push(rule);
 
   L.push('');
-  L.push(`HEADLINE  (standalone order: full ${gbp(s.inboundPostage)} inbound postage · ${pct(m.inputs.feePct, 1)} fees · margin gate ${pct(m.inputs.minMargin)})`);
-  L.push(`  Raw net (uncapped)                    ${padL(gbp(s.rawNet), 10)}   ${s.lots} lots · ${s.pieces} pcs · outlay ${gbp(s.outlay)}`);
-  L.push(`  Demand-capped net                     ${padL(gbp(s.cappedNet), 10)}`);
-  L.push(`  LIQUID (STR≥${s.liquidGate}, no DUPs, capped)    ${padL(gbp(s.liquidNet), 10)}   ${s.liquidLots} lots · outlay ${gbp(s.liquidOutlay)}   ← the honest buy`);
+  L.push(`BUY LADDER — parts & minifigs by STR band  (each band a STANDALONE order: full Basket inbound postage ${gbp(s.inboundPostage)} · ${pct(m.inputs.feePct, 1)} fees · margin gate ${pct(m.inputs.minMargin)})`);
+  L.push(...gateLadder(s.gates));
   L.push('');
+  L.push(`  Whole buyable (STR≥0):  raw ${gbp(s.rawNet)} · demand-capped ${gbp(s.cappedNet)}   —  ${s.lots} lots · ${s.pieces} pcs · outlay ${gbp(s.outlay)} · Basket inbound postage ${gbp(s.inboundPostage)}`);
   L.push(`  STR (qty basis)  median ${num(s.strMedian)} · mean ${num(s.strMean)} · outlay-w ${num(s.strOutlayWeighted)}`);
   const c = s.coverage;
   const cp = (n: number) => pct(c.totalLots ? n / c.totalLots : null);
   L.push(`  Coverage (all P/M lots): UK ${cp(c.ukLots)} · world† ${cp(c.worldLots)} · none ${cp(c.noneLots)} of ${c.totalLots}   († = world +11% UK calibration)`);
-  L.push(`  Magnets ${s.magnetLots} · high-STR ${s.highStrLots} · DUPs ${s.dupLots} · ceiling-warn ${s.ceilingWarnLots}${s.setLotsExcluded ? ` · ${s.setLotsExcluded} set lots excluded (separate decision)` : ''}`);
+  L.push(`  Advisory (never removes lots): NEW/R-OUT are buy indicators, DUP ${s.dupLots} = already-deep flag · magnets ${s.magnetLots} · high-STR ${s.highStrLots} · ceiling-warn ${s.ceilingWarnLots}${s.setLotsExcluded ? ` · ${s.setLotsExcluded} set lots in the SETS section below` : ''}`);
 
   L.push('');
   L.push(`DECISION TABLE — buyable P/M lots, sorted by capped net  (Cap£ = net × min(qty, 6-mo absorption); flags: M=magnet ▲=price-ceiling !=damage)`);
@@ -91,8 +90,30 @@ export function renderDecisionCli(rep: DecisionReport, opts: { maxRows?: number;
   if (rep.rows.length === 0) L.push('  (no lots clear the buying gates)');
 
   L.push('');
-  L.push('GATE LADDER  (each column standalone: full inbound postage charged to the subset)');
-  L.push(...gateLadder(s.gates));
-  L.push('');
+  L.push(...setsCli(rep));
   return L.join('\n');
+}
+
+/** SETS — a SEPARATE buying decision from parts/minifigs (never mixed into the P/M figure). */
+function setsCli(rep: DecisionReport): string[] {
+  const st = rep.sets;
+  if (!st || st.lots === 0) {
+    return [`SETS — ${rep.summary.setLotsExcluded || 0} set lot(s) seen; no sets assessment on this lens (run store-assessment for the sets breakdown).`];
+  }
+  const m = st.methods;
+  const line = (label: string, r: { lots: number; outlay: number; net: number }, note: string) =>
+    `  ${padR(label, 22)}${padL(r.lots, 5)}${padL(gbp(r.outlay), 11)}${padL(gbp(r.net), 11)}   ${note}`;
+  return [
+    `SETS — separate decision  (${st.lots} S-type lots · ${gbp(st.askValue)} ask; how the margin is achieved)`,
+    `  ${padR('Method', 22)}${padL('Lots', 5)}${padL('Outlay', 11)}${padL('Net', 11)}`,
+    `  ${'-'.repeat(60)}`,
+    line('FLIP-AMAZON', m.flipAmazon, 'buy box via trusted ASIN, FBM fees (NEW only)'),
+    line('SELL-BL', m.sellBl, 'sell complete at BL 6-mo avg, condition-matched'),
+    line('PART-OUT', m.partOut, 'POV ≥2× ask and ≥£10 gap (signal, not booked)'),
+    line('CMFs, identified', m.cmfIdentified, 'per-figure ids, sold as figures on BL'),
+    line('CMFs, no identity', m.cmfNoIdentity, 'bare colNN — unpriceable without photos'),
+    line('SKIP (no margin)', m.skip, ''),
+    `  ${'-'.repeat(60)}`,
+    line('SETS TOTAL (sellable)', st.totalSellable, ''),
+  ];
 }

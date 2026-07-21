@@ -27,7 +27,6 @@ import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
 import { computeStoreAssessmentWithLots, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
-import { renderAssessment } from '../src/lib/bl-store-assessment/format';
 import type { StoreLot, AssessMode } from '../src/lib/bl-store-assessment/types';
 import { buildDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
@@ -61,8 +60,10 @@ const GAPFILL_DELAY_MS = parseInt(argv['gapfill-delay-ms'] ?? '400', 10);
 
 const inputs = {
   minAsk: parseFloat(argv['min-ask'] ?? '0.10'),
-  // --pricing-lens=grounded|estimate|auto (default auto: grounded once >=95% checked)
-  ukGroundedOnly: argv['pricing-lens'] === 'grounded' ? true : argv['pricing-lens'] === 'estimate' ? false : undefined,
+  // --pricing-lens=grounded|estimate|auto. Default GROUNDED (Chris 2026-07-21: the full
+  // assessment uses UK prices; world is an explicit opt-in, never the silent default).
+  // `estimate` = world fills gaps; `auto` = old "grounded once ≥95% checked" behaviour.
+  ukGroundedOnly: argv['pricing-lens'] === 'estimate' ? false : argv['pricing-lens'] === 'auto' ? undefined : true,
   minMargin: parseFloat(argv['min-margin'] ?? '0.20'),
   minStr: parseFloat(argv['min-str'] ?? '0.5'),
   magnetMaxSupplyLots: parseInt(argv['magnet-max-supply'] ?? '3', 10),
@@ -217,7 +218,11 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     liquidGate: decision.summary.liquidGate,
     inboundPostage: decision.summary.inboundPostage,
   };
-  const report = `${renderAssessment(assessment)}\n\n${renderDecisionCli(decision)}`;
+  // ONE report (Chris 2026-07-21): the common bl-store-report is the only decision
+  // surface. The legacy renderAssessment sections ([11] overlap, [12] gate table,
+  // [13] sets) duplicated and conflicted with it — removed. Store-profiling context
+  // (size/pricing/feedback) lives in the persisted structured assessment for the UI.
+  const report = renderDecisionCli(decision);
 
   const reportFile = path.join(OUT_DIR, `assessment-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(reportFile, report);
