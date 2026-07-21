@@ -123,8 +123,11 @@ async function main() {
         // engine's DEFAULT_INPUTS spread.
         inputs: {
           ...(argv['min-margin'] != null ? { minMargin: parseFloat(argv['min-margin']) } : {}),
-          ...(argv['pricing-lens'] === 'grounded' ? { ukGroundedOnly: true }
-            : argv['pricing-lens'] === 'estimate' ? { ukGroundedOnly: false } : {}),
+          // Default = grounded UK-only (Chris 2026-07-21: the full assessment uses UK
+          // prices; world is an explicit opt-in, never the silent default). `--pricing-lens=auto`
+          // restores the old "grounded once ≥95% checked" behaviour.
+          ...(argv['pricing-lens'] === 'estimate' ? { ukGroundedOnly: false }
+            : argv['pricing-lens'] === 'auto' ? {} : { ukGroundedOnly: true }),
         },
       });
       assessment = r.assessment;

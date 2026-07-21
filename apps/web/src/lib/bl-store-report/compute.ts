@@ -156,7 +156,12 @@ export function buildSummary(allPmRows: DecisionRow[], buyRows: DecisionRow[], i
   const listValue = sum(buyRows.map((r) => (r.list ?? 0) * r.qty));
   const rawNet = sum(buyRows.map((r) => r.lotNet ?? 0)) - (buyRows.length ? inboundPostage : 0);
   const cappedNet = sum(buyRows.map((r) => r.cappedLotNet ?? 0)) - (buyRows.length ? inboundPostage : 0);
-  const liquid = buyRows.filter((r) => (r.strQty ?? 0) >= LIQUID_STR_GATE && r.overlap !== 'DUPLICATE');
+  // STR≥gate band, DUPs INCLUDED. Overlap is advisory only (Chris 2026-07-21): a DUP
+  // is stock we already hold deep, worth flagging, but it is a real profitable lot and
+  // NEVER removed from a headline figure. The prior "no-DUPs liquid headline" was an
+  // unratified policy — reverted. cappedNetNoDups (per-gate) remains as a labelled
+  // secondary advisory only.
+  const liquid = buyRows.filter((r) => (r.strQty ?? 0) >= LIQUID_STR_GATE);
   const liquidOutlay = sum(liquid.map((r) => r.ask * r.qty));
   const liquidNet = sum(liquid.map((r) => r.cappedLotNet ?? 0)) - (liquid.length ? inboundPostage : 0);
   const strs = buyRows.map((r) => r.strQty ?? 0);
@@ -244,6 +249,7 @@ export function buildDecisionReport(a: StoreAssessment, opts: BuildOptions = {},
     },
     rows: buyRows,
     summary,
+    sets: a.sets ?? null,
   };
 }
 
@@ -288,5 +294,6 @@ export function buildBasketDecisionReport(
     },
     rows: buyRows,
     summary: buildSummary(allPmRows, buyRows, inbound, items.length - pm.length),
+    sets: null, // basket lens does not assess sets — the assess lens owns the SETS section
   };
 }
