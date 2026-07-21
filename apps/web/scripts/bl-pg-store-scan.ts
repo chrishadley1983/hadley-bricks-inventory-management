@@ -38,7 +38,7 @@
  *                            Revisit if the cycle's freshness ratio slips — see the digest)
  *   --inventory-ttl-hours=<n> Reuse cached store scrape if younger (default 24)
  *   --force-rescrape         Ignore cached store inventory
- *   --max-pages=<n>          AJAX pages per item type (default 50)
+ *   --max-pages=<n>          AJAX pages per item type (default 500 — no truncation; set low only to probe)
  *   --page-delay-ms=<n>      Between AJAX pages (default 3000, floor 3000)
  *   --nav-delay-ms=<n>       Base delay between PG navigations (default 4000; +0-2s jitter)
  *   --limit-tuples=<n>       Cap PG pages this run (0 = all; partial runs resume via cache)
@@ -108,7 +108,11 @@ const MIN_STR = parseFloat(argv['min-str'] ?? '0');
 const CACHE_TTL_DAYS = parseFloat(argv['cache-ttl-days'] ?? '45');
 const INVENTORY_TTL_HOURS = parseFloat(argv['inventory-ttl-hours'] ?? '24');
 const FORCE_RESCRAPE = argv['force-rescrape'] === 'true';
-const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
+// No-truncation default (Chris 2026-07-21): the old 50-page (5,000-part) default silently
+// truncated large stores, producing a partial pg-scan-inventory.json that reads as complete
+// and poisons downstream coverage/gap math. Match store-assessment's 500-page ceiling so a
+// realistic store is never capped. Lower it explicitly with --max-pages only for a quick probe.
+const MAX_PAGES = Math.min(500, parseInt(argv['max-pages'] ?? '500', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const NAV_DELAY_MS = Math.max(2500, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
