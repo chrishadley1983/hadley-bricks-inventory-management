@@ -27,7 +27,6 @@ import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
 import { computeStoreAssessmentWithLots, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
-import { renderAssessment } from '../src/lib/bl-store-assessment/format';
 import type { StoreLot, AssessMode } from '../src/lib/bl-store-assessment/types';
 import { buildDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
@@ -219,7 +218,11 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
     liquidGate: decision.summary.liquidGate,
     inboundPostage: decision.summary.inboundPostage,
   };
-  const report = `${renderAssessment(assessment)}\n\n${renderDecisionCli(decision)}`;
+  // ONE report (Chris 2026-07-21): the common bl-store-report is the only decision
+  // surface. The legacy renderAssessment sections ([11] overlap, [12] gate table,
+  // [13] sets) duplicated and conflicted with it — removed. Store-profiling context
+  // (size/pricing/feedback) lives in the persisted structured assessment for the UI.
+  const report = renderDecisionCli(decision);
 
   const reportFile = path.join(OUT_DIR, `assessment-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(reportFile, report);

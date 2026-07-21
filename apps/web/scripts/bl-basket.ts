@@ -61,8 +61,8 @@ import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completenes
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 import { DAMAGE_KEYWORDS } from '../src/lib/bl-store-assessment/engine';
-import { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT, STR_GATES } from '../src/lib/bricklink/fees';
-import { buildBasketDecisionReport, renderDecisionMd } from '../src/lib/bl-store-report';
+import { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT } from '../src/lib/bricklink/fees';
+import { buildBasketDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -820,97 +820,27 @@ function scoreAll(items: ScrapedItem[], priceMap: Map<string, { ukSoldAvg: numbe
  * full-basket postage share and charge the ENTIRE inbound shipping to the
  * subset (Chris 2026-07-19: gate rows understated postage, flattering cut-down
  * baskets — a £3 ship spread over 73 lots left the 31-lot cut carrying ~40p). */
-function aggregate(passed: EnrichedItem[], inputs: RunInputs, standaloneShipping = false): {
-  lots: number; pieces: number; outlay: number; list: number; net: number; margin: number; roi: number;
-  meanSTR: number; medianSTR: number; outlayWeightedSTR: number;
-  pPerLotMo: number; pPerPcMo: number; avgMonthsToClear: number;
-} {
-  const n = passed.length;
-  if (n === 0) return { lots: 0, pieces: 0, outlay: 0, list: 0, net: 0, margin: 0, roi: 0, meanSTR: 0, medianSTR: 0, outlayWeightedSTR: 0, pPerLotMo: 0, pPerPcMo: 0, avgMonthsToClear: 0 };
-  const outlay = passed.reduce((s, o) => s + o.unitPriceGBP * o.invQty, 0);
-  const list = passed.reduce((s, o) => s + (o.listPrice ?? 0) * o.invQty, 0);
-  const net = standaloneShipping
-    ? passed.reduce((s, o) => s + (o.lotProfit ?? 0) + (o.inboundPerUnit ?? 0) * o.invQty, 0) - inputs.shipping
-    : passed.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
-  const pieces = passed.reduce((s, o) => s + o.invQty, 0);
-  const margin = list > 0 ? (net / list) * 100 : 0;
-  const roi = outlay > 0 ? (net / outlay) * 100 : 0;
-  const strs = passed.map((o) => o.sellThru || 0).sort((a, b) => a - b);
-  const meanSTR = strs.reduce((a, b) => a + b, 0) / n;
-  const medianSTR = n % 2 === 0 ? (strs[n / 2 - 1] + strs[n / 2]) / 2 : strs[Math.floor(n / 2)];
-  const outlayWeightedSTR = outlay > 0 ? passed.reduce((s, o) => s + (o.sellThru || 0) * o.unitPriceGBP * o.invQty, 0) / outlay : 0;
-  const lotMonths = passed.reduce((s, o) => s + (o.mos ?? 0), 0);
-  const pieceMonths = passed.reduce((s, o) => s + (o.mos ?? 0) * o.invQty, 0);
-  const pPerLotMo = lotMonths > 0 ? net / lotMonths : 0;
-  const pPerPcMo = pieceMonths > 0 ? net / pieceMonths : 0;
-  const avgMonthsToClear = n > 0 ? lotMonths / n : 0;
-  // Suppress unused-warning in some flag combos.
-  void inputs;
-  return { lots: n, pieces, outlay, list, net, margin, roi, meanSTR, medianSTR, outlayWeightedSTR, pPerLotMo, pPerPcMo, avgMonthsToClear };
-}
-
 function renderReport(enriched: EnrichedItem[], meta: { storeName: string; country: string }, inputs: RunInputs): string {
-  const passed = enriched.filter((e) => e.passed).sort((a, b) => (b.lotProfit ?? 0) - (a.lotProfit ?? 0));
-  const agg = aggregate(passed, inputs);
-  const totalVarFees = agg.list * VAR_FEE_PCT;
-  const top3 = passed.slice(0, 3).reduce((s, o) => s + (o.lotProfit ?? 0), 0);
-  const top3Share = agg.net > 0 ? (top3 / agg.net) * 100 : 0;
-  const byMos = [...passed].sort((a, b) => (a.mos ?? 999) - (b.mos ?? 999));
-  let cum = 0, mos50: number | null = null, mos80: number | null = null;
-  for (const r of byMos) { cum += r.lotProfit ?? 0; if (!mos50 && cum >= 0.5 * agg.net) mos50 = r.mos; if (!mos80 && cum >= 0.8 * agg.net) mos80 = r.mos; }
-
-  const padL = (s: string | number, n: number) => String(s).padStart(n);
-  const pad = (s: string | number, n: number) => String(s).padEnd(n);
-  const money = (n: number, w = 6) => padL('£' + n.toFixed(2), w);
-
-  const L: string[] = [];
-  L.push('');
-  L.push(`  ${meta.storeName}  -  ${new Date().toISOString().slice(0, 10)}`);
-  L.push(`  ${agg.lots} lots / ${agg.pieces} pieces`);
-  L.push('  ' + '-'.repeat(56));
-  L.push(`  Outlay    ${money(agg.outlay, 8)}     List       ${money(agg.list, 8)}`);
-  L.push(`  Postage   ${money(inputs.shipping, 8)}     Fees (9.4%) ${money(totalVarFees, 7)}`);
-  L.push('  ' + '-'.repeat(56));
-  L.push(`  NET       ${money(agg.net, 8)}     Margin ${agg.margin.toFixed(0)}% / ROI ${agg.roi.toFixed(0)}%`);
-  L.push(`  Top 3     ${money(top3, 8)}  (${top3Share.toFixed(0)}% of net profit)`);
-  L.push(`  Unprof    ${padL(enriched.filter((e) => !e.passed).length.toString(), 8)}`);
-  // D1: median first, then mean + outlay-weighted (right-tail outliers skew the mean — see feedback memory).
-  L.push(`  STR       median ${agg.medianSTR.toFixed(2)} · mean ${agg.meanSTR.toFixed(2)} · outlay-w ${agg.outlayWeightedSTR.toFixed(2)}`);
-  // D2: capacity efficiency — the metric that matters when shelf space is the bottleneck.
-  L.push(`  Capacity  £${agg.pPerLotMo.toFixed(3)}/lot/mo · £${agg.pPerPcMo.toFixed(3)}/pc/mo · avg ${agg.avgMonthsToClear.toFixed(1)} mo to clear`);
-  L.push(`  50% net   ~${padL((mos50 ?? 0).toFixed(0) + 'mo', 7)}  80% net ~${(mos80 ?? 0).toFixed(0)}mo  (@10%/mo lot rate)`);
-  L.push('');
-  L.push(`  Gates: ask≥£${inputs.minAsk.toFixed(2)}, str≥${inputs.minStr}, margin≥${(inputs.minMargin * 100).toFixed(0)}%, ship=£${inputs.shipping.toFixed(2)}`);
-  L.push('');
-  L.push('  #  T  Item           Name                                 List    Ask    Net/u   Mgn  Qty  Lot     STR   Mo');
-  L.push('  -- -  -------------  -----------------------------------  ------  -----  ------  ---  ---  ------  ----  ----');
-  passed.forEach((o, i) => {
-    const nameFull = o.colourName && o.itemType === 'P' ? `${o.colourName} ${o.itemName}` : o.itemName;
-    L.push(`  ${padL(i + 1, 2)} ${o.itemType}  ${pad(o.itemNo, 13)}  ${pad((nameFull || '').slice(0, 35), 35)}  ${money(o.listPrice ?? 0, 6)}  ${money(o.unitPriceGBP, 5)}  ${money(o.netPerUnit ?? 0, 6)}  ${padL(((o.marginPct ?? 0)).toFixed(0) + '%', 3)}  ${padL(o.invQty, 3)}  ${money(o.lotProfit ?? 0, 6)}  ${padL(o.sellThru.toFixed(2), 4)}  ${padL((o.mos ?? 0).toFixed(0), 4)}`);
-  });
-
-  // D3: gate-comparison table — same data, common cutoffs, helps decide --min-str.
-  L.push('');
-  L.push('  Gate-comparison (each row = STANDALONE order: full inbound shipping charged to the subset):');
-  L.push('  Gate     Lots   Outlay   Net    Mgn   ROI   medSTR  £/lot/mo');
-  L.push('  -------  -----  -------  -----  ----  ----  ------  --------');
-  for (const gate of STR_GATES) {
-    const subset = passed.filter((o) => (o.sellThru || 0) >= gate);
-    if (subset.length === 0) continue;
-    const a = aggregate(subset, inputs, true);
-    L.push(`  STR≥${gate.toFixed(2)} ${padL(a.lots, 5)}  ${money(a.outlay, 7)}  ${money(a.net, 5)}  ${padL(a.margin.toFixed(0) + '%', 4)}  ${padL(a.roi.toFixed(0) + '%', 4)}  ${padL(a.medianSTR.toFixed(2), 6)}  ${padL('£' + a.pPerLotMo.toFixed(3), 8)}`);
-  }
-  L.push('');
+  // ONE report (Chris 2026-07-21): the basket routes through the common bl-store-report
+  // module — no private table (this WAS the 5th divergent renderer the Jul-19 audit
+  // named). Same demand cap, advisory overlap, all-band ladder and standalone-postage
+  // rules every store surface shares.
+  const decision = buildBasketDecisionReport(
+    enriched.map((e) => ({
+      itemType: e.itemType, itemNo: e.itemNo, colourName: e.colourName, itemName: e.itemName,
+      condition: e.condition, invQty: e.invQty, unitPriceGBP: e.unitPriceGBP,
+      ukSoldAvg: e.ukSoldAvg, ukSoldQty: e.ukSoldQty, ukStockQty: e.ukStockQty,
+      sellThru: e.sellThru, listPrice: e.listPrice, netPerUnit: e.netPerUnit,
+      inboundPerUnit: e.inboundPerUnit, marginPct: e.marginPct, passed: e.passed,
+    })),
+    { slug: STORE_SLUG ?? '', storeName: meta.storeName, country: meta.country, inputs: { minMargin: inputs.minMargin, minStr: inputs.minStr, shipping: inputs.shipping } },
+  );
   if (enrichmentGap && enrichmentGap.accepted && enrichmentGap.missing > 0) {
-    L.push(`  Buy: PARTIAL DATA  -  net ${money(agg.net, 0)} / ${agg.roi.toFixed(0)}% on ${money(agg.outlay, 0)} from PRICED lots only`);
-    L.push(`       ${enrichmentGap.missing} of ${enrichmentGap.of} gap tuples UNPRICED - real basket may be larger (or contain traps).`);
-    L.push(`       Close the gap: pg-page-sweep --from-report=tmp/stores/<slug>/missing-tuples.json, then re-run.`);
-  } else {
-    L.push(`  Buy: ${agg.net > 0 ? 'YES' : 'REVIEW'}  -  net ${money(agg.net, 0)} / ${agg.roi.toFixed(0)}% on ${money(agg.outlay, 0)}`);
+    decision.meta.dataGapNote = `PARTIAL DATA — ${enrichmentGap.missing} of ${enrichmentGap.of} benchmark-gap tuples accepted UNPRICED; the real basket may be larger (close the gap via pg-page-sweep, then re-run).`;
   }
-  L.push('');
-  return L.join('\n');
+  return renderDecisionCli(decision);
 }
+
 
 // ---------------------------------------------------------------------------
 // Phase 7: Cart build (XML upload → select store → confirm → create)

@@ -80,6 +80,7 @@ import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completenes
 import { PartOutValueCacheService } from '../src/lib/bricklink/part-out-value-cache.service';
 import { parseSetNumber, resolvePovOptions } from '../src/lib/bricklink/part-out-value';
 import { captureFraction } from '../src/lib/bricklink/liquidity-pov';
+import { buildBasketDecisionReport, renderDecisionMd } from '../src/lib/bl-store-report';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
 
@@ -113,7 +114,7 @@ const NAV_DELAY_MS = Math.max(2500, parseInt(argv['nav-delay-ms'] ?? '4000', 10)
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 
 // Fee model — canonical home is src/lib/bricklink/fees.ts (BL 3% + Bricqer 3.5% + PayPal 2.9%).
-import { VAR_FEE_PCT, STR_GATES } from '../src/lib/bricklink/fees';
+import { VAR_FEE_PCT } from '../src/lib/bricklink/fees';
 // Personal velocity baseline (see bl-basket): 10% lot turnover per month.
 const PERSONAL_MONTHLY_LOT_RATE = 0.10;
 
@@ -918,12 +919,6 @@ interface ScanMeta {
   variantRecoveredCount: number;
 }
 
-function median(nums: number[]): number | null {
-  if (nums.length === 0) return null;
-  const s = [...nums].sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  return s.length % 2 === 0 ? (s[mid - 1] + s[mid]) / 2 : s[mid];
-}
 
 function money(n: number | null | undefined, dp = 2): string {
   return n == null ? '—' : `£${n.toFixed(dp)}`;
@@ -948,193 +943,53 @@ interface ScanReportSummary {
 }
 
 function buildReport(meta: ScanMeta, scored: ScoredLot[]): { md: string; summary: ScanReportSummary } {
+  // ONE report (Chris 2026-07-21): bl-pg-store-scan warms the UK price-guide cache; the
+  // DECISION report renders through the common bl-store-report module — the private
+  // buy-table here WAS the divergent renderer named in the Jul-19 audit. Same demand cap,
+  // advisory overlap, all-band ladder and standalone-postage rules every surface shares.
+  // World-sourced benchmarks label as uk in this compact lens; the sanctioned grounded
+  // path is store-assessment / store-report, which this scan has just warmed the cache for.
   const passed = scored.filter((s) => s.passed).sort((a, b) => (b.realisableNet ?? 0) - (a.realisableNet ?? 0));
-  const watch = scored.filter((s) => !s.passed && s.watch).sort((a, b) => (b.marginPct ?? 0) - (a.marginPct ?? 0));
-  const benchmarked = scored.filter((s) => s.askVsUk != null);
-  const noSales = scored.filter((s) => s.rejectReason === 'no UK/world sales in 6mo');
-  const unenriched = scored.filter((s) => s.rejectReason === 'not enriched (partial run)');
   const identityAmbiguous = scored.filter((s) => s.priceSource === 'ambiguous');
   const floorUnviableLots = scored.filter((s) => s.floorUnviable);
-  const floorUnviableNaiveNet = floorUnviableLots.reduce((s, o) => s + Math.max(0, o.lotProfit ?? 0), 0);
   const srcCounts = { uk: 0, world: 0, none: 0, ambiguous: 0 } as Record<PriceSource, number>;
   for (const s of scored) srcCounts[s.priceSource]++;
-  const worldBuys = passed.filter((p) => p.priceSource === 'world');
-
   const outlay = passed.reduce((s, o) => s + o.ask * o.qty, 0);
-  const listTotal = passed.reduce((s, o) => s + (o.listPrice ?? 0) * o.qty, 0);
   const net = passed.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
   const realisableNetSum = passed.reduce((s, o) => s + (o.realisableNet ?? 0), 0);
-  const margin = listTotal > 0 ? (net / listTotal) * 100 : 0;
-  const roi = outlay > 0 ? (net / outlay) * 100 : 0;
+  const solidRealisableNet = passed.filter((p) => p.confidence === 'solid').reduce((s, o) => s + (o.realisableNet ?? 0), 0);
   const top3 = passed.slice(0, 3).reduce((s, o) => s + (o.realisableNet ?? 0), 0);
   const top3Share = realisableNetSum > 0 ? (top3 / realisableNetSum) * 100 : 0;
-  const solidPassed = passed.filter((p) => p.confidence === 'solid');
-  const solidNet = solidPassed.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
-  const solidRealisableNet = solidPassed.reduce((s, o) => s + (o.realisableNet ?? 0), 0);
-
-  const ratios = benchmarked.map((s) => s.askVsUk!) as number[];
-  const medianRatio = median(ratios);
-  const below80 = ratios.filter((r) => r < 0.8).length;
-  const above100 = ratios.filter((r) => r >= 1.0).length;
-
-  const strs = passed.map((p) => p.str);
-  const medStr = median(strs);
-
-  // Verdict thresholds run on realisable net (capture + floor adjusted) — the raw
-  // margin/STR gates above are unchanged, but a basket only reads as BUY/REVIEW if the
-  // money is honestly there after liquidity and floor-viability discounting.
-  const verdict =
+  const verdict: 'BUY' | 'REVIEW' | 'SKIP' =
     passed.length === 0 ? 'SKIP'
-    : realisableNetSum >= 25 && solidRealisableNet >= 15 && top3Share < 80 ? 'BUY'
-    : realisableNetSum >= 10 ? 'REVIEW'
-    : 'SKIP';
+      : realisableNetSum >= 25 && solidRealisableNet >= 15 && top3Share < 80 ? 'BUY'
+        : realisableNetSum >= 10 ? 'REVIEW'
+          : 'SKIP';
 
-  const verdictReason =
-    verdict === 'BUY'
-      ? `£${realisableNetSum.toFixed(2)} realisable net (capture-adjusted; £${net.toFixed(2)} raw) across ${passed.length} lots (${roi.toFixed(0)}% ROI on £${outlay.toFixed(2)} raw), with £${solidRealisableNet.toFixed(2)} of it on solid-confidence benchmarks and no excessive concentration (top-3 = ${top3Share.toFixed(0)}%).`
-      : verdict === 'REVIEW'
-        ? `Only £${realisableNetSum.toFixed(2)} realisable net (£${net.toFixed(2)} raw; ${roi.toFixed(0)}% ROI on £${outlay.toFixed(2)}) — worth a manual look at the buy list, but marginal after handling time${top3Share >= 80 ? `, and top-3 lots carry ${top3Share.toFixed(0)}% of realisable profit` : ''}.`
-        : `No meaningful realisable profit at the current gates (margin ≥ ${(MIN_MARGIN * 100).toFixed(0)}%): ${passed.length} lots pass for £${net.toFixed(2)} raw net / £${realisableNetSum.toFixed(2)} realisable. Store prices sit ${medianRatio != null ? `at ${(medianRatio * 100).toFixed(0)}% of UK 6MA (median)` : 'without enough benchmark coverage'} — not a stale-priced seller.`;
+  const decision = buildBasketDecisionReport(
+    scored.filter((s) => s.itemType !== 'S').map((s) => ({
+      itemType: s.itemType, itemNo: s.itemNo, colourName: s.colourName, itemName: s.itemName,
+      condition: s.cond, invQty: s.qty, unitPriceGBP: s.ask,
+      ukSoldAvg: s.ukSoldAvg, ukSoldQty: s.ukSoldQty, ukStockQty: s.ukStockQty,
+      sellThru: s.str, listPrice: s.listPrice, netPerUnit: s.netPerUnit,
+      inboundPerUnit: s.inboundPerUnit, marginPct: s.marginPct, passed: s.passed,
+    })),
+    { slug: STORE_SLUG, storeName: meta.storeName, country: 'United Kingdom',
+      inputs: { minMargin: MIN_MARGIN, minStr: MIN_STR, shipping: SHIPPING } },
+  );
+  const scanNote = [
+    '',
+    '## Scan telemetry',
+    '',
+    `- Lots scanned ${scored.length} · passing ${passed.length} · verdict ${verdict}`,
+    `- Price source: UK ${srcCounts.uk} · world ${srcCounts.world} · uncovered ${srcCounts.none} · ambiguous ${srcCounts.ambiguous}`,
+    `- Enrichment: ${meta.enrich.cacheHits} cache hits · ${meta.enrich.pagesScraped} pages scraped · gap-fill queued ${meta.gapFillCount} · variant-recovered ${meta.variantRecoveredCount}${meta.enrich.aborted ? ' · ⚠ ABORTED: ' + meta.enrich.aborted : ''}`,
+    `- Cache-warming scan. Decision report: \`npx tsx scripts/store-assessment.ts --store-slug=${STORE_SLUG}\` (or store-report.ts to re-render offline).`,
+    '',
+  ].join('\n');
 
-  const L: string[] = [];
-  L.push(`# BL store scan — ${meta.storeName} (${STORE_SLUG})`);
-  L.push('');
-  L.push(`*${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC · data: catalogPG page scrape (UK-only, native-GBP rows) · no BL API calls*`);
-  L.push('');
-  L.push(`## Verdict: ${verdict}`);
-  L.push('');
-  L.push(verdictReason);
-  if (meta.enrich.aborted) {
-    L.push('');
-    L.push(`> ⚠ **Partial data**: ${meta.enrich.aborted}`);
-  }
-  L.push('');
-  L.push('## Basket economics (all passing lots)');
-  L.push('');
-  L.push('| | |');
-  L.push('|---|---|');
-  L.push(`| Lots passing gates | ${passed.length} (${passed.reduce((s, o) => s + o.qty, 0)} pieces) |`);
-  L.push(`| Outlay | ${money(outlay)} |`);
-  L.push(`| Projected list (Bricqer formula) | ${money(listTotal)} |`);
-  L.push(`| Projected net (after 9.4% fees + £${SHIPPING.toFixed(2)} postage) | ${money(net)} raw |`);
-  L.push(`| Realisable net (capture-adjusted)¹ | **${money(realisableNetSum)}** (${net > 0 ? ((realisableNetSum / net) * 100).toFixed(0) : '—'}% of raw) |`);
-  L.push(`| Margin on list / ROI on outlay | ${margin.toFixed(0)}% / ${roi.toFixed(0)}% |`);
-  L.push(`| Net on solid-confidence lots only | ${money(solidNet)} raw / ${money(solidRealisableNet)} realisable (${solidPassed.length} lots) |`);
-  L.push(`| Top-3 lot concentration | ${top3Share.toFixed(0)}% of realisable net |`);
-  L.push(`| Median STR of passing lots | ${medStr != null ? medStr.toFixed(2) : '—'} |`);
-  L.push('');
-  L.push('¹ Real £ = raw lot net × f(STR) capture-curve fraction (liquidity-pov.ts) × floor-capture (1.0 unless the list price is floor-clamped and the market has never actually supported it — see Coverage).');
-  L.push('');
-  if (passed.length > 0) {
-    L.push(`Shipping sensitivity: net = ${money(net + SHIPPING - 2)} at £2.00 · ${money(net)} at £${SHIPPING.toFixed(2)} · ${money(net + SHIPPING - 5)} at £5.00 (raw basis).`);
-    L.push('');
-  }
-
-  L.push('## Store pricing profile');
-  L.push('');
-  L.push(`- Benchmarked lots: **${benchmarked.length}** of ${scored.length} scanned (${noSales.length} with no UK/world sales in 6 months${unenriched.length > 0 ? `; ${unenriched.length} not yet enriched — partial run` : ''}).`);
-  L.push(`- Price source: **${srcCounts.uk} UK** (L3 page-scrape) · **${srcCounts.world} worldwide** (L1 fallback) · **${srcCounts.none} uncovered** (no benchmark on either layer) · **${srcCounts.ambiguous} identity-ambiguous** (see Coverage) — of ${scored.length} scanned lots.`);
-  if (medianRatio != null) {
-    L.push(`- Median ask ÷ UK 6MA: **${medianRatio.toFixed(2)}** — ${medianRatio >= 1 ? 'priced at/above market (active repricer; bargains are exceptions, not policy)' : medianRatio >= 0.85 ? 'slightly under market' : 'meaningfully under market (stale-priced seller — worth mining)'}.`);
-    L.push(`- ${below80} lots ask <80% of UK 6MA · ${above100} lots ask ≥100%.`);
-  }
-  if (worldBuys.length > 0) {
-    L.push(`- ⚠ **${worldBuys.length} of ${passed.length} buy candidates are worldwide-priced (L1)** — live-check on BL before purchase (UK/world gap ~11% median, worse on new licensed printed parts).`);
-  }
-  L.push('');
-
-  const povCell = (o: ScoredLot) => {
-    if (o.itemType !== 'S') return '';
-    if (o.povSoldAvgGbp == null) return '—';
-    return `${money(o.povSoldAvgGbp, 2)}${o.povMultiple != null ? ` (${o.povMultiple.toFixed(1)}x)` : ''}${o.povArbitrageFlag ? ' ⚠pov' : ''}`;
-  };
-  const lotLine = (o: ScoredLot) => {
-    const name = (o.itemType === 'P' && o.colourName ? `${o.colourName} ${o.itemName}` : o.itemName).slice(0, 44);
-    const src = o.priceSource === 'uk' ? 'uk' : o.priceSource === 'world' ? 'world' : o.priceSource === 'ambiguous' ? 'ambig' : '—';
-    return `| ${o.itemType} | ${o.itemNo} | ${name} | ${o.cond} | ${money(o.ask)} | ${o.qty} | ${money(o.ukSoldAvg, 3)} | ${money(o.ukSoldMedian, 2)} | ${o.ukSoldLots} | ${o.str.toFixed(2)} | ${o.ukLast2moQty} | ${money(o.listPrice, 3)} | ${money(o.netPerUnit, 3)} | **${money(o.lotProfit)}** | ${money(o.realisableNet)} | ${o.marginPct?.toFixed(0) ?? '—'}% | ${o.confidence}${o.skewFlag ? ' ⚠skew' : ''} | ${src} | ${povCell(o)} |`;
-  };
-  const header = '| T | Item | Name | C | Ask | Qty | UK 6MA | Med | Sales | STR | L2mo | List | Net/u | Lot £ | Real £ | Mgn | Confidence | Src | POV |';
-  const sep = '|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|';
-
-  L.push(`## Buy list — ${passed.length} lots`);
-  L.push('');
-  if (passed.length === 0) {
-    L.push('*None at the current gates.*');
-  } else {
-    L.push(header);
-    L.push(sep);
-    for (const o of passed) L.push(lotLine(o));
-    L.push('');
-    L.push('*Sales = UK-or-world transactions in 6mo, whichever priced the lot (confidence: ≥5 solid, 2–4 thin, 1 single-sale). L2mo = UK pieces sold in the 2 most recent months (0 for world-priced lots — L1 has no monthly buckets). ⚠skew = 6MA sits >30% above median — benchmark propped up by outlier sales; trust the median (world-priced lots never skew-flag — L1 has no median). Src = uk (L3 page-scrape, live-checked basis) or world (L1 worldwide fallback — live-check before buying, UK/world gap ~11% median). POV = BL part-out value (cache-only join, sets only); ⚠pov = ask < 50% of POV sold avg — a part-out arbitrage signal, independent of the STR-based buy gates above. Real £ = capture-adjusted net, see footnote¹ above; buy list is sorted by Real £, not Lot £.*');
-  }
-  L.push('');
-
-  if (watch.length > 0) {
-    L.push(`## Watch list — ${watch.length} near-misses (10–${(MIN_MARGIN * 100).toFixed(0)}% margin)`);
-    L.push('');
-    L.push(header);
-    L.push(sep);
-    for (const o of watch.slice(0, 15)) L.push(lotLine(o));
-    if (watch.length > 15) L.push(`*…and ${watch.length - 15} more.*`);
-    L.push('');
-  }
-
-  // STR gate comparison over the passing set.
-  if (passed.length > 0) {
-    L.push('## Gate comparison (STR cutoffs on top of the buy list)');
-    L.push('');
-    L.push('| Gate | Lots | Outlay | Net | Margin | ROI |');
-    L.push('|---|---|---|---|---|---|');
-    for (const gate of STR_GATES) {
-      const subset = passed.filter((o) => o.str >= gate);
-      if (subset.length === 0) continue;
-      const so = subset.reduce((s, o) => s + o.ask * o.qty, 0);
-      const sl = subset.reduce((s, o) => s + (o.listPrice ?? 0) * o.qty, 0);
-      const sn = subset.reduce((s, o) => s + (o.lotProfit ?? 0), 0);
-      L.push(`| STR≥${gate.toFixed(2)} | ${subset.length} | ${money(so)} | ${money(sn)} | ${sl > 0 ? ((sn / sl) * 100).toFixed(0) : '—'}% | ${so > 0 ? ((sn / so) * 100).toFixed(0) : '—'}% |`);
-    }
-    L.push('');
-  }
-
-  L.push('## Coverage & data quality');
-  L.push('');
-  L.push(`- Inventory: ${meta.totalLots} lots (P=${meta.byType['P'] ?? 0}, S=${meta.byType['S'] ?? 0}, M=${meta.byType['M'] ?? 0}).`);
-  L.push(`- Enrichment: ${meta.enrich.cacheHits} cache hits + ${meta.enrich.pagesScraped} pages scraped; ${meta.enrich.noData} no-data items; ${meta.enrich.notFound} not in catalog.`);
-  if (meta.variantRecoveredCount > 0) {
-    L.push(`- Variant-ID recovery: **${meta.variantRecoveredCount}** set lot(s) resolved to their true catalog "-<seq>" identity (advent-day builds / gift-with-purchase variants, via BL's itemSeq field) instead of the base set number — see Gate 1's doc comment.`);
-  }
-  if (identityAmbiguous.length > 0) {
-    L.push(`- Identity-ambiguous (variant subsets): **${identityAmbiguous.length}** lot(s) excluded from buy/watch — a base set number is still shared by 2+ distinct item names after Tier 2 recovery (stale cached inventory, or a genuine same-seq collision); needs item-level lookup, not attempted here.`);
-  }
-  if (floorUnviableLots.length > 0) {
-    L.push(`- Floor-unviable: **${floorUnviableLots.length}** lot(s) excluded from the buy list — list price is floor-clamped (£${BRICQER_PRICE_FLOOR.toFixed(4)}) but the UK 6mo max sold price is below it (nobody has ever paid our price); £${floorUnviableNaiveNet.toFixed(2)} naive net excluded.`);
-  }
-  if (meta.boiler.boilerplateCount > 0) {
-    L.push(`- Boilerplate: ${meta.boiler.boilerplateCount} repeated description(s) covering ${meta.boiler.itemsCovered} lots exempted from the damage filter.`);
-  }
-  L.push(`- Gates: ask ≥ ${money(MIN_ASK)} (economy dial), browser-scrape ask ≥ ${money(ENRICH_MIN_ASK)}, margin ≥ ${(MIN_MARGIN * 100).toFixed(0)}%, STR ≥ ${MIN_STR}, shipping £${SHIPPING.toFixed(2)} allocated by list value.`);
-  L.push(`- Fee model: 9.4% variable (BL 3% + Bricqer 3.5% + PayPal 2.9%).`);
-  if (meta.gapFillCount > 0) {
-    L.push(`- Gap-fill: ${meta.gapFillCount} uncovered tuple(s) queued to \`bl_pg_refresh_queue\` (tier=tail) — run \`npx tsx scripts/pg/pg-residual-fill.ts\` to clear them.`);
-  }
-  L.push('');
-
-  L.push('## Next steps');
-  L.push('');
-  if (verdict === 'BUY') {
-    L.push(`1. Build the cart: \`npx tsx scripts/bl-basket.ts --store-slug=${STORE_SLUG} --shipping=${SHIPPING.toFixed(2)}\` — the PG scrape has already warmed its price cache, so it will re-derive this basket without extra API spend.`);
-    L.push('2. Sense-check the ⚠skew rows against their medians before approving the cart.');
-    if (top3Share >= 60) L.push(`3. Top-3 lots carry ${top3Share.toFixed(0)}% of profit — verify those three manually on BL before committing.`);
-  } else if (verdict === 'REVIEW') {
-    L.push('1. Review the buy list above manually — the total is small enough that handling time may not justify a cart.');
-    L.push(`2. If buying, run: \`npx tsx scripts/bl-basket.ts --store-slug=${STORE_SLUG}\` (price cache already warm).`);
-  } else {
-    L.push('1. No action — deprioritise this store.');
-    if (medianRatio != null && medianRatio >= 1) L.push('2. The store reprices actively; re-scanning it later is unlikely to help. Spend the next scan on a different seller.');
-  }
-  L.push('');
   return {
-    md: L.join('\n'),
+    md: `${renderDecisionMd(decision)}\n${scanNote}`,
     summary: {
       verdict,
       lotsTotal: scored.length,
