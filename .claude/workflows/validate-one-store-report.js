@@ -104,6 +104,15 @@ pass=true only if 1-6 hold on both stores. Structured findings with the actual n
 4. Regression suite: cd "${WEB}"; npx vitest run src/lib/bl-store-report src/lib/bl-store-assessment - all pass.
 pass=true only if main carries the merge, the card is de-dup-stripped, prod is green, and tests pass. Structured findings.`,
   },
+  {
+    key: 'surface-audit',
+    prompt: `Audit the WHOLE store scan/assess surface for un-deprecated rivals and footguns at ${REPO} (working dir ${WEB}). The one-store-report consolidation was scoped too narrowly once; sweep the entire surface, not just the known files.
+1. grep every script under apps/web/scripts (incl scripts/pg) and every module under apps/web/src for store-scanner / store-report renderers: functions named build*Report / render*Report / renderAssessment, private STR-gate ladders, or standalone HTML/markdown store tables. List EACH with file:line.
+2. Classify each as: (a) sanctioned - renders via src/lib/bl-store-report; (b) intentionally kept (scan-bl-store.ts and analyze-bl-store.ts are Chris's own-store / bulk-offer tools, ALLOWED); or (c) an UNEXPECTED rival that should have been consolidated. Only (c) is a finding.
+3. Truncation footgun: confirm bl-pg-store-scan.ts default --max-pages is 500 (NOT 50) and no other scraper writes a store inventory JSON that a coverage/gap calc could mistake for the full bl_store_scrapes. Any default that truncates a realistic store = a blocker finding.
+4. Confirm src/lib/bl-store-assessment/format.ts (renderAssessment) is deleted and unreferenced, and that the surface-guard.test.ts guards (truncation default + format.ts absence + CLIs import bl-store-report) pass: cd "${WEB}"; npx vitest run src/lib/bl-store-report.
+pass=true only if there are ZERO category-(c) rivals AND zero truncating inventory defaults AND the guards pass. Structured findings with file:line evidence.`,
+  },
 ];
 
 phase('Validate');
