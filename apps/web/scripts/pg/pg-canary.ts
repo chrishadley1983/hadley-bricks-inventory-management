@@ -33,6 +33,7 @@ import * as dotenv from 'dotenv';
 import * as path from 'path';
 import {
   PgScraper,
+  PgSoldUnavailableError,
   isPgCdpReachable,
   type PgItemRef,
   type PgItemType,
@@ -183,6 +184,7 @@ async function main(): Promise<void> {
   let requests = 0;
   let ok = 0;
   let failed = 0;
+  const soldUnavailableTuples: string[] = [];
   const divergences: Array<{ label: string; lanes: Record<string, number | null>; maxDivergencePct: number }> = [];
 
   try {
@@ -209,6 +211,10 @@ async function main(): Promise<void> {
           lanes.uk_catalogpg = null;
           lanes.world_catalogpg = null;
           failed += 1;
+          // Golden tuples are high-liquidity by construction — sold "(Unavailable)" on
+          // them is the BL outage state, never genuine emptiness. Tracked for its own
+          // alert below (the divergence check can't see it: null lanes are skipped).
+          if (e instanceof PgSoldUnavailableError) soldUnavailableTuples.push(tupleLabel(item));
           console.warn(`[pg-canary] catalogPG fetch failed for ${tupleLabel(item)}: ${e instanceof Error ? e.message : e}`);
         }
         await sleep(4000 + Math.floor(Math.random() * 2000));
@@ -294,7 +300,12 @@ async function main(): Promise<void> {
     first_block_at_request: null,
     started_at: new Date().toISOString(),
     ended_at: new Date().toISOString(),
-    notes: JSON.stringify({ tuples: GOLDEN_TUPLES.length, divergentCount: divergences.length, divergences }),
+    notes: JSON.stringify({
+      tuples: GOLDEN_TUPLES.length,
+      divergentCount: divergences.length,
+      divergences,
+      soldUnavailableCount: soldUnavailableTuples.length,
+    }),
   });
   if (telemetryError) console.error(`[pg-canary] telemetry insert failed: ${telemetryError.message}`);
 
@@ -307,6 +318,22 @@ async function main(): Promise<void> {
       divergences,
     });
     if (!result.success) console.error(`[pg-canary] Discord alert failed: ${result.error}`);
+  }
+
+  // BL sold-data outage (2026-07-21 incident): >=3 golden tuples serving "(Unavailable)"
+  // sold quadrants means the outage is live — alert so nobody trusts sold-side data or
+  // launches page sweeps until it clears.
+  if (soldUnavailableTuples.length >= 3) {
+    console.warn(`[pg-canary] BL sold-data outage detected on ${soldUnavailableTuples.length} golden tuple(s) — sending Discord alert`);
+    const result = await discordService.sendPgOpsAlert({
+      title: 'BL sold-price data unavailable (site-side outage)',
+      lines: [
+        `${soldUnavailableTuples.length}/${GOLDEN_TUPLES.length} golden tuples returned "(Unavailable)" sold quadrants on the catalogPG lane.`,
+        `Affected: ${soldUnavailableTuples.slice(0, 10).join(', ')}`,
+        'Golden tuples are high-liquidity — this is the BL outage state, not genuine emptiness. Hold PG page sweeps; the nightly requeues affected tuples +1d automatically.',
+      ],
+    });
+    if (!result.success) console.error(`[pg-canary] sold-unavailable alert failed: ${result.error}`);
   }
 
   console.log('[pg-canary] done');

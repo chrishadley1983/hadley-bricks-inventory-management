@@ -42,6 +42,7 @@ import {
   PgCurrencyError,
   PgNotFoundError,
   PgNoDataError,
+  PgSoldUnavailableError,
   isPgCdpReachable,
   type PgItemRef,
   type PgItemType,
@@ -125,7 +126,7 @@ async function main(): Promise<void> {
   const results: PgScrapeResult[] = [];
   const okRefs: PgItemRef[] = [];
   const noDataRefs: PgItemRef[] = [];
-  let ok = 0, noData = 0, notFound = 0, failed = 0, reestablishes = 0;
+  let ok = 0, noData = 0, notFound = 0, failed = 0, soldUnavailable = 0, reestablishes = 0;
   const startMs = Date.now();
   let stoppedEarly = false;
 
@@ -211,6 +212,13 @@ async function main(): Promise<void> {
         } catch (err) {
           if (err instanceof PgNoDataError) { noData++; noDataRefs.push(item); break; }
           if (err instanceof PgNotFoundError) { notFound++; console.warn(`  not in catalog: ${label}`); break; }
+          if (err instanceof PgSoldUnavailableError) {
+            // BL site-side sold-data outage (2026-07-21): no zero row, no queue stamp —
+            // the tuple stays due and is retried once BL restores the data.
+            soldUnavailable++; failed++;
+            console.warn(`  sold-unavailable (BL outage): ${label}`);
+            break;
+          }
           const transient = err instanceof PgBlockError && attempt < 2;
           const sessionShaped = (err instanceof PgLoginError || err instanceof PgCurrencyError) && reestablishes < 3;
           if (transient) {
@@ -242,7 +250,7 @@ async function main(): Promise<void> {
     await scraper.close();
   }
 
-  console.log(`[pg-page-sweep] ${stoppedEarly ? 'STOPPED EARLY' : 'done'}: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed of ${tuples.length} (${((Date.now() - startMs) / 60000).toFixed(1)} min)`);
+  console.log(`[pg-page-sweep] ${stoppedEarly ? 'STOPPED EARLY' : 'done'}: ${ok} ok, ${noData} no-data, ${notFound} not-in-catalog, ${failed} failed (${soldUnavailable} sold-unavailable) of ${tuples.length} (${((Date.now() - startMs) / 60000).toFixed(1)} min)`);
   process.exitCode = failed > tuples.length / 2 ? 1 : 0;
 }
 
