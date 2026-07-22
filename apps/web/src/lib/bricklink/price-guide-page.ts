@@ -357,10 +357,14 @@ export interface PgPageProbe {
   hasQuadrants: boolean;
   /** True when any non-GBP currency token appears un-tilded (display currency ≠ GBP). */
   foreignNativeSeen: boolean;
-  /** True when the "Last 6 Months Sales" section renders BL's "(Unavailable)" marker —
-   * the 2026-07-21 site-side sold-data outage state. Optional: probes built before the
-   * marker existed (tests, cached captures) simply never set it. */
-  soldUnavailable?: boolean;
+  /** Per-cell "(Unavailable)" flags from the 4-cell sold/stock summary row. ONE flag on
+   * its own is BL's normal rendering for a sold quadrant with zero transactions (a third
+   * of catalog pages are one-sided) — only BOTH set is the site-side outage signature
+   * (2026-07-21 incident; refined 2026-07-22 after one-sided pages false-positived the
+   * original single-marker check and killed the first guarded run 9 tuples in).
+   * Optional: probes built before the flags existed simply never set them. */
+  soldNewUnavailable?: boolean;
+  soldUsedUnavailable?: boolean;
   /** Body text sample for captcha/login detection (first ~2000 chars). */
   textSample: string;
   /**
@@ -381,12 +385,13 @@ export function classifyPgPage(p: PgPageProbe): PgPageKind {
   if (/oops\.asp|err=403/i.test(p.url) || (p.textLen < 200 && !/Price Guide/i.test(p.title))) return 'block';
   if (/sign in|log in to|please log in/i.test(p.textSample) && /login|identity\.lego/i.test(p.url)) return 'login';
   if (!/Price Guide/i.test(p.title)) return 'transient';
-  // BL sold-data outage ("(Unavailable)" in the sales quadrants, 2026-07-21): the page
-  // is a real PG page but its sold side is withheld site-side. Must outrank noData —
-  // during the outage these pages have no month rows and would otherwise be recorded
-  // as confirmed-empty zero rows (poisoning STR silently). Also outranks 'ok': even if
-  // the quadrant row were found, a sold-withheld page must never be persisted.
-  if (p.soldUnavailable) return 'soldUnavailable';
+  // BL sold-data outage (2026-07-21): BOTH sold quadrants "(Unavailable)" at once. Must
+  // outrank noData — during the outage these pages have no month rows and would otherwise
+  // be recorded as confirmed-empty zero rows (poisoning STR silently). Also outranks 'ok':
+  // even if the quadrant row were found, a sold-withheld page must never be persisted.
+  // ONE unavailable cell alone is NOT an outage — it's the normal empty-quadrant rendering
+  // on one-sided items (2026-07-22 false-positive lesson; such pages scrape normally).
+  if (p.soldNewUnavailable && p.soldUsedUnavailable) return 'soldUnavailable';
   if (p.foreignNativeSeen) return 'wrongCurrency';
   // A rendered Price Guide page with no transaction tables = item never sold/listed
   // anywhere (small shell page, ~2KB). Genuine no-data, NOT a block (learned on old sets).
@@ -496,10 +501,23 @@ export const PG_EXTRACT_JS = `(function(){
   }
   var stockOffersRaw = quadRow ? { newC: parseStockOffers(quadRow.children[2]), usedC: parseStockOffers(quadRow.children[3]) } : null;
   var bodyText = document.body && document.body.innerText ? document.body.innerText : '';
-  // BL sold-data outage marker (2026-07-21): "(Unavailable)" rendered where the
-  // Last-6-Months-Sales quadrants belong. Anchored to the section header so a stray
-  // "(Unavailable)" elsewhere (e.g. in a store name) can't false-positive.
-  var soldUnavailable = /Last 6 Months Sales:?[\\s\\S]{0,300}\\(Unavailable\\)/.test(bodyText);
+  // Sold-quadrant availability, per cell (rewritten 2026-07-22): a single "(Unavailable)"
+  // sold cell is BL's NORMAL rendering for a quadrant with zero transactions — a third of
+  // catalog pages are one-sided (verified: P 210 c6 Used-only, P 20309 c6 New-only, and a
+  // clean-scraped zero-Used torso all render it). The 2026-07-21 outage signature is BOTH
+  // sold cells "(Unavailable)" at once (natural rate: 0 of 37,946 ranked-queue scrapes).
+  // Read the 4-cell SUMMARY row (sold-N, sold-U, stock-N, stock-U boxes) — it renders even
+  // in the full-outage shape where the month-table quadrant row is absent. The tall month
+  // row can't be mistaken for it: its empty sold cells are blank, failing the predicate.
+  var soldNewUnavailable = false, soldUsedUnavailable = false;
+  var sumRow = Array.from(document.querySelectorAll('tr')).find(function(tr){
+    if (tr.children.length !== 4) return false;
+    return Array.from(tr.children).every(function(c){ return /Times Sold:|Total Lots:|\\(Unavailable\\)/.test(c.textContent||''); });
+  });
+  if (sumRow) {
+    soldNewUnavailable = /\\(Unavailable\\)/.test(sumRow.children[0].textContent||'');
+    soldUsedUnavailable = /\\(Unavailable\\)/.test(sumRow.children[1].textContent||'');
+  }
   return JSON.stringify({
     url: location.href,
     title: document.title,
@@ -507,7 +525,8 @@ export const PG_EXTRACT_JS = `(function(){
     textSample: bodyText.slice(0, 2000),
     hasQuadrants: !!quads,
     foreignNativeSeen: foreignNative,
-    soldUnavailable: soldUnavailable,
+    soldNewUnavailable: soldNewUnavailable,
+    soldUsedUnavailable: soldUsedUnavailable,
     navCount: document.querySelectorAll('nav').length,
     stockOffersRaw: stockOffersRaw,
     quads: quads

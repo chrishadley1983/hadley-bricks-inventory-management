@@ -283,35 +283,53 @@ describe('classifyPgPage', () => {
     expect(classifyPgPage({ ...base, title: 'BrickLink', textLen: 5000, hasQuadrants: false })).toBe('transient');
   });
 
-  // BL sold-data outage (2026-07-21): "(Unavailable)" rendered in the sold quadrants,
-  // item-specific, everyone sees it, store API served zeros for the same items. These
-  // pages MUST NOT be recorded as confirmed no-data — that poisons STR with zero rows.
+  // BL sold-data outage (2026-07-21): BOTH sold quadrants "(Unavailable)" on items that
+  // demonstrably have sales (60367/77006/72043). These pages MUST NOT be recorded as
+  // confirmed no-data — that poisons STR with zero rows.
   it('soldUnavailable outranks noData for the outage page shape (quadrantless, full-size body)', () => {
-    expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 14000, soldUnavailable: true })).toBe(
-      'soldUnavailable',
-    );
+    expect(
+      classifyPgPage({
+        ...base,
+        hasQuadrants: false,
+        textLen: 14000,
+        soldNewUnavailable: true,
+        soldUsedUnavailable: true,
+      }),
+    ).toBe('soldUnavailable');
   });
 
   it('soldUnavailable outranks ok — a sold-withheld page must never be persisted', () => {
-    expect(classifyPgPage({ ...base, soldUnavailable: true })).toBe('soldUnavailable');
+    expect(classifyPgPage({ ...base, soldNewUnavailable: true, soldUsedUnavailable: true })).toBe('soldUnavailable');
   });
 
-  it('probes without the soldUnavailable field (pre-outage captures) classify as before', () => {
+  // 2026-07-22 regression: a SINGLE "(Unavailable)" sold cell is BL's normal rendering
+  // for a quadrant with zero transactions — a third of catalog pages are one-sided
+  // (real cases: P 210 c6 Used-only sold, P 20309 c6 New-only sold). The original
+  // single-marker guard classed these as outage pages and killed the first guarded
+  // lane D run 9 tuples in (two-strike session brake).
+  it('one-sided pages (one "(Unavailable)" sold cell) classify ok, never soldUnavailable', () => {
+    expect(classifyPgPage({ ...base, soldNewUnavailable: true })).toBe('ok');
+    expect(classifyPgPage({ ...base, soldUsedUnavailable: true })).toBe('ok');
+  });
+
+  it('probes without the unavailability flags (pre-outage captures) classify as before', () => {
     expect(classifyPgPage({ ...base, hasQuadrants: false, textLen: 1970 })).toBe('noData');
     expect(classifyPgPage(base)).toBe('ok');
   });
 
-  it('PG_EXTRACT_JS sold-unavailable regex survives template cooking (the \\s-became-s bug class)', () => {
-    const m = PG_EXTRACT_JS.match(/var soldUnavailable = (\/[^;]+\/)\.test\(bodyText\)/);
+  it('PG_EXTRACT_JS unavailable regexes survive template cooking (the \\s-became-s bug class)', () => {
+    // Escaped literal parens must survive cooking — if the backslashes were eaten,
+    // "(Unavailable)" would become a capture group matching bare "Unavailable" anywhere.
+    expect(PG_EXTRACT_JS).toContain('\\(Unavailable\\)');
+    // Summary-row predicate: matches each real cell shape, rejects month-table cells.
+    const m = PG_EXTRACT_JS.match(/return \/(Times[^/]+)\/\.test\(c\.textContent\|\|''\)/);
     expect(m).not.toBeNull();
-    const re = new Function(`return ${m![1]}`)() as RegExp;
-    // Real innerText shape from the 2026-07-21 outage capture (S 60367).
-    expect(
-      re.test('Last 6 Months Sales:\nCurrent Items for Sale:\nNew\nUsed\nNew\nUsed\n(Unavailable)\n(Unavailable)\nTotal Lots: 53'),
-    ).toBe(true);
-    // Healthy page: months and prices follow the header, no marker.
-    expect(re.test('Last 6 Months Sales:\nJuly 2026\nQty Each\n1 GBP 500.00')).toBe(false);
-    // Marker far from the section header (e.g. deep in a store name) must not trip it.
-    expect(re.test(`Last 6 Months Sales:\n${'x'.repeat(400)}\n(Unavailable)`)).toBe(false);
+    const re = new RegExp(m![1]);
+    expect(re.test('(Unavailable)')).toBe(true);
+    expect(re.test('Times Sold: 165 Total Qty: 230')).toBe(true);
+    expect(re.test('Total Lots: 223 Total Qty: 349')).toBe(true);
+    expect(re.test('July 2026 Qty Each 1 ~GBP 0.37')).toBe(false);
+    // Unescaped-parens failure mode: bare "Unavailable" (e.g. in a store name) must not match.
+    expect(re.test('Unavailable Bricks Store')).toBe(false);
   });
 });
