@@ -256,7 +256,21 @@ interface StoreRunResult {
 function runStoreChild(slug: string, userId: string): { ok: boolean; error?: string } {
   const res = spawnSync(
     'npx',
-    ['tsx', 'scripts/store-assessment.ts', `--store-slug=${slug}`, `--mode=${MODE}`, `--user-id=${userId}`, `--cdp-port=${CDP_PORT}`],
+    [
+      'tsx',
+      'scripts/store-assessment.ts',
+      `--store-slug=${slug}`,
+      `--mode=${MODE}`,
+      `--user-id=${userId}`,
+      `--cdp-port=${CDP_PORT}`,
+      // Discovery sweep only (Chris 2026-07-23): estimate lens so world-fallback prices
+      // fill benchmark gaps on the nightly cards (with † provenance) instead of scoring
+      // as no-data — on BumbleBeeBuzz the grounded default rendered "world† 0% / no data
+      // 22%" when ~20% of lots had world estimates available. Passed HERE as an input,
+      // deliberately NOT a default change: direct store-assessment.ts runs, store-report,
+      // and every detailed buy-decision surface keep the grounded lens.
+      '--pricing-lens=estimate',
+    ],
     {
       cwd: path.resolve(__dirname, '..'),
       shell: true, // resolves npx.cmd on Windows
