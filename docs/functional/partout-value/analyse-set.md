@@ -27,10 +27,13 @@ not the old `ratio > 1` test. Supporting reasons to part out anyway:
 - Retired exclusive sets and premium boxes carry a complete-set premium
 - Value is concentrated in a handful of slow lots (check "Where the value sits")
 
-### A verdict of "Insufficient Data"
+### When there's no complete-set price
 
-`SKIP` means there is no complete-set price on record, so neither gate can be applied.
-It is not a soft "no" — it's an absence of the denominator.
+You get `PART-OUT BELOW £X` (or `NOT WORTH PARTING OUT`), not "insufficient data". No set
+price means no sell-complete comparison — but the acquisition question still has an
+answer, and that's the actionable half: buy under £X and the part-out works.
+
+`SKIP` now means only one thing: no priced parts at all, so there is nothing to value.
 
 ---
 

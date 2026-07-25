@@ -34,21 +34,28 @@ const pct = (v: number | null | undefined, dp = 0): string =>
 const multiple = (v: number | null): string => (v == null ? '—' : `${v.toFixed(2)}×`);
 
 function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
-  const { verdict, verdictReason, povMultiple, gapGbp, gate } = assessment;
+  const { verdict, verdictReason, povMultiple, gapGbp, gate, maxBuy } = assessment;
 
   const style =
     verdict === 'PART-OUT'
       ? { card: 'border-green-200 bg-green-50', text: 'text-green-700', Icon: TrendingUp }
-      : verdict === 'SELL-COMPLETE'
-        ? { card: 'border-red-200 bg-red-50', text: 'text-red-700', Icon: TrendingDown }
-        : { card: 'border-muted bg-muted/40', text: 'text-muted-foreground', Icon: MinusCircle };
+      : verdict === 'PART-OUT-BELOW'
+        ? { card: 'border-amber-200 bg-amber-50', text: 'text-amber-800', Icon: Wallet }
+        : verdict === 'SELL-COMPLETE' || verdict === 'NOT-VIABLE'
+          ? { card: 'border-red-200 bg-red-50', text: 'text-red-700', Icon: TrendingDown }
+          : { card: 'border-muted bg-muted/40', text: 'text-muted-foreground', Icon: MinusCircle };
 
   const label =
     verdict === 'PART-OUT'
       ? 'Part Out'
-      : verdict === 'SELL-COMPLETE'
-        ? 'Sell Complete'
-        : 'Insufficient Data';
+      : verdict === 'PART-OUT-BELOW'
+        ? // The acquisition answer, which stands without a sell-complete comparison.
+          `Part Out below ${maxBuy.price == null ? '—' : formatCurrency(maxBuy.price)}`
+        : verdict === 'SELL-COMPLETE'
+          ? 'Sell Complete'
+          : verdict === 'NOT-VIABLE'
+            ? 'Not Worth Parting Out'
+            : 'No Parts Data';
 
   return (
     <Card className={style.card}>
@@ -61,17 +68,28 @@ function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
               {label}
             </div>
             <p className="text-sm text-muted-foreground">{verdictReason}</p>
-            <div className="flex flex-wrap gap-2 pt-1 text-xs text-muted-foreground">
-              <span>
-                POV multiple <strong>{multiple(povMultiple)}</strong> (gate{' '}
-                {gate.povMultipleMin.toFixed(1)}×)
-              </span>
-              <span aria-hidden>·</span>
-              <span>
-                Gap <strong>{gapGbp == null ? '—' : formatCurrency(gapGbp)}</strong> (gate{' '}
-                {formatCurrency(gate.minGapGbp)})
-              </span>
-            </div>
+            {/*
+              The gate row only means something when there IS a complete-set price. With
+              no comparison to make, showing "— (gate 2.0×)" reads as a failure rather
+              than an absence, so it's replaced by the answer we do have.
+            */}
+            {povMultiple == null && gapGbp == null ? (
+              <div className="pt-1 text-xs text-muted-foreground">
+                No sell-complete comparison available — this is the acquisition answer only.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2 pt-1 text-xs text-muted-foreground">
+                <span>
+                  POV multiple <strong>{multiple(povMultiple)}</strong> (gate{' '}
+                  {gate.povMultipleMin.toFixed(1)}×)
+                </span>
+                <span aria-hidden>·</span>
+                <span>
+                  Gap <strong>{gapGbp == null ? '—' : formatCurrency(gapGbp)}</strong> (gate{' '}
+                  {formatCurrency(gate.minGapGbp)})
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </CardContent>
@@ -150,11 +168,31 @@ function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
             <div className="text-sm font-medium text-muted-foreground">
               Max buy @ {pct(maxBuy.targetMargin)} margin
             </div>
-            <div className="text-2xl font-bold" data-testid="partout-max-buy">
+            <div
+              className={`text-2xl font-bold ${
+                maxBuy.price != null && maxBuy.price <= 0 ? 'text-red-700' : ''
+              }`}
+              data-testid="partout-max-buy"
+            >
               {maxBuy.price == null ? '—' : formatCurrency(maxBuy.price)}
             </div>
+            {/*
+              Postage is shown as its own line rather than folded in silently — on a thin
+              set it is the whole story (7643 used: £2.54 ceiling, £3.00 postage).
+            */}
             <div className="text-xs text-muted-foreground">
-              From realisable POV, net of fees. Excludes acquisition postage and teardown time.
+              {maxBuy.beforePostage == null
+                ? 'From realisable POV, net of fees.'
+                : `${formatCurrency(maxBuy.beforePostage)} from realisable POV net of fees, less ${formatCurrency(maxBuy.postageGbp)} inbound postage.`}
+            </div>
+            {maxBuy.price != null && maxBuy.price <= 0 && (
+              <div className="pt-1 text-xs font-medium text-red-700">
+                {maxBuy.price < 0 ? 'Negative' : 'Zero'} — no purchase price makes this work.
+              </div>
+            )}
+            <div className="pt-1 text-xs text-muted-foreground">
+              Teardown time isn&apos;t a separate cost here — it&apos;s already priced into the{' '}
+              {pct(maxBuy.targetMargin)} margin and the part-out gate.
             </div>
             {setPrice != null && maxBuy.price != null && (
               <div className="pt-1 text-xs text-muted-foreground">

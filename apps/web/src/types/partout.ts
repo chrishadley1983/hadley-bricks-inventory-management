@@ -132,13 +132,45 @@ export interface PartoutAssessment {
   povMultiple: number | null;
   /** grossPov − setPrice. */
   gapGbp: number | null;
-  verdict: 'PART-OUT' | 'SELL-COMPLETE' | 'SKIP';
+  /**
+   * Two questions live here, and only one of them needs a complete-set price:
+   *
+   *  - PRIORITY (part out vs sell whole) — a comparison, so it needs the set price.
+   *  - ACQUISITION (worth doing at all, and up to what buy price) — needs only the
+   *    realisable POV.
+   *
+   * A missing set price used to collapse both into SKIP, which reported "insufficient
+   * data" directly above a Max Buy card that had already answered the second question.
+   * It now narrows the answer instead of withholding it.
+   */
+  verdict:
+    | 'PART-OUT' // gate cleared against the complete-set price
+    | 'SELL-COMPLETE' // complete beats parting out
+    | 'PART-OUT-BELOW' // no complete-set price to compare — but viable under max buy
+    | 'NOT-VIABLE' // max buy is at or below zero: no purchase price makes it work
+    | 'SKIP'; // no priced parts at all — nothing to value
   /** Plain-English reason the verdict landed where it did. */
   verdictReason: string;
   /** Echo of the gate thresholds actually applied. */
   gate: { povMultipleMin: number; minGapGbp: number };
   /** Most we should pay for the set and still hit the target margin on a part-out. */
-  maxBuy: { targetMargin: number; price: number | null };
+  maxBuy: {
+    targetMargin: number;
+    /**
+     * Inbound postage, deducted as a CASH cost rather than a percentage — you pay it on
+     * top of the purchase price, so it comes straight off the ceiling.
+     */
+    postageGbp: number;
+    /** Ceiling before postage: realisable × (1 − fees − margin). */
+    beforePostage: number | null;
+    /**
+     * The usable ceiling. Deliberately NOT clamped at zero — a negative figure is the
+     * finding ("no purchase price makes this work"), and clamping would disguise it as
+     * a free set. Teardown labour is intentionally absent: it is already priced into the
+     * 2× POV gate and the target margin, so charging it again would double-count.
+     */
+    price: number | null;
+  };
   strBands: PartoutStrBand[];
   magnets: PartoutMagnet[];
   concentration: PartoutConcentration;

@@ -6,6 +6,7 @@ import {
   POV_MULTIPLE_MIN,
   POV_MIN_GAP_GBP,
   DEFAULT_MIN_MARGIN,
+  DEFAULT_INBOUND_POSTAGE_GBP,
   STR_GATES,
 } from '../fees';
 import { captureFraction } from '../liquidity-pov';
@@ -101,10 +102,24 @@ describe('assessPartout — the canonical part-out gate', () => {
     expect(a.verdictReason).toContain('labour floor');
   });
 
-  it('SKIPs rather than guessing when there is no set price', () => {
-    const a = assessPartout([part({ quantity: 100, priceNew: 1 })], null, 'new');
-    expect(a.verdict).toBe('SKIP');
+  // A missing set price blocks the PRIORITY question (part out vs sell whole) but not
+  // the ACQUISITION one (worth it under what buy price). Reporting SKIP for both threw
+  // away an answer we had already computed.
+  it('answers the acquisition question when there is no set price to compare against', () => {
+    const a = assessPartout([part({ quantity: 100, priceNew: 1, strQtyNew: 1.5 })], null, 'new');
+    expect(a.verdict).toBe('PART-OUT-BELOW');
     expect(a.povMultiple).toBeNull();
+    expect(a.gapGbp).toBeNull();
+    expect(a.maxBuy.price!).toBeGreaterThan(0);
+    expect(a.verdictReason).toContain('buy under');
+  });
+
+  it('says not-viable, not insufficient-data, when no buy price can work', () => {
+    // Thin set: the postage alone exceeds the fee- and margin-adjusted ceiling.
+    const a = assessPartout([part({ quantity: 1, priceNew: 1, strQtyNew: 1.5 })], null, 'new');
+    expect(a.maxBuy.price!).toBeLessThanOrEqual(0);
+    expect(a.verdict).toBe('NOT-VIABLE');
+    expect(a.verdictReason).toContain('any purchase price');
   });
 
   it('SKIPs when no lot carries a price', () => {
@@ -120,12 +135,25 @@ describe('assessPartout — the canonical part-out gate', () => {
 });
 
 describe('assessPartout — max buy', () => {
-  it('back-solves from realisable POV net of fees and target margin', () => {
+  it('back-solves from realisable POV net of fees, target margin and postage', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new');
-    const expected = a.realisablePov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
-    expect(a.maxBuy.price).toBeCloseTo(expected, 2);
+    const beforePostage = a.realisablePov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
+    expect(a.maxBuy.beforePostage).toBeCloseTo(beforePostage, 2);
+    expect(a.maxBuy.postageGbp).toBe(DEFAULT_INBOUND_POSTAGE_GBP);
+    expect(a.maxBuy.price).toBeCloseTo(beforePostage - DEFAULT_INBOUND_POSTAGE_GBP, 2);
     expect(a.maxBuy.targetMargin).toBe(DEFAULT_MIN_MARGIN);
+  });
+
+  it('treats postage as a cash cost, so a zero-postage collection raises the ceiling', () => {
+    const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
+    const paid = assessPartout(parts, 20, 'new');
+    const collected = assessPartout(parts, 20, 'new', { inboundPostageGbp: 0 });
+    expect(collected.maxBuy.price! - paid.maxBuy.price!).toBeCloseTo(
+      DEFAULT_INBOUND_POSTAGE_GBP,
+      2
+    );
+    expect(collected.maxBuy.beforePostage).toBeCloseTo(paid.maxBuy.beforePostage!, 2);
   });
 
   it('prices off realisable, not gross — so it cannot exceed the gross-based figure', () => {
@@ -139,14 +167,29 @@ describe('assessPartout — max buy', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new', { targetMargin: 0.5 });
     expect(a.maxBuy.targetMargin).toBe(0.5);
-    expect(a.maxBuy.price).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT - 0.5), 2);
+    expect(a.maxBuy.beforePostage).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT - 0.5), 2);
   });
 
-  it('never goes negative when fees plus margin exceed the whole revenue', () => {
+  // Deliberately NOT clamped at zero any more: a negative ceiling is the finding, and
+  // clamping it disguised an unbuyable set as a free one.
+  it('goes negative rather than clamping when fees plus margin exceed the revenue', () => {
+    // setPrice null so the acquisition answer is the headline — with a set price the
+    // priority verdict wins instead, which is covered by the gate tests above.
+    const a = assessPartout([part({ quantity: 1, priceNew: 1 })], null, 'new', {
+      targetMargin: 0.99,
+    });
+    expect(a.maxBuy.price!).toBeLessThan(0);
+    expect(a.verdict).toBe('NOT-VIABLE');
+  });
+
+  it('keeps the priority verdict when a set price exists, even if max buy is negative', () => {
+    // "Part this one out rather than sell it whole" and "don't BUY one to part out" are
+    // different statements — the verdict answers the first, the max-buy card the second.
     const a = assessPartout([part({ quantity: 1, priceNew: 1 })], 1, 'new', {
       targetMargin: 0.99,
     });
-    expect(a.maxBuy.price).toBe(0);
+    expect(a.maxBuy.price!).toBeLessThan(0);
+    expect(a.verdict).toBe('SELL-COMPLETE');
   });
 
   it('is null when there is nothing realisable', () => {
