@@ -294,12 +294,16 @@ const AMAZON_TYPE_TREATMENT: Record<string, 'sales-and-fees' | 'refund' | 'fees-
     // Money returned to a buyer, plus the fees Amazon credits back.
     Refund: 'refund',
     GuaranteeClaimRefund: 'refund',
-    // No sales value, only a cost charged to the account.
+    // No sales value, only a cost charged to the account. NOTE: `Adjustment` is
+    // not homogeneous — see AMAZON_ADJUSTMENT_BALANCE_MOVEMENTS.
     Adjustment: 'fees-only',
-    AdhocDisbursement: 'fees-only',
     // The payout of sales already counted — including it would double-count
     // everything (£47,510.44 all-time).
     Transfer: 'excluded',
+    // Also a payout, not a cost: its one row is described 'InitiateDisbursement'
+    // (−£0.01, Feb 2025). Same class of error as Reserve, just small — a
+    // disbursement moves money we already counted rather than spending it.
+    AdhocDisbursement: 'excluded',
     // The Amazon seller subscription, which has its own P&L row
     // (queryAmazonSubscription). Folding it in here would double-count £90/qtr.
     ServiceFee: 'excluded',
