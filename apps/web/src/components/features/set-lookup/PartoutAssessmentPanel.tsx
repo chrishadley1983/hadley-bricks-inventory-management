@@ -34,9 +34,7 @@ const pct = (v: number | null | undefined, dp = 0): string =>
 const multiple = (v: number | null): string => (v == null ? '—' : `${v.toFixed(2)}×`);
 
 function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
-  const { verdict, verdictReason, povMultiple, gapGbp, gate } = assessment;
-
-  const { maxBuy } = assessment;
+  const { verdict, verdictReason, povMultiple, gapGbp, gate, maxBuy } = assessment;
 
   const style =
     verdict === 'PART-OUT'
@@ -189,7 +187,7 @@ function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
             </div>
             {maxBuy.price != null && maxBuy.price <= 0 && (
               <div className="pt-1 text-xs font-medium text-red-700">
-                Negative — no purchase price makes this work.
+                {maxBuy.price < 0 ? 'Negative' : 'Zero'} — no purchase price makes this work.
               </div>
             )}
             <div className="pt-1 text-xs text-muted-foreground">
