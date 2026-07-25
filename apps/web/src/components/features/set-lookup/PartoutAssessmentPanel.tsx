@@ -199,6 +199,7 @@ function LadderCard({ assessment }: { assessment: PartoutAssessment }) {
 
 function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
   const { maxBuy, setPrice } = assessment;
+  const negative = maxBuy.price != null && maxBuy.price <= 0;
 
   return (
     <Card>
@@ -210,43 +211,61 @@ function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
               Max buy @ {pct(maxBuy.targetMargin)} margin
             </div>
             <div
-              className={`text-2xl font-bold ${
-                maxBuy.price != null && maxBuy.price <= 0 ? 'text-red-700' : ''
-              }`}
+              className={`text-2xl font-bold ${negative ? 'text-red-700' : ''}`}
               data-testid="partout-max-buy"
             >
               {maxBuy.price == null ? '—' : formatCurrency(maxBuy.price)}
             </div>
-            {/*
-              Postage is shown as its own line rather than folded in silently — on a thin
-              set it is the whole story (7643 used: £2.54 ceiling, £3.00 postage).
-            */}
-            <div className="text-xs text-muted-foreground">
-              {maxBuy.beforePostage == null
-                ? 'From full POV, net of fees.'
-                : `${formatCurrency(maxBuy.beforePostage)} from full POV net of fees, less ${formatCurrency(maxBuy.postageGbp)} inbound postage.`}
-            </div>
-            {maxBuy.price != null && maxBuy.price <= 0 && (
+
+            {/* A negative ceiling is a finding, not detail — it stays on the face of the card. */}
+            {negative && (
               <div className="pt-1 text-xs font-medium text-red-700">
-                {maxBuy.price < 0 ? 'Negative' : 'Zero'} — no purchase price makes this work.
+                {maxBuy.price! < 0 ? 'Negative' : 'Zero'} — no purchase price makes this work.
               </div>
             )}
-            <div className="pt-1 text-xs text-muted-foreground">
-              Teardown time isn&apos;t a separate cost here — it&apos;s already priced into the{' '}
-              {pct(maxBuy.targetMargin)} margin and the part-out gate.
-            </div>
-            {setPrice != null && maxBuy.price != null && (
-              <div className="pt-1 text-xs text-muted-foreground">
-                Set currently {formatCurrency(setPrice)} —{' '}
-                {maxBuy.price >= setPrice ? (
-                  <span className="font-medium text-green-700">within budget</span>
-                ) : (
-                  <span className="font-medium text-red-700">
-                    {formatCurrency(setPrice - maxBuy.price)} over
-                  </span>
-                )}
-              </div>
-            )}
+
+            {/*
+              The derivation, the labour note and the current-price comparison are all
+              explanatory rather than decisions, so they hover instead of crowding the
+              number (Chris, 2026-07-25: "have this detail as a mouseover").
+            */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex cursor-help items-center gap-1 pt-1 text-xs text-muted-foreground">
+                    <Info className="h-3 w-3 shrink-0" />
+                    <span>How this is worked out</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-sm space-y-2 text-xs">
+                  <p>
+                    {maxBuy.beforePostage == null
+                      ? 'Back-solved from the full POV, net of fees.'
+                      : `${formatCurrency(maxBuy.beforePostage)} from full POV net of ${pct(assessment.feePct, 1)} fees and ${pct(maxBuy.targetMargin)} margin, less ${formatCurrency(maxBuy.postageGbp)} inbound postage.`}
+                  </p>
+                  <p>
+                    Teardown time isn&apos;t a separate cost here — it&apos;s already priced into
+                    the {pct(maxBuy.targetMargin)} margin and the part-out gate. To charge more
+                    for your time, raise the margin.
+                  </p>
+                  {setPrice != null && maxBuy.price != null && (
+                    <p>
+                      The set currently costs {formatCurrency(setPrice)} —{' '}
+                      {maxBuy.price >= setPrice ? (
+                        <span className="font-medium text-green-400">
+                          within budget by {formatCurrency(maxBuy.price - setPrice)}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-red-400">
+                          {formatCurrency(setPrice - maxBuy.price)} over
+                        </span>
+                      )}
+                      .
+                    </p>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
       </CardContent>
