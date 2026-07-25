@@ -1227,7 +1227,10 @@ async function queryAmazonFees(
  *   TRANSFER            8 rows     £109.72  payout to bank, a balance movement
  *   ADJUSTMENT          2 rows      £5.96p  net credit, immaterial, undecided
  */
-const EBAY_TYPE_TREATMENT: Record<string, 'income' | 'refund' | 'fees' | 'postage' | 'excluded'> = {
+const EBAY_TYPE_TREATMENT: Record<
+  string,
+  'income' | 'refund' | 'fees' | 'postage' | 'excluded' | 'unclaimed'
+> = {
   SALE: 'income',
   REFUND: 'refund',
   NON_SALE_CHARGE: 'fees',
@@ -1242,9 +1245,17 @@ const EBAY_TYPE_TREATMENT: Record<string, 'income' | 'refund' | 'fees' | 'postag
   CREDIT: 'excluded',
   // Payout to the bank: money already counted as income when the sale landed.
   TRANSFER: 'excluded',
-  // 2 rows, net £5.96 CREDIT, £0.00 in both Q1 2026/27 and FY2025/26. Left
-  // excluded pending a decision rather than guessed at; revisit if it grows.
-  ADJUSTMENT: 'excluded',
+  // NOT a balance movement — the first version of this registry said it was,
+  // which was the exact sin the Reserve investigation warned about: classifying
+  // for convenience without reading the rows. They are two real trading items:
+  //   2024-08-07 CREDIT £26.12  "Store (Basic): Subscription Fee"  (shop-fee refund)
+  //   2025-03-31 DEBIT  £20.16  "Seller Co-funded Coupon Charge"   (marketing cost)
+  // Both fall in FY2024/25 — £0.00 in Q1 2026/27 AND £0.00 in FY2025/26 — so no
+  // filed figure turns on them, and building a whole row for £5.96 net is not
+  // worth it. Deliberately UNCLAIMED, not "excluded as a movement": the £20.16
+  // cost is forgone and the £26.12 credit untaken, leaving us £5.96 in HMRC's
+  // favour. Claim both properly if this type ever recurs materially.
+  ADJUSTMENT: 'unclaimed',
 }
 
 /** Fail loud on an eBay transaction_type nobody has classified. */
@@ -1545,6 +1556,40 @@ async function queryEbayFixedFees(
 /**
  * Query eBay Shop Fee (monthly subscription - OTHER_FEES with date range memo)
  */
+/**
+ * eBay Promoted Offsite advertising fees — OTHER_FEES rows whose memo names
+ * them, as opposed to the shop-subscription rows the memo-date test catches.
+ *
+ * £26.12 all-time across many sub-£1 charges (Dec 2024 – Mar 2025), so £0.00 in
+ * both Q1 2026/27 and FY2025/26. It reached no box before, and it is advertising
+ * rather than a marketplace commission, so it belongs with the ad fees in
+ * box 24.1.
+ */
+async function queryEbayPromotedOffsite(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount, raw_response',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    const rawResponse = row.raw_response as { feeType?: string; transactionMemo?: string } | null;
+    if (rawResponse?.feeType !== 'OTHER_FEES') continue;
+    if (!/promoted|offsite/i.test(rawResponse?.transactionMemo ?? '')) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
 async function queryEbayShopFee(
   supabase: SupabaseClient<Database>,
   userId: string,
@@ -1561,17 +1606,40 @@ async function queryEbayShopFee(
   // Date range pattern: YYYY-MM-DD - YYYY-MM-DD
   const dateRangePattern = /^\d{4}-\d{2}-\d{2} - \d{4}-\d{2}-\d{2}$/;
 
+  // OTHER_FEES is not just the shop subscription. Any row failing the memo test
+  // used to fall through to NO box at all — £26.12 of "Promoted Offsite fee"
+  // (many sub-£1 rows, Dec 2024 – Mar 2025, so £0.00 in both Q1 2026/27 and
+  // FY2025/26). Advertising memos are routed to the ad-fee row instead of being
+  // dropped, and anything else trips the guard below rather than vanishing.
+  const ADVERTISING_MEMOS = /promoted|offsite/i;
+
   const monthMap = new Map<string, number>();
+  const unclassifiedMemos = new Map<string, number>();
   for (const row of allData) {
     const rawResponse = row.raw_response as { feeType?: string; transactionMemo?: string } | null;
-    if (
-      rawResponse?.feeType === 'OTHER_FEES' &&
-      rawResponse?.transactionMemo &&
-      dateRangePattern.test(rawResponse.transactionMemo)
-    ) {
+    if (rawResponse?.feeType !== 'OTHER_FEES') continue;
+    const memo = rawResponse?.transactionMemo ?? '';
+    const value = Math.abs(Number(row.amount || 0));
+
+    if (dateRangePattern.test(memo)) {
       const month = row.transaction_date.substring(0, 7);
-      monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.amount || 0)));
+      monthMap.set(month, (monthMap.get(month) || 0) + value);
+    } else if (!ADVERTISING_MEMOS.test(memo)) {
+      // Advertising is picked up by queryEbayPromotedOffsite; anything else is
+      // money nobody has decided about.
+      unclassifiedMemos.set(memo || '(no memo)', (unclassifiedMemos.get(memo || '(no memo)') ?? 0) + value);
     }
+  }
+
+  if (unclassifiedMemos.size > 0) {
+    const detail = [...unclassifiedMemos.entries()]
+      .map(([memo, v]) => `"${memo}" £${v.toFixed(2)}`)
+      .join(', ');
+    throw new Error(
+      `Unclassified eBay OTHER_FEES memo(s): ${detail}. Decide which box each belongs in — ` +
+        `OTHER_FEES covers the shop subscription AND other charges, so a memo that matches ` +
+        `neither pattern reaches no box at all.`
+    );
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -1991,6 +2059,13 @@ function getRowDefinitions(basis: ReportBasis = 'accrual'): RowDefinition[] {
       category: 'Selling Fees',
       transactionType: 'eBay Ad Fees - Standard',
       queryFn: queryEbayAdFeesStandard,
+      signMultiplier: -1,
+    },
+    {
+      // Promoted Offsite advertising, previously in no box at all.
+      category: 'Selling Fees',
+      transactionType: 'eBay Promoted Offsite',
+      queryFn: queryEbayPromotedOffsite,
       signMultiplier: -1,
     },
     {

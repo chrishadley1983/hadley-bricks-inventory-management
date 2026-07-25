@@ -49,6 +49,7 @@ const BOX_BY_ROW: Record<string, string> = {
   'Website / Software': '23',
   'eBay Ad Fees - Standard': '24.1',
   'eBay Ad Fees - Advanced': '24.1',
+  'eBay Promoted Offsite': '24.1',
   'PayPal Fees': '26',
   'Amazon Fees': '30',
   'eBay Fixed Fees': '30',

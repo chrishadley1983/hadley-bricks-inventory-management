@@ -316,7 +316,7 @@ describe('ProfitLossReportService', () => {
   });
 
   describe('row definitions', () => {
-    it('should define 31 row types across all categories', async () => {
+    it('should define 32 row types across all categories', async () => {
       // This test verifies the service structure by checking the total rows when includeZeroRows is true
       const mockSupabase = createSupabaseMock();
       const service = new ProfitLossReportService(mockSupabase as never);
@@ -339,14 +339,14 @@ describe('ProfitLossReportService', () => {
       // Shopify was added 2026-07-25: real trading income once the store started
       // selling, previously omitted from both bases.
       expect(incomeRows.length).toBe(7); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Shopify, Amazon Sales, Amazon Refunds
-      expect(sellingFeesRows.length).toBe(11); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, PayPal Fees, 8 eBay fee types
+      expect(sellingFeesRows.length).toBe(12); // BL/BO/Bricqer, Amazon, PayPal, 9 eBay fee types (incl. Promoted Offsite)
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(3); // Postage, eBay Postage Labels, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website / Software, Office, Mileage
       expect(homeCostsRows.length).toBe(3); // Use of Home, Phone & Broadband, Insurance
 
-      // Total should be 31 rows (7 income + 11 selling fees + 2 stock + 3 packing + 5 bills + 3 home costs)
-      expect(result.rows.length).toBe(31);
+      // Total should be 32 rows (7 income + 12 selling fees + 2 stock + 3 packing + 5 bills + 3 home costs)
+      expect(result.rows.length).toBe(32);
     });
 
     it('should include expected Income row types', async () => {
