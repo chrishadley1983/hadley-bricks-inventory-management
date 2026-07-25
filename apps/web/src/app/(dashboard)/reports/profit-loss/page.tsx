@@ -15,6 +15,7 @@ import {
   ChevronRight,
   Calendar,
   Home,
+  Scale,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -36,7 +37,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useProfitLossReport, useExportReport } from '@/hooks/use-reports';
 import { usePerfPage } from '@/hooks/use-perf';
-import type { ProfitLossCategory } from '@/lib/services/profit-loss-report.service';
+import type { ProfitLossCategory, ReportBasis } from '@/lib/services/profit-loss-report.service';
 import { cn, formatCurrency } from '@/lib/utils';
 import { BarChart } from '@/components/charts/bar-chart';
 import { ComboChart } from '@/components/charts/combo-chart';
@@ -136,6 +137,15 @@ export default function ProfitLossReportPage() {
   usePerfPage('ProfitLossReportPage');
 
   const [viewPreset, setViewPreset] = useState<ViewPreset>('last_12_months');
+
+  /**
+   * Reporting basis. Accrual stays the default — it reflects trading activity
+   * rather than settlement timing, which is what you want for running the
+   * business. Cash is what the MTD return is actually filed on, and until this
+   * toggle existed there was no way to see those figures in the app at all.
+   * The two diverge within a quarter and converge over a year.
+   */
+  const [basis, setBasis] = useState<ReportBasis>('accrual');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -176,7 +186,7 @@ export default function ProfitLossReportPage() {
     }
   };
 
-  const { data: report, isLoading, error } = useProfitLossReport(dateRange, false);
+  const { data: report, isLoading, error } = useProfitLossReport(dateRange, false, basis);
   const exportMutation = useExportReport();
   const { toast } = useToast();
   const [exportingPdf, setExportingPdf] = useState(false);
@@ -731,6 +741,43 @@ export default function ProfitLossReportPage() {
                 Export CSV
               </Button>
             </div>
+          </div>
+
+          {/* Reporting basis — accrual by default; cash is what MTD is filed on */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Scale className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">Basis:</span>
+            </div>
+            <ToggleGroup
+              type="single"
+              value={basis}
+              onValueChange={(value: string) => {
+                // ToggleGroup emits '' when the active item is clicked again —
+                // ignore it so the report can never end up with no basis.
+                if (value) setBasis(value as ReportBasis);
+              }}
+            >
+              <ToggleGroupItem
+                value="accrual"
+                aria-label="Accrual basis — income at sale date"
+                className="text-xs sm:text-sm"
+              >
+                Accrual
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="cash"
+                aria-label="Cash basis — income when the money is received"
+                className="text-xs sm:text-sm"
+              >
+                Cash
+              </ToggleGroupItem>
+            </ToggleGroup>
+            <p className="text-xs text-muted-foreground">
+              {basis === 'accrual'
+                ? 'Income at sale date. Best for trading performance.'
+                : 'Income when the money lands. This is what the MTD return is filed on.'}
+            </p>
           </div>
 
           {/* View Presets */}

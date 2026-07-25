@@ -13,7 +13,7 @@ import type {
   StoreStatusRecord,
   UpdateStoreStatusInput,
 } from '@/lib/services';
-import type { ProfitLossReport } from '@/lib/services/profit-loss-report.service';
+import type { ProfitLossReport, ReportBasis } from '@/lib/services/profit-loss-report.service';
 
 interface DateRangeParams {
   startDate: Date;
@@ -56,9 +56,14 @@ async function fetchReport<T>(endpoint: string, params?: Record<string, string>)
 /**
  * Hook for fetching profit/loss report
  */
-export function useProfitLossReport(dateRange?: DateRangeParams, compareWithPrevious = true) {
+export function useProfitLossReport(
+  dateRange?: DateRangeParams,
+  compareWithPrevious = true,
+  basis: ReportBasis = 'accrual'
+) {
   const params: Record<string, string> = {
     compareWithPrevious: String(compareWithPrevious),
+    basis,
   };
 
   if (dateRange) {
@@ -72,7 +77,9 @@ export function useProfitLossReport(dateRange?: DateRangeParams, compareWithPrev
   console.log('[useProfitLossReport] Fetching with params:', params);
 
   return useQuery<ProfitLossReport>({
-    queryKey: ['reports', 'profit-loss', dateRange, compareWithPrevious],
+    // `basis` MUST be in the key — without it, switching basis would serve the
+    // other basis's cached figures, which on a tax report is worse than slow.
+    queryKey: ['reports', 'profit-loss', dateRange, compareWithPrevious, basis],
     queryFn: () => fetchReport<ProfitLossReport>('profit-loss', params),
     staleTime: 5 * 60 * 1000, // 5 minutes
   });

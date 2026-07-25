@@ -97,6 +97,46 @@ describe('Report hooks', () => {
       expect(fetchUrl).toContain('compareWithPrevious=true');
     });
 
+    it('defaults to accrual basis', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockReport),
+      });
+
+      renderHook(() => useProfitLossReport(), { wrapper: createWrapper() });
+
+      await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+      expect(mockFetch.mock.calls[0][0] as string).toContain('basis=accrual');
+    });
+
+    it('requests the cash basis when asked, and caches it separately', async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockReport),
+      });
+
+      // One shared QueryClient, so a missing `basis` in the query key would
+      // serve the accrual figures for a cash request — on a tax report that is
+      // worse than a slow refetch.
+      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+
+      const accrual = renderHook(() => useProfitLossReport(undefined, true, 'accrual'), { wrapper });
+      await waitFor(() => expect(accrual.result.current.isSuccess).toBe(true));
+
+      const cash = renderHook(() => useProfitLossReport(undefined, true, 'cash'), { wrapper });
+      await waitFor(() => expect(cash.result.current.isSuccess).toBe(true));
+
+      const urls = mockFetch.mock.calls.map((c) => c[0] as string);
+      expect(urls.some((u) => u.includes('basis=accrual'))).toBe(true);
+      expect(urls.some((u) => u.includes('basis=cash'))).toBe(true);
+      // Two distinct fetches, i.e. the cash request was not served from the
+      // accrual cache entry.
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('should handle fetch error', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: false,
