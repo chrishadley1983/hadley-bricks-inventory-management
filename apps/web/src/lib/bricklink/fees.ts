@@ -65,19 +65,23 @@ export const MAGNET = { maxSupplyLots: 3, minStr: 0.5 } as const;
  * the suspect half. UK lots come from `bricklink_price_guide_cache`, which is consistently
  * UK-scoped.
  *
- * WHY DIFFERENT CUTS. UK supply distributions are not comparable between the two:
+ * Supply is measured in PIECES, not seller lots — the same basis as the STR it is paired
+ * with, and the same number the parts table shows as "Stock qty". Lots would reintroduce
+ * exactly the mixed-denominator problem that made njo0658 read "Stock 12 / Sold 6" against
+ * an STR of 0.02.
  *
- *              p25   median   p75    <=3 UK lots
- *   PART        2      9       54      32.9%
- *   MINIFIG     2      4        9      47.2%
+ * WHY DIFFERENT CUTS, and why the minifig bound is the TIGHTER one: minifigs sit thinner
+ * on the shelf than parts, so the same count is a weaker claim for a figure. 9 pieces of a
+ * part in the whole UK is genuinely thin; 9 of a minifig is mid-market.
  *
- * One gate across both would be far stricter for minifigs in practice. These cuts are
- * deliberately loose on their own — the STR leg does the other half of the work, and a lot
- * only qualifies if it is BOTH thinly supplied and actually selling.
+ * Bounds are EXCLUSIVE, as specified (Chris, 2026-07-25: "figs < 5 or parts < 10 and
+ * STR > 1", "and on quantity not lots"). The STR leg carries most of the weight: above 1,
+ * a lot must have sold MORE in six months than is sitting on the shelf right now, which is
+ * a strong claim on its own and lets the supply bound be the looser half of the pair.
  */
 export const UK_MAGNET = {
-  part: { maxUkStockLots: 3, minStr: 0.5 },
-  minifig: { maxUkStockLots: 5, minStr: 0.5 },
+  part: { ukStockQtyUnder: 10, strAbove: 1 },
+  minifig: { ukStockQtyUnder: 5, strAbove: 1 },
 } as const;
 
 /** Ask-vs-market price bands — shared by assessment + store-quality position bucketing. */

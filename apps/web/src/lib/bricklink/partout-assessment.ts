@@ -53,7 +53,7 @@ interface Lens {
   price: (p: PartValue) => number | null;
   /** QUANTITY-basis STR fraction — the house standard. Never the lots-basis ×100. */
   str: (p: PartValue) => number | null;
-  ukStockLots: (p: PartValue) => number | null;
+  ukStockQty: (p: PartValue) => number | null;
   worldSupplyLots: (p: PartValue) => number | null;
   overlap: (p: PartValue) => OverlapTag | null;
 }
@@ -62,14 +62,14 @@ const LENSES: Record<PartoutCondition, Lens> = {
   new: {
     price: (p) => p.priceNew,
     str: (p) => p.strQtyNew,
-    ukStockLots: (p) => p.ukStockLotsNew,
+    ukStockQty: (p) => p.stockAvailableNew,
     worldSupplyLots: (p) => p.worldSupplyLotsNew,
     overlap: (p) => p.overlapNew,
   },
   used: {
     price: (p) => p.priceUsed,
     str: (p) => p.strQtyUsed,
-    ukStockLots: (p) => p.ukStockLotsUsed,
+    ukStockQty: (p) => p.stockAvailableUsed,
     worldSupplyLots: (p) => p.worldSupplyLotsUsed,
     overlap: (p) => p.overlapUsed,
   },
@@ -122,9 +122,10 @@ function buildStrBands(parts: PartValue[], lens: Lens, grossPov: number): Partou
 /**
  * Magnets: thinly supplied IN THE UK and actually selling.
  *
- * Scarcity is UK seller lots, cut separately for parts and minifigs (see UK_MAGNET) —
+ * Scarcity is UK stock QUANTITY (pieces), cut separately for parts and minifigs (see UK_MAGNET) —
  * their supply distributions aren't comparable, so one gate across both is really two
- * different levels of strictness wearing the same number.
+ * different levels of strictness wearing the same number. The minifig bound is the
+ * TIGHTER one because figures sit thinner on the shelf to begin with.
  *
  * The `> 0` guard is kept: a zero UK stock count is ambiguous (nothing listed, or nothing
  * captured), and treating it as infinite scarcity would flag every gap in the cache. That
@@ -140,13 +141,15 @@ function findMagnets(parts: PartValue[], lens: Lens): PartoutMagnet[] {
   for (const p of parts) {
     const gate = p.partType === 'MINIFIG' ? UK_MAGNET.minifig : UK_MAGNET.part;
     const str = lens.str(p);
-    const ukLots = lens.ukStockLots(p);
+    const ukQty = lens.ukStockQty(p);
+    // Both bounds exclusive, per the spec: "figs < 5 or parts < 10 and STR > 1",
+    // measured in PIECES.
     const isMagnet =
       str != null &&
-      str >= gate.minStr &&
-      ukLots != null &&
-      ukLots > 0 &&
-      ukLots <= gate.maxUkStockLots;
+      str > gate.strAbove &&
+      ukQty != null &&
+      ukQty > 0 &&
+      ukQty < gate.ukStockQtyUnder;
     if (!isMagnet) continue;
 
     const price = lens.price(p);
@@ -160,7 +163,7 @@ function findMagnets(parts: PartValue[], lens: Lens): PartoutMagnet[] {
       quantity: p.quantity,
       price,
       str,
-      ukStockLots: ukLots,
+      ukStockQty: ukQty,
       worldSupplyLots: lens.worldSupplyLots(p),
       lineValue: round(lineGross(p, lens)),
       overlap: lens.overlap(p),
@@ -169,7 +172,7 @@ function findMagnets(parts: PartValue[], lens: Lens): PartoutMagnet[] {
 
   // Scarcest in the UK first, then best sell-through.
   return out.sort(
-    (a, b) => (a.ukStockLots ?? 99) - (b.ukStockLots ?? 99) || (b.str ?? 0) - (a.str ?? 0)
+    (a, b) => (a.ukStockQty ?? 99) - (b.ukStockQty ?? 99) || (b.str ?? 0) - (a.str ?? 0)
   );
 }
 
@@ -433,7 +436,7 @@ export function assessPartout(
     // empty map, so without this an outage reads on screen as "no magnets" — a positive
     // claim built on absent evidence.
     magnetCoverage: {
-      withSupplyData: parts.filter((p) => lens.ukStockLots(p) != null).length,
+      withSupplyData: parts.filter((p) => lens.ukStockQty(p) != null).length,
       total: parts.length,
     },
   };
