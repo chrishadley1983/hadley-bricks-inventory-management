@@ -1754,6 +1754,7 @@ export type Database = {
       bl_set_arb_candidates: {
         Row: {
           amazon_asin: string | null
+          amazon_snapshot_date: string | null
           buy_price_gbp: number
           buy_qty: number
           computed_at: string
@@ -1764,6 +1765,7 @@ export type Database = {
           landed_unit_gbp: number | null
           net_margin_gbp: number | null
           net_margin_pct: number | null
+          sales_rank: number | null
           sell_channel: string
           sell_net_gbp: number | null
           sell_price_gbp: number | null
@@ -1774,10 +1776,12 @@ export type Database = {
           status: string
           uk_cheapest_gbp: number | null
           velocity_drops90: number | null
+          was_price_90d: number | null
           weight_g: number | null
         }
         Insert: {
           amazon_asin?: string | null
+          amazon_snapshot_date?: string | null
           buy_price_gbp: number
           buy_qty?: number
           computed_at?: string
@@ -1788,6 +1792,7 @@ export type Database = {
           landed_unit_gbp?: number | null
           net_margin_gbp?: number | null
           net_margin_pct?: number | null
+          sales_rank?: number | null
           sell_channel?: string
           sell_net_gbp?: number | null
           sell_price_gbp?: number | null
@@ -1798,10 +1803,12 @@ export type Database = {
           status?: string
           uk_cheapest_gbp?: number | null
           velocity_drops90?: number | null
+          was_price_90d?: number | null
           weight_g?: number | null
         }
         Update: {
           amazon_asin?: string | null
+          amazon_snapshot_date?: string | null
           buy_price_gbp?: number
           buy_qty?: number
           computed_at?: string
@@ -1812,6 +1819,7 @@ export type Database = {
           landed_unit_gbp?: number | null
           net_margin_gbp?: number | null
           net_margin_pct?: number | null
+          sales_rank?: number | null
           sell_channel?: string
           sell_net_gbp?: number | null
           sell_price_gbp?: number | null
@@ -1822,6 +1830,7 @@ export type Database = {
           status?: string
           uk_cheapest_gbp?: number | null
           velocity_drops90?: number | null
+          was_price_90d?: number | null
           weight_g?: number | null
         }
         Relationships: [
@@ -18129,6 +18138,22 @@ export type Database = {
           last_snapshot: string
           priority: number
           quantity: number
+        }[]
+      }
+      get_latest_ebay_pricing: {
+        Args: {
+          p_condition?: string
+          p_country_code?: string
+          p_set_numbers: string[]
+        }
+        Returns: {
+          avg_price: number
+          id: string
+          listings_json: Json
+          max_price: number
+          min_price: number
+          set_number: string
+          total_listings: number
         }[]
       }
       get_latest_listing_review: {
