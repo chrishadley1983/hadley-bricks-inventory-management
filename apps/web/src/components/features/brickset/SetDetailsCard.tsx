@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { Loader2 } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import type { BricksetSet } from '@/lib/brickset';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,11 +15,33 @@ interface PricingStats {
   listingCount: number;
 }
 
-interface BrickLinkPricingStats {
+/** One month of BL UK sold activity, keyed "March 2026" as BrickLink renders it. */
+export interface MonthlySold {
+  avg: number;
+  qty: number;
+  lots: number;
+}
+
+/**
+ * `status` is the discriminator that stops a failed lookup rendering as "no listings".
+ * See the note on the same type in /api/brickset/pricing.
+ */
+export type BrickLinkPanelStatus = 'ok' | 'not-configured' | 'error' | 'no-data';
+
+export interface BrickLinkPricingStats {
+  status: BrickLinkPanelStatus;
+  message: string | null;
   minPrice: number | null;
   avgPrice: number | null;
   maxPrice: number | null;
   lotCount: number;
+  soldAvg: number | null;
+  soldMedian: number | null;
+  soldLots: number;
+  soldQty: number;
+  strQty: number | null;
+  byMonth: Record<string, MonthlySold> | null;
+  freshnessDays: number | null;
 }
 
 export interface AmazonOfferData {
@@ -56,6 +78,7 @@ interface SetDetailsCardProps {
   onEbayClick?: () => void;
   onEbayUsedClick?: () => void;
   onAmazonOffersClick?: () => void;
+  onBricklinkClick?: (condition: 'new' | 'used') => void;
 }
 
 /**
@@ -97,6 +120,92 @@ function StatCard({ label, value, subtext, valueClassName }: StatCardProps) {
   );
 }
 
+/**
+ * BrickLink price panel.
+ *
+ * Two things this fixes: BrickLink was the only platform panel with no drill-down, and
+ * a failed or unconfigured lookup rendered as a row of em-dashes — visually identical
+ * to "BrickLink has nothing for this set". `stats.status` now drives an explicit state.
+ */
+function BricklinkPanel({
+  title,
+  stats,
+  loading,
+  accent,
+  onClick,
+}: {
+  title: string;
+  stats: BrickLinkPricingStats | null | undefined;
+  loading?: boolean;
+  accent: string;
+  onClick?: () => void;
+}) {
+  const status = stats?.status;
+  const isProblem = status === 'not-configured' || status === 'error';
+
+  return (
+    <div>
+      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+        {title}
+      </h4>
+      <button
+        onClick={onClick}
+        disabled={loading || !onClick}
+        className="w-full text-left rounded-lg border overflow-hidden hover:shadow-sm transition-all cursor-pointer disabled:cursor-default disabled:hover:shadow-none"
+      >
+        {isProblem && !loading ? (
+          <div className="flex items-start gap-2 p-3">
+            <AlertCircle
+              className={`mt-0.5 h-4 w-4 shrink-0 ${
+                status === 'error' ? 'text-red-600' : 'text-amber-600'
+              }`}
+            />
+            <div className="min-w-0 text-xs">
+              <div className="font-medium">
+                {status === 'error' ? 'Lookup failed' : 'BrickLink not connected'}
+              </div>
+              <div className="truncate text-muted-foreground">{stats?.message}</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 divide-x bg-muted/50">
+              {(
+                [
+                  ['Min', stats?.minPrice],
+                  ['Avg', stats?.avgPrice],
+                  ['Max', stats?.maxPrice],
+                ] as [string, number | null | undefined][]
+              ).map(([label, value]) => (
+                <div key={label} className="p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground">{label}</div>
+                  <div className={`font-mono font-bold ${accent}`}>
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
+                    ) : value ? (
+                      formatPrice(value, 'GBP')
+                    ) : (
+                      '—'
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <Separator />
+            <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
+              <span>Listings</span>
+              <span className="font-mono font-medium text-foreground">
+                {loading ? '...' : (stats?.lotCount ?? '—')} lots
+                {onClick && !loading && <span className={`ml-1 ${accent}`}>(click)</span>}
+              </span>
+            </div>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function SetDetailsCard({
   set,
   pricing,
@@ -104,6 +213,7 @@ export function SetDetailsCard({
   onEbayClick,
   onEbayUsedClick,
   onAmazonOffersClick,
+  onBricklinkClick,
 }: SetDetailsCardProps) {
   return (
     <Card>
@@ -376,113 +486,20 @@ export function SetDetailsCard({
 
         {/* BrickLink Pricing - New and Used side by side */}
         <div className="grid grid-cols-2 gap-4">
-          {/* BrickLink New */}
-          <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              BrickLink (UK, New)
-            </h4>
-            <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-3 divide-x bg-muted/50">
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Min</div>
-                  <div className="font-mono font-bold text-blue-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklink?.minPrice ? (
-                      formatPrice(pricing.bricklink.minPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Avg</div>
-                  <div className="font-mono font-bold text-blue-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklink?.avgPrice ? (
-                      formatPrice(pricing.bricklink.avgPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Max</div>
-                  <div className="font-mono font-bold text-blue-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklink?.maxPrice ? (
-                      formatPrice(pricing.bricklink.maxPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-              </div>
-              <Separator />
-              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
-                <span>Listings</span>
-                <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : (pricing?.bricklink?.lotCount ?? '—')} lots
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* BrickLink Used */}
-          <div>
-            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              BrickLink (UK, Used)
-            </h4>
-            <div className="rounded-lg border overflow-hidden">
-              <div className="grid grid-cols-3 divide-x bg-muted/50">
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Min</div>
-                  <div className="font-mono font-bold text-teal-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklinkUsed?.minPrice ? (
-                      formatPrice(pricing.bricklinkUsed.minPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Avg</div>
-                  <div className="font-mono font-bold text-teal-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklinkUsed?.avgPrice ? (
-                      formatPrice(pricing.bricklinkUsed.avgPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-                <div className="p-2 text-center">
-                  <div className="text-[10px] text-muted-foreground">Max</div>
-                  <div className="font-mono font-bold text-teal-600">
-                    {pricingLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin mx-auto" />
-                    ) : pricing?.bricklinkUsed?.maxPrice ? (
-                      formatPrice(pricing.bricklinkUsed.maxPrice, 'GBP')
-                    ) : (
-                      '—'
-                    )}
-                  </div>
-                </div>
-              </div>
-              <Separator />
-              <div className="px-3 py-2 bg-muted/30 text-xs text-muted-foreground flex justify-between">
-                <span>Listings</span>
-                <span className="font-mono font-medium text-foreground">
-                  {pricingLoading ? '...' : (pricing?.bricklinkUsed?.lotCount ?? '—')} lots
-                </span>
-              </div>
-            </div>
-          </div>
+          <BricklinkPanel
+            title="BrickLink (UK, New)"
+            stats={pricing?.bricklink}
+            loading={pricingLoading}
+            accent="text-blue-600"
+            onClick={onBricklinkClick ? () => onBricklinkClick('new') : undefined}
+          />
+          <BricklinkPanel
+            title="BrickLink (UK, Used)"
+            stats={pricing?.bricklinkUsed}
+            loading={pricingLoading}
+            accent="text-teal-600"
+            onClick={onBricklinkClick ? () => onBricklinkClick('used') : undefined}
+          />
         </div>
 
         {/* Item Numbers & Barcodes - Inline compact layout */}

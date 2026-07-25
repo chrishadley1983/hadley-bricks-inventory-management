@@ -14,19 +14,23 @@ Look up any LEGO set and determine whether it's more profitable to sell the set 
 
 ### When to Part Out
 
-Part out when:
-- POV Ratio > 1.0 (parts worth more than set)
-- High-value minifigures or rare parts
-- Common set with easy-to-sell parts
-- Set is incomplete or damaged
+The screen answers this for you — the verdict clears a **2.0x POV multiple AND a £10 gap**,
+not the old `ratio > 1` test. Supporting reasons to part out anyway:
+- Magnets present (scarce, fast-moving lots that pull traffic to the store)
+- Most lots land in the high STR bands, so the realisable rung holds up
+- Overlap is mostly NEW / RESTOCK rather than DUPLICATE
+- Set is incomplete or damaged, so it can't be sold whole
 
 ### When to Sell Complete
 
-Sell complete when:
-- POV Ratio < 1.0 (set worth more)
-- Retired exclusive sets
-- Sets with premium boxes
-- Time cost of parting out not worthwhile
+- The gate isn't cleared — at a 1.0–2.0x multiple the bench time isn't repaid
+- Retired exclusive sets and premium boxes carry a complete-set premium
+- Value is concentrated in a handful of slow lots (check "Where the value sits")
+
+### A verdict of "Insufficient Data"
+
+`SKIP` means there is no complete-set price on record, so neither gate can be applied.
+It is not a soft "no" — it's an absence of the denominator.
 
 ---
 
@@ -49,26 +53,24 @@ Sell complete when:
 2. Analysis loads automatically
 3. Wait for price fetching (if uncached)
 
-### Step 4: Review Summary
+### Step 4: Read the assessment
 
-Four key metrics at the top:
+The assessment panel leads. Read it in this order:
 
 | Card | Shows |
 |------|-------|
-| **POV (New)** | Total parts value if New |
-| **Ratio (New)** | POV ÷ New set price |
-| **POV (Used)** | Total parts value if Used |
-| **Ratio (Used)** | POV ÷ Used set price |
+| **Assessment** | The verdict, why, and the POV multiple / gap against their gates |
+| **Part-Out Value** | Gross → Realisable → **Net**. Only Net is money we'd see. |
+| **Max buy** | Ceiling at 20% margin, and whether the current set price is within it |
 
-**Recommendation Banner:**
-- Green "Part Out" = parts worth more
-- Red "Sell Complete" = set worth more
+Then the supporting cards: sell-through depth, where the value sits, magnets, and store
+overlap. An amber banner warns when unpriced lots are understating everything above.
 
 ### Step 5: Toggle Condition
 
-1. Use **New / Used** tabs above table
-2. All values update to selected condition
-3. Recommendation uses New condition by default
+1. Use the **New / Used** tabs next to the "Part-Out Assessment" heading
+2. The whole assessment, the parts table AND the BrickLink cross-check follow the toggle
+3. New is selected by default
 
 ### Step 6: Explore Parts
 
@@ -101,31 +103,30 @@ If prices seem stale:
 
 ## Reading the Results
 
-### Profitable Partout Example
+### A real "Sell Complete" (75192-1, July 2026)
 
 ```
-Set: 75192-1 Millennium Falcon
-Set Price (New): £649.99
-POV (New): £1,245.67
-Ratio: 1.92x
+Set price (New):  £878.11
+Gross POV:        £905.89     <- flatters: every lot at guide price
+Realisable:       £396.77     (44% capture)
+Net:              £359.47     <- the decision figure, after 9.4% fees
+POV multiple:     1.03x       (gate 2.00x)
+Gap:              £27.78      (gate £10.00)
+Max buy @ 20%:    £280.12     -> £597.99 over the current set price
 
-Recommendation: PART OUT
+Verdict: SELL COMPLETE
 ```
 
-Meaning: Parts are worth 92% more than the complete set.
+Note how far apart gross and net are. On the old `ratio > 1` model this set read as a
+marginal part-out at 1.03x; on the gate it is clearly not worth the bench time.
 
-### Unprofitable Partout Example
+### The BrickLink cross-check
 
-```
-Set: 40499-1 Santa's Sleigh
-Set Price (New): £29.99
-POV (New): £18.45
-Ratio: 0.62x
-
-Recommendation: SELL COMPLETE
-```
-
-Meaning: Set is worth 38% more than the parts.
+The card below the assessment shows BrickLink's own published POV for the same set:
+£910.71, a 0.5% difference from our **gross** rung. That agreement is the point — the two
+diverge only after the liquidity haircut and fees, which is exactly what the
+reconciliation note on the card says. BL's `1.24x` divides by RRP (£734.99); our `1.03x`
+divides by what the set actually costs today (£878.11). Only ours drives the gate.
 
 ---
 

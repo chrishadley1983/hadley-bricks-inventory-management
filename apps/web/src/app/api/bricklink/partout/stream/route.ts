@@ -14,6 +14,7 @@ import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { CredentialsRepository } from '@/lib/repositories';
 import { PartoutService } from '@/lib/bricklink/partout.service';
+import { mapPartoutError } from '@/lib/bricklink/partout-error';
 import type { PartoutStreamEvent } from '@/types/partout';
 
 // Increase timeout for large sets (5 minutes)
@@ -114,6 +115,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       // 6. Get partout value with progress callback
       const data = await partoutService.getPartoutValue(setNumber, {
         forceRefresh,
+        userId: user.id,
         onProgress: async (fetched: number, total: number, cached: number) => {
           await writer.write(
             encoder.encode(
@@ -145,9 +147,11 @@ export async function GET(request: NextRequest): Promise<Response> {
     } catch (error) {
       console.error('[GET /api/bricklink/partout/stream] Error:', error);
 
-      const errorMessage = 'Internal server error';
+      // SSE has already committed a 200, so the status is informational here — the
+      // message is what reaches the user, and it must say what actually failed.
+      const { message } = mapPartoutError(error);
 
-      await writer.write(encoder.encode(formatSSE({ type: 'error', error: errorMessage })));
+      await writer.write(encoder.encode(formatSSE({ type: 'error', error: message })));
     } finally {
       await writer.close();
     }

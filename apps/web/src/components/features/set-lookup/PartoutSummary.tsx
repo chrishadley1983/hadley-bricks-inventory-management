@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, TrendingDown, Package, Database, AlertTriangle } from 'lucide-react';
+import { Package, Database, AlertTriangle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 import type { PartoutData } from '@/types/partout';
@@ -41,7 +41,6 @@ function getRatioColorClass(ratio: number | null): string {
  * Displays summary cards with POV totals, ratios, and recommendation
  */
 export function PartoutSummary({ data }: PartoutSummaryProps) {
-  const isPartOut = data.recommendation === 'part-out';
   const missingStats = getMissingPriceStats(data);
   const hasMissingPrices = missingStats.missingNew > 0 || missingStats.missingUsed > 0;
 
@@ -75,11 +74,7 @@ export function PartoutSummary({ data }: PartoutSummaryProps) {
               {formatRatio(data.ratioNew)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {data.ratioNew !== null
-                ? data.ratioNew > 1
-                  ? 'Part out profitable'
-                  : 'Sell complete better'
-                : 'No set price'}
+              {data.ratioNew !== null ? 'Gross, before fees' : 'No set price'}
             </div>
           </CardContent>
         </Card>
@@ -110,40 +105,19 @@ export function PartoutSummary({ data }: PartoutSummaryProps) {
               {formatRatio(data.ratioUsed)}
             </div>
             <div className="text-xs text-muted-foreground">
-              {data.ratioUsed !== null
-                ? data.ratioUsed > 1
-                  ? 'Part out profitable'
-                  : 'Sell complete better'
-                : 'No set price'}
+              {data.ratioUsed !== null ? 'Gross, before fees' : 'No set price'}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recommendation, Cache Stats, and Missing Prices */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {/* Recommendation */}
-        <Card className={isPartOut ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              {isPartOut ? (
-                <TrendingUp className="h-5 w-5 text-green-600" />
-              ) : (
-                <TrendingDown className="h-5 w-5 text-red-600" />
-              )}
-              <div>
-                <div className="text-sm font-medium text-muted-foreground">Recommendation</div>
-                <div
-                  className={`text-lg font-bold ${isPartOut ? 'text-green-700' : 'text-red-700'}`}
-                  data-testid="pov-recommendation"
-                >
-                  {isPartOut ? 'Part Out' : 'Sell Complete'}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
+      {/*
+        The recommendation card that used to live here rendered the legacy
+        `ratio > 1` test on GROSS value — no fees, no liquidity haircut. It is
+        superseded by PartoutAssessmentPanel's canonical verdict, and showing both
+        put two contradictory verdicts on one screen.
+      */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Cache Status */}
         <Card>
           <CardContent className="pt-4">

@@ -54,19 +54,45 @@ After looking up a set, pricing data is automatically fetched from multiple plat
 ### New Condition
 | Metric | Colour | Description |
 |--------|--------|-------------|
-| **Min** | Blue | Lowest UK new price |
-| **Avg** | Blue | Average UK new price |
-| **Max** | Blue | Highest UK new price |
+| **Min** | Blue | Lowest UK new asking price |
+| **Avg** | Blue | Quantity-weighted average UK new asking price |
+| **Max** | Blue | Highest UK new asking price |
 
 ### Used Condition
 | Metric | Colour | Description |
 |--------|--------|-------------|
-| **Min** | Teal | Lowest UK used price |
-| **Avg** | Teal | Average UK used price |
-| **Max** | Teal | Highest UK used price |
+| **Min** | Teal | Lowest UK used asking price |
+| **Avg** | Teal | Quantity-weighted average UK used asking price |
+| **Max** | Teal | Highest UK used asking price |
 
 ### Lot Count
-Shows number of available lots on BrickLink.
+Number of lots currently for sale on BrickLink UK.
+
+### Drill-down
+Both BrickLink panels are clickable and open a detail modal:
+
+| Section | Shows |
+|---------|-------|
+| Currently for sale | Min / avg / max asking price and lot count |
+| Sold on BrickLink UK | Avg, median, volume, and quantity-basis STR |
+| Months with UK sales on record | The dated months behind the sold figures |
+| Links | Deep links to the BrickLink price guide and catalogue page |
+
+**Read the sold months, not just the average.** The sold columns cover whatever months
+BrickLink's UK sold table held at fetch time — not a rolling six months. For a slow set
+that can be one or two points years apart (75192-1 New: 4 pieces, all Feb–Mar 2020). The
+modal states the real span in the section heading, and lists the months rather than
+drawing a trend line, because the gaps are months with no sales, not zero prices.
+
+### Panel states
+A BrickLink panel never shows an empty row of dashes for a failure. `status` distinguishes:
+
+| Status | Panel shows |
+|--------|-------------|
+| `ok` | The price grid |
+| `no-data` | The grid, plus an explicit "no UK listings or sales on record" note in the modal |
+| `not-configured` | Amber "BrickLink not connected", with a link to Settings |
+| `error` | Red "Lookup failed" and the underlying message |
 
 ## Price Comparison
 
@@ -108,6 +134,7 @@ Pricing refetches when:
 - [SetDetailsCard.tsx](../../../apps/web/src/components/features/brickset/SetDetailsCard.tsx:190-503) - Pricing sections
 - [SetLookupEbayModal.tsx](../../../apps/web/src/components/features/brickset/SetLookupEbayModal.tsx) - eBay listings
 - [AmazonOffersModal.tsx](../../../apps/web/src/components/features/brickset/AmazonOffersModal.tsx) - Amazon offers
+- [SetLookupBricklinkModal.tsx](../../../apps/web/src/components/features/brickset/SetLookupBricklinkModal.tsx) - BrickLink drill-down, sold months, catalogue deep links
 
 ## API Endpoint
 
@@ -140,16 +167,37 @@ GET /api/brickset/pricing?setNumber=75192&ean=5702015869935&upc=673419267038
       "listingCount": 15
     },
     "bricklink": {
+      "status": "ok",
+      "message": null,
       "minPrice": 590.00,
       "avgPrice": 610.00,
       "maxPrice": 680.00,
-      "lotCount": 5
+      "lotCount": 5,
+      "soldAvg": 475.00,
+      "soldMedian": 475.00,
+      "soldLots": 4,
+      "soldQty": 4,
+      "strQty": 0.18,
+      "byMonth": {
+        "March 2020": { "avg": 500.00, "qty": 1, "lots": 1 },
+        "February 2020": { "avg": 466.67, "qty": 3, "lots": 3 }
+      },
+      "freshnessDays": 4.2
     },
     "bricklinkUsed": {
-      "minPrice": 420.00,
-      "avgPrice": 480.00,
-      "maxPrice": 550.00,
-      "lotCount": 8
+      "status": "not-configured",
+      "message": "BrickLink is not connected. Add credentials in Settings.",
+      "minPrice": null,
+      "avgPrice": null,
+      "maxPrice": null,
+      "lotCount": 0,
+      "soldAvg": null,
+      "soldMedian": null,
+      "soldLots": 0,
+      "soldQty": 0,
+      "strQty": null,
+      "byMonth": null,
+      "freshnessDays": null
     }
   }
 }

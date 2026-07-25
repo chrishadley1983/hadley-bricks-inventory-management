@@ -36,6 +36,23 @@ export interface SideView {
   strLots: number | null; // sold_lots / stock_lots
   strQty: number | null; // sold_qty / stock_qty
   hist: Record<string, number> | undefined; // sold-side qty histogram (price 4dp -> qty)
+  /**
+   * Sold-side months on record, keyed "March 2026" as BL renders them.
+   *
+   * This is whatever months BL's UK sold table happened to list at fetch time — NOT a
+   * rolling 6-month series and NOT gap-filled. High-turnover parts get a dense recent
+   * run; an individual set often gets one or two points that may be years apart
+   * (75192-1 New: Feb + Mar 2020). Present it dated and sparse; drawing it as a
+   * continuous trend line would invent data that isn't there.
+   */
+  byMonth?: Record<string, MonthlySold> | undefined;
+}
+
+/** One month of BL UK sold activity. */
+export interface MonthlySold {
+  avg: number;
+  qty: number;
+  lots: number;
 }
 
 export type Coverage = 'uk' | 'world_fallback' | 'none';
@@ -62,6 +79,7 @@ export function pgKey(itemType: string, itemNo: string, blColourId: number): str
 const EMPTY_SIDE: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
   stockLots: 0, stockQty: 0, stockMin: null, stockMax: null, stockAvg: null, strLots: null, strQty: null, hist: undefined,
+  byMonth: undefined,
 };
 
 /** Qty-weighted mean of a price(4dp)->qty histogram; ignores the rolled-up "other" bucket. */
@@ -83,7 +101,15 @@ function ukSide(row: Row, cond: 'new' | 'used'): SideView {
   const soldQty = iNum(row[`uk_sold_qty_${cond}`]);
   const stockLots = iNum(row[`uk_stock_lots_${cond}`]);
   const stockQty = iNum(row[`uk_stock_qty_${cond}`]);
-  const detail = (row.uk_detail ?? {}) as Record<string, { min?: number | null; max?: number | null; hist?: Record<string, number> }>;
+  const detail = (row.uk_detail ?? {}) as Record<
+    string,
+    {
+      min?: number | null;
+      max?: number | null;
+      hist?: Record<string, number>;
+      byMonth?: Record<string, MonthlySold>;
+    }
+  >;
   const histKey = cond === 'new' ? 'soldNew' : 'soldUsed';
   const stockHistKey = cond === 'new' ? 'stockNew' : 'stockUsed';
   return {
@@ -99,6 +125,7 @@ function ukSide(row: Row, cond: 'new' | 'used'): SideView {
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
     hist: detail?.[histKey]?.hist,
+    byMonth: detail?.[histKey]?.byMonth,
   };
 }
 
