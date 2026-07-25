@@ -45,7 +45,12 @@ CELL_BY_BOX = {
     "24.1": "C47",  # advertising
     "26": "C59",  # bank, credit card and other financial charges
     "30": "C75",  # other business expenses
-    "31": "C77",  # consolidated expenses (ALTERNATIVE to 17-30)
+    # Consolidated expenses (ALTERNATIVE to 17-30). Row 77 holds the box-31
+    # LABEL only and has no C cell at all; the value cell is C79, one row down,
+    # matching every other box's label-then-value layout. Verified against the
+    # template 2026-07-25 — the previous "C77" would have aborted with "cell not
+    # found", fail-loud but wrong.
+    "31": "C79",
 }
 
 
