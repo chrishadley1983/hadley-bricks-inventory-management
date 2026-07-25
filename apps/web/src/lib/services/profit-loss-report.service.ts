@@ -279,6 +279,112 @@ function countMissingBreakdowns(rows: { breakdowns: unknown }[]): number {
   return rows.filter((r) => !Array.isArray(r.breakdowns) || r.breakdowns.length === 0).length;
 }
 
+/**
+ * Every Amazon `transaction_type` and what the P&L does with it.
+ *
+ * The fee query used to hard-code `transaction_type='Shipment'`, so
+ * `Adjustment` rows (return postage billed back to us — £9.98 in Q1 2026/27,
+ * £113.59 all-time) reached no box at all. An explicit registry plus the guard
+ * below means a type can no longer be silently unread.
+ */
+const AMAZON_TYPE_TREATMENT: Record<string, 'sales-and-fees' | 'refund' | 'fees-only' | 'excluded'> =
+  {
+    // Gross sales + the fees deducted from them.
+    Shipment: 'sales-and-fees',
+    // Money returned to a buyer, plus the fees Amazon credits back.
+    Refund: 'refund',
+    GuaranteeClaimRefund: 'refund',
+    // No sales value, only a cost charged to the account.
+    Adjustment: 'fees-only',
+    AdhocDisbursement: 'fees-only',
+    // The payout of sales already counted — including it would double-count
+    // everything (£47,510.44 all-time).
+    Transfer: 'excluded',
+    // The Amazon seller subscription, which has its own P&L row
+    // (queryAmazonSubscription). Folding it in here would double-count £90/qtr.
+    ServiceFee: 'excluded',
+    // A £30.00 credit received 2025-08-18. Outside every quarter filed so far;
+    // classify it before FY2025/26 is submitted.
+    DebtRecovery: 'excluded',
+  }
+
+/**
+ * Fail loud on an Amazon transaction_type nobody has classified, rather than
+ * letting its money sit outside the report.
+ */
+function assertNoUnclassifiedAmazonTypes(rows: { transaction_type: string | null }[]): void {
+  const unknown = new Set<string>();
+  for (const row of rows) {
+    const type = row.transaction_type ?? '(null)';
+    if (!(type in AMAZON_TYPE_TREATMENT)) unknown.add(type);
+  }
+  if (unknown.size > 0) {
+    throw new Error(
+      `Unclassified Amazon transaction_type(s): ${[...unknown].join(', ')}. Add each to ` +
+        `AMAZON_TYPE_TREATMENT — do not leave Amazon money outside the report.`
+    );
+  }
+}
+
+/** Types whose `Expenses` breakdown is a real business cost. */
+const AMAZON_FEE_BEARING_TYPES = Object.entries(AMAZON_TYPE_TREATMENT)
+  .filter(([, t]) => t === 'sales-and-fees' || t === 'fees-only')
+  .map(([type]) => type)
+
+/**
+ * `Adjustment` rows are not one thing, and the difference is worth £6,263.55.
+ *
+ *   Reserve                8 rows  Sales +6,263.55  Expenses −6,263.55  net £0
+ *   LabmanLabelReturn     27 rows  Sales      0.00  Expenses    −89.54
+ *   LabmanLabelPurchase    8 rows  Sales      0.00  Expenses    −24.19
+ *   LabmanLabelChargeBack  8 rows  Sales     +0.14  Expenses      0.00
+ *
+ * `Reserve` is Amazon's balance-hold mechanic (ReserveDebit/ReserveCredit) —
+ * money withheld then released. It is neither income nor expense: both sides are
+ * equal and opposite, and taking only the Expenses side inflated a full year's
+ * costs by £4,945.88 (FY2025/26 profit would have come out £4,597 light). Taking
+ * BOTH sides would instead inflate box 15 turnover by the same amount. It has to
+ * be excluded outright.
+ */
+const AMAZON_ADJUSTMENT_BALANCE_MOVEMENTS = ['Reserve'] as const;
+
+/** Adjustment descriptions that ARE real business costs/credits. */
+const AMAZON_ADJUSTMENT_TRADING = [
+  'LabmanLabelReturn',
+  'LabmanLabelPurchase',
+  'LabmanLabelChargeBack',
+] as const;
+
+/** True for rows that only move money between Amazon's own balances. */
+function isAmazonBalanceMovement(description: string | null): boolean {
+  return (AMAZON_ADJUSTMENT_BALANCE_MOVEMENTS as readonly string[]).includes(description ?? '');
+}
+
+/**
+ * Fail loud on an Adjustment description nobody has classified — the same
+ * structural protection as the type registry, one level deeper, because that is
+ * the level at which Reserve hid.
+ */
+function assertKnownAmazonAdjustments(
+  rows: { transaction_type: string | null; description: string | null }[]
+): void {
+  const unknown = new Set<string>();
+  for (const row of rows) {
+    if (row.transaction_type !== 'Adjustment') continue;
+    const desc = row.description ?? '(null)';
+    if (isAmazonBalanceMovement(desc)) continue;
+    if ((AMAZON_ADJUSTMENT_TRADING as readonly string[]).includes(desc)) continue;
+    unknown.add(desc);
+  }
+  if (unknown.size > 0) {
+    throw new Error(
+      `Unclassified Amazon Adjustment description(s): ${[...unknown].join(', ')}. Decide whether ` +
+        `each is a real cost or a balance movement (like Reserve) before filing — the two differ ` +
+        `by thousands of pounds.`
+    );
+  }
+}
+
 // =============================================================================
 // QUERY FUNCTIONS
 // =============================================================================
@@ -350,7 +456,7 @@ async function queryEbayRefunds(
   endDate: string
 ): Promise<MonthlyAggregation[]> {
   const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
-    select: 'transaction_date, amount',
+    select: 'transaction_date, amount, raw_response',
     eq: { user_id: userId, transaction_type: 'REFUND', booking_entry: 'DEBIT' },
     gte: { transaction_date: startDate },
     lt: { transaction_date: endDate },
@@ -359,13 +465,83 @@ async function queryEbayRefunds(
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     const month = row.transaction_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.amount || 0));
+    // `amount` is NET of the fees eBay credits back with the refund
+    // (totalFeeBasisAmount − totalFeeAmount == amount, exact on every row), so
+    // using it buries a fee credit inside income. Income must fall by the GROSS
+    // refund; the fee credit is applied to the fee rows by
+    // sumEbayRefundFeeCredits. £8.85 in Q1 2026/27.
+    const gross = ebayRefundGrossAmount(row);
+    monthMap.set(month, (monthMap.get(month) || 0) + gross);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
     month,
     total,
   }));
+}
+
+/** eBay REFUND row shape for the fields we read. */
+interface EbayRefundRaw {
+  totalFeeBasisAmount?: { value?: string } | null;
+  totalFeeAmount?: { value?: string } | null;
+  orderLineItems?: Array<{
+    marketplaceFees?: Array<{ feeType?: string; amount?: { value?: string } }> | null;
+  }> | null;
+}
+
+/**
+ * The GROSS amount refunded to the buyer: `totalFeeBasisAmount` where present,
+ * else `amount` plus the credited fees. Falls back to `amount` alone only if
+ * neither is available (which would understate the refund, so it is last).
+ */
+function ebayRefundGrossAmount(row: { amount: number | null; raw_response: unknown }): number {
+  const raw = row.raw_response as EbayRefundRaw | null;
+  const basis = Number(raw?.totalFeeBasisAmount?.value ?? NaN);
+  if (Number.isFinite(basis) && basis > 0) return basis;
+  const net = Math.abs(Number(row.amount || 0));
+  const credited = Number(raw?.totalFeeAmount?.value ?? 0);
+  return net + (Number.isFinite(credited) ? Math.abs(credited) : 0);
+}
+
+/**
+ * Fee credits carried INSIDE a REFUND row's own `marketplaceFees`, summed per
+ * feeType per month.
+ *
+ * This is a fourth, separate channel from the standalone NON_SALE_CHARGE
+ * credits. They are NOT the same money — verified on Q1 2026/27: the refund
+ * row's identity (basis − totalFeeAmount == amount) closes to the penny, so its
+ * credit is self-contained, and the standalone credits reference listing ids on
+ * different dates. Netting both is therefore correct, not a double-count.
+ */
+async function sumEbayRefundFeeCredits(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string,
+  feeType: string
+): Promise<Map<string, number>> {
+  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, raw_response',
+    eq: { user_id: userId, transaction_type: 'REFUND', booking_entry: 'DEBIT' },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    const raw = row.raw_response as EbayRefundRaw | null;
+    let credited = 0;
+    for (const lineItem of raw?.orderLineItems ?? []) {
+      for (const fee of lineItem.marketplaceFees ?? []) {
+        if (fee.feeType === feeType) credited += Math.abs(Number(fee.amount?.value || 0));
+      }
+    }
+    if (credited === 0) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + credited);
+  }
+
+  return monthMap;
 }
 
 /**
@@ -500,7 +676,7 @@ async function queryAmazonRefunds(
   endDate: string
 ): Promise<MonthlyAggregation[]> {
   const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
-    select: 'posted_date, total_amount',
+    select: 'posted_date, total_amount, breakdowns',
     eq: { user_id: userId },
     in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
     gte: { posted_date: startDate },
@@ -510,8 +686,21 @@ async function queryAmazonRefunds(
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     const month = row.posted_date.substring(0, 7);
-    // Amazon refunds are already negative in the database
-    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.total_amount || 0)));
+    // `Refunded Sales` only — NOT total_amount, which is already net of
+    // `Refunded Expenses` (the fees Amazon credits back). Since queryAmazonFees
+    // now subtracts those credits from the fee row, using total_amount here
+    // would relieve the same credit twice (£17.52 in Q1 2026/27).
+    const refundedSales = sumAmazonBreakdown(
+      row.breakdowns as AmazonBreakdownNode[],
+      /^Refunded Sales$/i
+    );
+    // Older rows may predate breakdowns capture; fall back rather than drop the
+    // refund entirely, since a missing refund overstates income.
+    const value =
+      Math.abs(refundedSales) > 0
+        ? Math.abs(refundedSales)
+        : Math.abs(Number(row.total_amount || 0));
+    monthMap.set(month, (monthMap.get(month) || 0) + value);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -600,12 +789,19 @@ async function queryAmazonSalesCash(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
-    select: 'posted_date, breakdowns',
-    eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
+  const allRows = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, breakdowns, transaction_type, description',
+    eq: { user_id: userId, transaction_status: 'RELEASED' },
+    in: { transaction_type: ['Shipment', 'Adjustment'] },
     gte: { posted_date: startDate },
     lt: { posted_date: endDate },
   });
+
+  // Shipment sales, plus the small `Sales` side of trading Adjustments
+  // (LabmanLabelChargeBack credits). `Reserve` adjustments are EXCLUDED: their
+  // Sales side is a balance movement matched by an equal Expenses side, so
+  // counting it would inflate turnover by £6,263.55 across the account.
+  const allData = allRows.filter((r) => !isAmazonBalanceMovement(r.description));
 
   // Gross sales come from the `Sales` breakdown, NOT `gross_sales_amount`,
   // which is net of the DigitalServicesFee — see sumAmazonBreakdown.
@@ -682,10 +878,68 @@ function isBrickOwlPayPalReceipt(transactionType: string | null): boolean {
 }
 
 /**
- * Fetch PayPal customer payment receipts (event code T0006, money in).
- * These are the BrickLink + Brick Owl order payments landing in the PayPal
- * balance — the cash receipt event for both platforms. The PayPal sync stores
- * every fee-bearing transaction, which customer payments always are.
+ * PayPal event codes that represent a CUSTOMER PAYMENT to us.
+ *
+ * T0006 is the bulk (BrickLink + Brick Owl checkout). T0011 and T0000 are the
+ * same thing arriving by a different PayPal flow — direct/off-platform sales.
+ * All 11 such rows (2024-11 → 2026-05, £705.59) carry an individual payer name
+ * and a commercial goods-and-services fee, which a friends-and-family transfer
+ * would not.
+ *
+ * They were omitted from income for two validation rounds while £31.65 of their
+ * fees WAS being claimed as an expense — claiming the fee and omitting the
+ * receipt is defensible neither way (£120.00 of it inside Q1 2026/27 alone).
+ */
+const PAYPAL_CUSTOMER_PAYMENT_CODES = ['T0006', 'T0011', 'T0000'] as const;
+
+/**
+ * Event codes we have consciously decided are NOT income, so a genuinely new
+ * code trips the guard below instead of silently sitting outside the return.
+ *   T1107 positive = a refund we RECEIVED from a supplier. Already relieved
+ *   inside the stock-purchase row, so counting it as income would double-count.
+ */
+const PAYPAL_KNOWN_NON_INCOME_CODES = [
+  'T1107',
+  // T0403 — withdrawal / bank transfer. A movement between our own balances,
+  // never trading income, even when it arrives with a positive gross amount.
+  // Listed one code at a time on purpose: a prefix rule (all T04xx) would let a
+  // genuinely new code through the guard silently, which is the failure mode
+  // this whole mechanism exists to prevent.
+  'T0403',
+] as const;
+
+/**
+ * Fail loud if money arrives under an event code nobody has classified.
+ *
+ * This is the structural fix for how the T0011/T0000 receipts hid: the income
+ * query named ONE code, so anything else was invisible rather than wrong.
+ */
+function assertNoUnclassifiedPayPalReceipts(
+  rows: { transaction_event_code: string | null; gross_amount: number | null }[]
+): void {
+  const unknown = new Map<string, number>();
+  for (const row of rows) {
+    if (Number(row.gross_amount ?? 0) <= 0) continue;
+    const code = row.transaction_event_code ?? '(null)';
+    if ((PAYPAL_CUSTOMER_PAYMENT_CODES as readonly string[]).includes(code)) continue;
+    if ((PAYPAL_KNOWN_NON_INCOME_CODES as readonly string[]).includes(code)) continue;
+    unknown.set(code, (unknown.get(code) ?? 0) + Number(row.gross_amount ?? 0));
+  }
+  if (unknown.size > 0) {
+    const detail = [...unknown.entries()].map(([c, v]) => `${c} £${v.toFixed(2)}`).join(', ');
+    throw new Error(
+      `Unclassified PayPal money-in event code(s): ${detail}. Decide whether each is income ` +
+        `and add it to PAYPAL_CUSTOMER_PAYMENT_CODES or PAYPAL_KNOWN_NON_INCOME_CODES — ` +
+        `do not leave receipts outside the return.`
+    );
+  }
+}
+
+/**
+ * Fetch PayPal customer payment receipts (money in).
+ * These are the order payments landing in the PayPal balance — the cash receipt
+ * event. The PayPal sync stores every fee-bearing transaction, which customer
+ * payments always are.
  */
 async function fetchPayPalCustomerReceipts(
   supabase: SupabaseClient<Database>,
@@ -693,13 +947,21 @@ async function fetchPayPalCustomerReceipts(
   startDate: string,
   endDate: string
 ) {
-  return fetchAllRecords(supabase, 'paypal_transactions', {
-    select: 'transaction_date, gross_amount, transaction_type',
-    eq: { user_id: userId, transaction_event_code: 'T0006' },
+  // Read EVERY money-in row so the guard can see codes we don't yet handle,
+  // then let each caller select the codes it is responsible for.
+  const allReceipts = await fetchAllRecords(supabase, 'paypal_transactions', {
+    select: 'transaction_date, gross_amount, transaction_type, transaction_event_code',
+    eq: { user_id: userId },
     gt: { gross_amount: 0 },
     gte: { transaction_date: startDate },
     lt: { transaction_date: endDate },
   });
+
+  assertNoUnclassifiedPayPalReceipts(allReceipts);
+
+  return allReceipts.filter((r) =>
+    (PAYPAL_CUSTOMER_PAYMENT_CODES as readonly string[]).includes(r.transaction_event_code ?? '')
+  );
 }
 
 /**
@@ -716,6 +978,74 @@ async function queryBrickLinkSalesCash(
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     if (!row.transaction_date || isBrickOwlPayPalReceipt(row.transaction_type)) continue;
+    // T0006 only: the BL figure must stay reconcilable against bricklink_transactions.
+    // Direct/off-platform receipts get their own row — see queryOtherPayPalSalesCash.
+    if (row.transaction_event_code !== 'T0006') continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_amount || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Shopify sales, by order date.
+ *
+ * The customer pays at checkout, so receipt date == order date and the same
+ * query serves both bases. Previously out of scope in both (documented when the
+ * store was making nothing); it is now real trading income — £24.46 in Q1
+ * 2026/27 and £79.92 in the first three weeks of July, so leaving it out would
+ * understate turnover by a growing amount.
+ *
+ * NOTE: `platform_orders.fees` is null on every Shopify row, so no Shopify
+ * payment-processing fee is claimed anywhere. That understates expenses
+ * slightly — it needs a fee source before this grows further.
+ */
+async function queryShopifySales(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'platform_orders', {
+    select: 'order_date, total, status',
+    eq: { user_id: userId, platform: 'shopify' },
+    gte: { order_date: startDate },
+    lt: { order_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.order_date) continue;
+    if (String(row.status ?? '').toLowerCase() === 'cancelled') continue;
+    const month = row.order_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.total || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Cash: direct / off-platform PayPal sales — customer payments arriving under an
+ * event code other than the marketplace checkout one (T0011, T0000).
+ *
+ * Kept as its OWN row rather than folded into BrickLink so that (a) the
+ * BrickLink figure stays reconcilable against bricklink_transactions, and
+ * (b) this income is visible in the P&L instead of hiding inside a platform
+ * total. £120.00 in Q1 2026/27; £705.59 since Nov 2024.
+ */
+async function queryOtherPayPalSalesCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchPayPalCustomerReceipts(supabase, userId, startDate, endDate);
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date) continue;
+    if (row.transaction_event_code === 'T0006') continue;
     const month = row.transaction_date.substring(0, 7);
     monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_amount || 0));
   }
@@ -851,21 +1181,27 @@ async function queryAmazonFees(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const [charges, refunds] = await Promise.all([
-    fetchAllRecords(supabase, 'amazon_transactions', {
-      select: 'posted_date, breakdowns',
-      eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
-      gte: { posted_date: startDate },
-      lt: { posted_date: endDate },
-    }),
-    fetchAllRecords(supabase, 'amazon_transactions', {
-      select: 'posted_date, breakdowns',
-      eq: { user_id: userId, transaction_status: 'RELEASED' },
-      in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
-      gte: { posted_date: startDate },
-      lt: { posted_date: endDate },
-    }),
-  ]);
+  // Read EVERY RELEASED row so the guard sees any unclassified type, then take
+  // fees from the types that actually bear them. Restricting the query itself to
+  // 'Shipment' is what hid the Adjustment costs.
+  const allReleased = await fetchAllRecords(supabase, 'amazon_transactions', {
+    select: 'posted_date, breakdowns, transaction_type, description',
+    eq: { user_id: userId, transaction_status: 'RELEASED' },
+    gte: { posted_date: startDate },
+    lt: { posted_date: endDate },
+  });
+
+  assertNoUnclassifiedAmazonTypes(allReleased);
+  assertKnownAmazonAdjustments(allReleased);
+
+  const charges = allReleased.filter(
+    (r) =>
+      AMAZON_FEE_BEARING_TYPES.includes(r.transaction_type ?? '') &&
+      !isAmazonBalanceMovement(r.description)
+  );
+  const refunds = allReleased.filter(
+    (r) => AMAZON_TYPE_TREATMENT[r.transaction_type ?? ''] === 'refund'
+  );
 
   const missing = countMissingBreakdowns(charges) + countMissingBreakdowns(refunds);
   if (missing > 0) {
@@ -1004,6 +1340,19 @@ async function queryEbaySaleFeesByType(
     if (rawResponse?.feeType !== feeType) continue;
     const month = row.transaction_date.substring(0, 7);
     monthMap.set(month, (monthMap.get(month) || 0) - Math.abs(Number(row.amount || 0)));
+  }
+
+  // Net the fee credits carried inside REFUND rows — a separate channel that
+  // previously landed in income instead of against fees.
+  const refundCredits = await sumEbayRefundFeeCredits(
+    supabase,
+    userId,
+    startDate,
+    endDate,
+    feeType
+  );
+  for (const [month, credited] of refundCredits) {
+    monthMap.set(month, (monthMap.get(month) || 0) - credited);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -1458,6 +1807,18 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
       },
       {
         category: 'Income',
+        transactionType: 'Other PayPal Sales (cash received)',
+        queryFn: queryOtherPayPalSalesCash,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
+        transactionType: 'Shopify Sales',
+        queryFn: queryShopifySales,
+        signMultiplier: 1,
+      },
+      {
+        category: 'Income',
         transactionType: 'BrickLink / Brick Owl Refunds (cash)',
         queryFn: queryPayPalRefundsIssuedCash,
         signMultiplier: -1,
@@ -1500,6 +1861,12 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
       category: 'Income',
       transactionType: 'Brick Owl Gross Sales',
       queryFn: queryBrickOwlGrossSales,
+      signMultiplier: 1,
+    },
+    {
+      category: 'Income',
+      transactionType: 'Shopify Sales',
+      queryFn: queryShopifySales,
       signMultiplier: 1,
     },
     {

@@ -5,13 +5,13 @@
   },
   "basis": "cash",
   "boxes": {
-    "15": 16287.73,
+    "15": 16423.34,
     "17": 5519.37,
     "20": 25.2,
     "21": 445.44,
     "23": 2470.06,
     "26": 386.28,
-    "30": 1986.57,
+    "30": 1987.7,
     "24.1": 114.82
   },
   "detail": {
@@ -22,7 +22,7 @@
       },
       {
         "row": "eBay Refunds",
-        "value": -50.38
+        "value": -59.23
       },
       {
         "row": "BrickLink Sales (cash received)",
@@ -31,6 +31,14 @@
       {
         "row": "Brick Owl Sales (cash received)",
         "value": 1230.92
+      },
+      {
+        "row": "Other PayPal Sales (cash received)",
+        "value": 120
+      },
+      {
+        "row": "Shopify Sales",
+        "value": 24.46
       },
       {
         "row": "BrickLink / Brick Owl Refunds (cash)",
@@ -106,7 +114,7 @@
       },
       {
         "row": "Amazon Fees",
-        "value": 1008.84
+        "value": 1018.82
       },
       {
         "row": "eBay Insertion Fees",
@@ -114,15 +122,15 @@
       },
       {
         "row": "eBay Fixed Fees",
-        "value": 40.68
+        "value": 40.2
       },
       {
         "row": "eBay Variable Fees",
-        "value": 356.94
+        "value": 348.82
       },
       {
         "row": "eBay Regulatory Fees",
-        "value": 11.46
+        "value": 11.21
       },
       {
         "row": "eBay Shop Fee",
@@ -148,7 +156,7 @@
       }
     ]
   },
-  "turnover": 16287.73,
-  "expenses": 10947.74,
-  "profit": 5339.99
+  "turnover": 16423.34,
+  "expenses": 10948.87,
+  "profit": 5474.47
 }

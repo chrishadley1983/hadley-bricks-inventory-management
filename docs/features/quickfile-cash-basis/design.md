@@ -189,3 +189,71 @@ Q1 boxes: 15 £16,287.73 · 17 £5,519.37 · 20 £25.20 · 21 £445.44 · 23 £2
 only and the return goes via My Tax Digital bridging, so this is not a
 double-filing risk, but the books are now £46.85 light on income and should be
 re-pushed or adjusted.
+
+## Round 2: source COMPLETENESS (validation re-run, 2026-07-25)
+
+The re-run FAILED again — not on the four corrected sources, which all
+reproduced to the penny, but on money in tables the pipeline never read. Fixing
+a source is not the same as proving every source is read.
+
+**1. PayPal receipts outside the checkout event code.** Income was
+`transaction_event_code = 'T0006'` exactly, so £120.00 of T0011/T0000 customer
+payments (Q1) reached no row while £4.09 of their fees WAS claimed in box 26.
+All 11 such rows since Nov 2024 (£705.59) carry an individual payer name and a
+commercial goods-and-services fee. Now an explicit allowlist
+(`PAYPAL_CUSTOMER_PAYMENT_CODES`) with a **fail-loud guard** on any unclassified
+money-in code, and a separate `Other PayPal Sales (cash received)` row so the
+BrickLink figure stays reconcilable against `bricklink_transactions`.
+
+**2. Amazon `Adjustment` costs.** The fee query hard-coded
+`transaction_type='Shipment'`, so £9.98 of return postage (Q1; £113.59 all-time)
+was in no box. Replaced with an explicit `AMAZON_TYPE_TREATMENT` registry plus a
+guard, so an unread type now fails the run.
+
+**⚠ The trap inside that fix — worth £4,945.88.** `Adjustment` is not one thing.
+Eight `Reserve` rows carry `Sales +£6,263.55` AND `Expenses −£6,263.55` — Amazon's
+balance-hold mechanic, netting to exactly £0. Adding Adjustment to the fee side
+alone inflated FY2025/26 expenses by £4,945.88 (profit £4,597 light); adding both
+sides would have inflated box 15 turnover by the same. `Reserve` is excluded
+outright, with a second guard on unclassified Adjustment *descriptions* — the
+level at which it hid. Q1 contains no Reserve rows, which is exactly why testing
+only the quarter being filed would have shipped this.
+
+**3. eBay fee credits inside REFUND rows.** A REFUND row's `amount` is NET of the
+fees eBay credits back (`totalFeeBasisAmount − totalFeeAmount == amount`, exact on
+every row), so £8.85 of credits sat inside income. Turnover now falls by the GROSS
+refund and the credits are netted against their own fee rows. This is a fourth,
+separate credit channel from the standalone NON_SALE_CHARGE credits — verified NOT
+the same money, so netting both is correct.
+
+**4. Accrual double-relief (a regression from round 1).** `queryAmazonFees` began
+subtracting `Refunded Expenses` while accrual `queryAmazonRefunds` still used
+`|total_amount|`, which already nets it — relieving the same credit twice (£17.52
+in Q1). Accrual now reads `Refunded Sales` like cash.
+
+**5. Shopify.** Documented as out of scope when the store earned nothing; it is now
+trading income (£24.46 in Q1, £79.92 in three weeks of July) and is included on
+both bases. NOTE: `platform_orders.fees` is null on every Shopify row, so no
+Shopify processing fee is claimed anywhere — that needs a source.
+
+**Guards added:** no expense box may be negative; and a SOURCE→report check that
+goes back to the raw tables, because the existing report→boxes reconciliation
+cannot see a row that is never queried — which is precisely how defects 1–3
+survived two rounds.
+
+### Figures after round 2 (cash basis)
+
+| Period | Turnover | Expenses | Profit |
+|---|---|---|---|
+| **Q1 2026/27, 6 Apr – 5 Jul** | **16,423.34** | **10,948.87** | **5,474.47** |
+| Q1 calendar, 1 Apr – 30 Jun | 16,128.35 | 10,795.56 | 5,332.79 |
+| FY2025/26, 6 Apr 25 – 5 Apr 26 | 74,641.67 | 52,207.45 | 22,434.22 |
+| FY2025/26, 1 Apr 25 – 31 Mar 26 | 76,319.48 | 52,818.48 | 23,501.00 |
+
+Q1 boxes: 15 £16,423.34 · 17 £5,519.37 · 20 £25.20 · 21 £445.44 · 23 £2,470.06 ·
+24.1 £114.82 · 26 £386.28 · 30 £1,987.70.
+
+**Still open:** 4 FULLY_REFUNDED eBay orders (£252.23, all pre-6 Apr 2026) have no
+REFUND transaction at all, so the cash rule books the receipt with nothing
+deducted — must be resolved before FY2025/26 is filed. Amazon `DebtRecovery`
+(+£30.00, Aug 2025) is classified `excluded` pending a decision, also pre-Q1.
