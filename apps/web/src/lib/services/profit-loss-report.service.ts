@@ -57,6 +57,19 @@ export interface ProfitLossReportOptions {
   endMonth?: string; // 'YYYY-MM', defaults to current month
   includeZeroRows?: boolean; // Include rows with all zero values
   basis?: ReportBasis; // 'accrual' (default) or 'cash' — see getRowDefinitions
+  /**
+   * Exact date bounds — start INCLUSIVE, end EXCLUSIVE, both 'YYYY-MM-DD'.
+   * When supplied these override the whole-month bounds derived from
+   * startMonth/endMonth, so a report can cover an HMRC *standard* tax period
+   * (e.g. Q1 = 6 Apr – 5 Jul → startDate '2026-04-06',
+   * endDateExclusive '2026-07-06') rather than calendar months.
+   *
+   * The monthly columns still bucket by month, so the first and last months
+   * legitimately hold PART-month figures — read `total`, not the month cells,
+   * when the bounds are partial.
+   */
+  startDate?: string;
+  endDateExclusive?: string;
 }
 
 /**
@@ -138,6 +151,31 @@ function getMonthEndExclusive(month: string): string {
   const nextYear = monthNum === 12 ? year + 1 : year;
   const nextMonth = monthNum === 12 ? 1 : monthNum + 1;
   return `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+}
+
+/**
+ * Last in-range month (YYYY-MM) for an arbitrary EXCLUSIVE end date, which may
+ * fall mid-month (HMRC standard tax periods end on the 5th). Steps back one day
+ * so 2026-07-06 → '2026-07' (1–5 Jul are in range) while 2026-07-01 → '2026-06'.
+ */
+function getLastMonthFromExclusiveEndDate(endDateExclusive: string): string {
+  const dt = new Date(`${endDateExclusive}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() - 1);
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * These bounds feed HMRC submissions, so a malformed date must never degrade
+ * quietly into an empty or wrong period — reject it at the door.
+ */
+function assertValidDateBound(label: string, value: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must be 'YYYY-MM-DD', got '${value}'`);
+  }
+  const dt = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime()) || dt.toISOString().substring(0, 10) !== value) {
+    throw new Error(`${label} is not a real calendar date: '${value}'`);
+  }
 }
 
 /**
@@ -1555,15 +1593,39 @@ export class ProfitLossReportService {
     const endMonth = options.endMonth || formatMonth(new Date());
     const startMonth = options.startMonth || (await this.findEarliestDate(userId));
 
-    const startDate = getMonthStartDate(startMonth);
+    // Exact-date bounds win over month bounds when supplied (HMRC standard tax
+    // periods run 6th–5th, not month-to-month).
+    if (options.startDate) assertValidDateBound('startDate', options.startDate);
+    if (options.endDateExclusive) {
+      assertValidDateBound('endDateExclusive', options.endDateExclusive);
+    }
+    if (
+      options.startDate &&
+      options.endDateExclusive &&
+      options.startDate >= options.endDateExclusive
+    ) {
+      throw new Error(
+        `startDate '${options.startDate}' must be before endDateExclusive '${options.endDateExclusive}'`
+      );
+    }
+    const startDate = options.startDate ?? getMonthStartDate(startMonth);
     // Exclusive upper bound (first day of the following month) — see
     // getMonthEndExclusive for why the inclusive last-day bound was wrong.
-    const endDate = getMonthEndExclusive(endMonth);
-    const months = generateMonthRange(startMonth, endMonth);
+    const endDate = options.endDateExclusive ?? getMonthEndExclusive(endMonth);
+
+    // Month columns must span whatever the effective bounds cover, so a partial
+    // first/last month still gets a bucket.
+    const effectiveStartMonth = options.startDate ? startDate.substring(0, 7) : startMonth;
+    const effectiveEndMonth = options.endDateExclusive
+      ? getLastMonthFromExclusiveEndDate(endDate)
+      : endMonth;
+    const months = generateMonthRange(effectiveStartMonth, effectiveEndMonth);
 
     const basis = options.basis ?? 'accrual';
     console.log(`[P&L] Generating report for user ${userId} (basis: ${basis})`);
-    console.log(`[P&L] Date range: ${startMonth} to ${endMonth} (${startDate} to ${endDate})`);
+    console.log(
+      `[P&L] Date range: ${effectiveStartMonth} to ${effectiveEndMonth} (${startDate} to ${endDate})`
+    );
     console.log(`[P&L] Months to include: ${months.length}`);
 
     // Get all row definitions
@@ -1653,8 +1715,8 @@ export class ProfitLossReportService {
     return {
       generatedAt: new Date().toISOString(),
       dateRange: {
-        startMonth,
-        endMonth,
+        startMonth: effectiveStartMonth,
+        endMonth: effectiveEndMonth,
       },
       months,
       rows,

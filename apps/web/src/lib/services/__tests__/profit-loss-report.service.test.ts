@@ -196,6 +196,110 @@ describe('ProfitLossReportService', () => {
       });
     });
 
+    // HMRC standard tax periods run 6th–5th, so a quarter is a DATE range, not
+    // a month range. These guard the exact-date override used by the SA103F
+    // bridging generator (scripts/mtd-sa103-boxes.ts).
+    describe('exact-date bounds (HMRC standard tax periods)', () => {
+      it('passes explicit startDate/endDateExclusive to the row queries', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        await service.generateReport(testUserId, {
+          startDate: '2026-04-06',
+          endDateExclusive: '2026-07-06',
+          basis: 'cash',
+        });
+
+        const ebayChain = mockSupabase.from.mock.results
+          .map((r) => r.value)
+          .find((c) => c.gte.mock.calls.length > 0);
+        expect(ebayChain.gte).toHaveBeenCalledWith(expect.any(String), '2026-04-06');
+        expect(ebayChain.lt).toHaveBeenCalledWith(expect.any(String), '2026-07-06');
+      });
+
+      it('keeps a month bucket for the partial first and last months', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        const result = await service.generateReport(testUserId, {
+          startDate: '2026-04-06',
+          endDateExclusive: '2026-07-06',
+        });
+
+        // 1–5 Jul is in range, so July must NOT be trimmed off the end.
+        expect(result.months).toEqual(['2026-04', '2026-05', '2026-06', '2026-07']);
+        expect(result.dateRange).toEqual({ startMonth: '2026-04', endMonth: '2026-07' });
+      });
+
+      it('trims the trailing month when the exclusive end is the 1st', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        const result = await service.generateReport(testUserId, {
+          startDate: '2026-04-01',
+          endDateExclusive: '2026-07-01',
+        });
+
+        expect(result.months).toEqual(['2026-04', '2026-05', '2026-06']);
+      });
+
+      it('rolls the trailing month back across a year boundary', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        // Q3 of a standard tax year ends 5 Jan — January must stay in range.
+        const q3 = await service.generateReport(testUserId, {
+          startDate: '2026-10-06',
+          endDateExclusive: '2027-01-06',
+        });
+        expect(q3.months).toEqual(['2026-10', '2026-11', '2026-12', '2027-01']);
+
+        // Whereas an exclusive 1 Jan bound must NOT reach into January.
+        const toYearEnd = await service.generateReport(testUserId, {
+          startDate: '2026-10-01',
+          endDateExclusive: '2027-01-01',
+        });
+        expect(toYearEnd.months).toEqual(['2026-10', '2026-11', '2026-12']);
+      });
+
+      it('rejects malformed or impossible date bounds instead of degrading', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        await expect(
+          service.generateReport(testUserId, { startDate: '06/04/2026' })
+        ).rejects.toThrow(/startDate must be 'YYYY-MM-DD'/);
+
+        await expect(
+          service.generateReport(testUserId, { endDateExclusive: '2026-02-30' })
+        ).rejects.toThrow(/not a real calendar date/);
+
+        await expect(
+          service.generateReport(testUserId, {
+            startDate: '2026-07-06',
+            endDateExclusive: '2026-04-06',
+          })
+        ).rejects.toThrow(/must be before/);
+      });
+
+      it('still honours month bounds when no dates are supplied', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        const result = await service.generateReport(testUserId, {
+          startMonth: '2026-04',
+          endMonth: '2026-06',
+        });
+
+        expect(result.months).toEqual(['2026-04', '2026-05', '2026-06']);
+        const chain = mockSupabase.from.mock.results
+          .map((r) => r.value)
+          .find((c) => c.gte.mock.calls.length > 0);
+        expect(chain.gte).toHaveBeenCalledWith(expect.any(String), '2026-04-01');
+        expect(chain.lt).toHaveBeenCalledWith(expect.any(String), '2026-07-01');
+      });
+    });
+
     it('should generate valid ISO timestamp in generatedAt', async () => {
       const mockSupabase = createSupabaseMock();
       const service = new ProfitLossReportService(mockSupabase as never);
