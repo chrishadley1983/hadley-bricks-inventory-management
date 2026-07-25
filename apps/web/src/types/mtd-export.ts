@@ -147,4 +147,7 @@ export const PLATFORM_REFERENCE_NAMES: Record<string, string> = {
   amazon: 'AMAZON',
   bricklink: 'BRICKLINK',
   brickowl: 'BRICKOWL',
+  shopify: 'SHOPIFY',
+  // Direct / off-platform PayPal receipts (event codes T0011, T0000).
+  otherpaypal: 'PAYPAL',
 };
