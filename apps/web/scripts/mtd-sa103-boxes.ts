@@ -91,8 +91,13 @@ export function boxesFromReport(report: ProfitLossReport) {
       if (Math.abs(row.total) >= 0.005) unmapped.push(row.transactionType);
       continue;
     }
-    // Expense rows arrive negative; SA103F boxes are positive amounts.
-    const value = Math.abs(row.total);
+    // Expense rows arrive NEGATIVE (signMultiplier -1), and SA103F boxes are
+    // positive, so negate — do NOT use Math.abs. A fee row can legitimately be a
+    // net CREDIT for a period (reversals exceeding charges), which arrives
+    // POSITIVE; Math.abs would file that credit as an equal-sized CHARGE,
+    // overstating expenses and understating tax. Reachable since the
+    // Math.max(0, …) monthly floor was removed from the eBay fee queries.
+    const value = -row.total;
     boxes[box] = r2((boxes[box] ?? 0) + value);
     (detail[box] ??= []).push({ row: row.transactionType, value: r2(value) });
   }
@@ -116,8 +121,9 @@ export function boxesFromReport(report: ProfitLossReport) {
   const reportIncome = r2(
     report.rows.filter((r) => r.category === 'Income').reduce((s, r) => s + r.total, 0)
   );
+  // Negate, not Math.abs — the check must not repeat the sign error it guards.
   const reportExpenses = r2(
-    report.rows.filter((r) => r.category !== 'Income').reduce((s, r) => s + Math.abs(r.total), 0)
+    report.rows.filter((r) => r.category !== 'Income').reduce((s, r) => s - r.total, 0)
   );
   if (Math.abs(reportIncome - turnover) > 0.01) {
     throw new Error(
