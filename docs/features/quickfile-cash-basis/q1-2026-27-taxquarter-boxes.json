@@ -1,0 +1,154 @@
+{
+  "period": {
+    "startDate": "2026-04-06",
+    "endDateExclusive": "2026-07-06"
+  },
+  "basis": "cash",
+  "boxes": {
+    "15": 16256.24,
+    "17": 5519.37,
+    "20": 25.2,
+    "21": 445.44,
+    "23": 2470.06,
+    "26": 386.28,
+    "30": 1984.31,
+    "24.1": 114.34
+  },
+  "detail": {
+    "15": [
+      {
+        "row": "eBay Gross Sales",
+        "value": 2700.26
+      },
+      {
+        "row": "eBay Refunds",
+        "value": -50.38
+      },
+      {
+        "row": "BrickLink Sales (cash received)",
+        "value": 7206.54
+      },
+      {
+        "row": "Brick Owl Sales (cash received)",
+        "value": 1230.92
+      },
+      {
+        "row": "BrickLink / Brick Owl Refunds (cash)",
+        "value": -296.88
+      },
+      {
+        "row": "Amazon Sales (funds released)",
+        "value": 5566.92
+      },
+      {
+        "row": "Amazon Refunds (funds released)",
+        "value": -101.14
+      }
+    ],
+    "17": [
+      {
+        "row": "Lego Stock Purchases",
+        "value": 4848.44
+      },
+      {
+        "row": "Lego Parts",
+        "value": 670.93
+      }
+    ],
+    "20": [
+      {
+        "row": "Mileage",
+        "value": 25.2
+      }
+    ],
+    "21": [
+      {
+        "row": "Office",
+        "value": 331.19
+      },
+      {
+        "row": "Use of Home",
+        "value": 78
+      },
+      {
+        "row": "Insurance",
+        "value": 36.25
+      }
+    ],
+    "23": [
+      {
+        "row": "Postage",
+        "value": 2033.66
+      },
+      {
+        "row": "Packing Materials",
+        "value": 42.99
+      },
+      {
+        "row": "Website / Software",
+        "value": 305.66
+      },
+      {
+        "row": "Phone & Broadband",
+        "value": 87.75
+      }
+    ],
+    "26": [
+      {
+        "row": "PayPal Fees",
+        "value": 386.28
+      }
+    ],
+    "30": [
+      {
+        "row": "BrickLink / Brick Owl / Bricqer Fees",
+        "value": 329.85
+      },
+      {
+        "row": "Amazon Fees",
+        "value": 1006.1
+      },
+      {
+        "row": "eBay Insertion Fees",
+        "value": 10.92
+      },
+      {
+        "row": "eBay Fixed Fees",
+        "value": 41.16
+      },
+      {
+        "row": "eBay Variable Fees",
+        "value": 356.94
+      },
+      {
+        "row": "eBay Regulatory Fees",
+        "value": 11.46
+      },
+      {
+        "row": "eBay Shop Fee",
+        "value": 97.2
+      },
+      {
+        "row": "eBay International Fees",
+        "value": 13.68
+      },
+      {
+        "row": "Amazon Subscription",
+        "value": 90
+      },
+      {
+        "row": "Banking Fees / Subscriptions",
+        "value": 27
+      }
+    ],
+    "24.1": [
+      {
+        "row": "eBay Ad Fees - Standard",
+        "value": 114.34
+      }
+    ]
+  },
+  "turnover": 16256.24,
+  "expenses": 10945,
+  "profit": 5311.24
+}

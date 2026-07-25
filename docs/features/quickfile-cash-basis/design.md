@@ -88,3 +88,44 @@ June 2026 ground truth (independently verified in session 2026-07-02):
 - Amazon June: RELEASED £1,947.82 / fees £351.90; DEFERRED (excluded) £3,329.04
 - Accrual June income by platform: Amazon £3,169.78, BL £2,988.59, eBay
   £870.72, BO £409.02
+
+## Submission periods — HMRC STANDARD quarters (decided 2026-07-25)
+
+Chris elected the **standard** MTD quarterly periods (6th–5th), not calendar
+quarters. Q1 2026/27 is therefore **6 Apr – 5 Jul 2026**, not 1 Apr – 30 Jun.
+
+Consequences, all handled:
+
+- The P&L service accepts exact bounds — `startDate` (inclusive) and
+  `endDateExclusive` — which override `startMonth`/`endMonth`. Monthly columns
+  still bucket by month, so the first and last months hold PART-month figures:
+  read `total`, never the month cells, on a partial period.
+- **The tax year must use the same convention.** FY2025/26 was originally
+  prepared on 31-March equivalence (1 Apr 2025 – 31 Mar 2026: turnover
+  £74,986.05, expenses £52,876.94, profit £22,109.11). With 2026/27 starting
+  6 Apr 2026, FY2025/26 has to end **5 Apr 2026** or the 1–5 Apr 2026 sliver
+  (turnover £728.85, expenses £408.14, profit £320.71) falls in no return at
+  all. On the 6 Apr 2025 – 5 Apr 2026 basis: turnover **£73,303.14**, expenses
+  **£52,271.23**, profit **£21,031.91**. Regenerate the FY bridging file on
+  that basis before filing it (not due until Jan 2027).
+
+### Quarterly routine
+
+```
+cd apps/web
+npx tsx scripts/mtd-sa103-boxes.ts --start=2026-04-06 --end=2026-07-06 \
+  --basis=cash --json --out=../../docs/features/quickfile-cash-basis/<period>-boxes.json
+python scripts/make-mtd-sa103.py <period>-boxes.json <out>.xlsx
+```
+
+`mtd-sa103-boxes.ts` owns the row→box map and **throws on any unmapped expense
+row**, so a newly-appearing P&L row can never be silently dropped from a return
+(it caught `eBay Insertion Fees`, absent from Apr–Jun, on the first tax-quarter
+run). `make-mtd-sa103.py` patches the template's raw sheet XML (formatting and
+the column-B `£` labels preserved; values go in column C) and verifies every
+cell by re-reading the saved workbook.
+
+Q1 2026/27 filed figures — cash basis, 6 Apr – 5 Jul 2026:
+box 15 £16,256.24 · 17 £5,519.37 · 20 £25.20 · 21 £445.44 · 23 £2,470.06 ·
+24.1 £114.34 · 26 £386.28 · 30 £1,984.31 → expenses £10,945.00, profit
+£5,311.24. File: `MTD_SA103_2026-27_Q1_6Apr-5Jul.xlsx`.
