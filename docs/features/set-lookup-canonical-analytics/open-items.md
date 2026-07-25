@@ -73,9 +73,31 @@ route is untouched); the CLI raises it so one invocation covers everything; and 
 now defaults to a **full sweep**, clearing any stored cursor first (`--resume` opts back
 into the old behaviour).
 
-**NOT YET RUN.** The first live refresh is ~312 calls against Bricqer and prunes rows —
-awaiting Chris's go-ahead. Until it runs, the overlap panel is still reading the
-2026-06-14 snapshot.
+**First sweep RUN and verified, 2026-07-25** (approved by Chris). 322 pages, 32,142 items
+fetched, 30,506 rows persisted (≈1,636 items carry no `definition` and are skipped by
+`toSnapshotRow`), 0 stale removed — inventory only grew. Afterwards:
+`sync_status=idle`, `sync_cursor=0`, `last_full_sync=2026-07-25T12:11:58Z`, and every
+row's `synced_at` falls inside that single invocation — which is exactly the condition
+stale removal requires and could never previously reach.
+
+⚠️ **The scheduled task is registered but DISABLED — enable it after this PR merges.**
+`hb-assess-wt` hard-resets to `origin/main` at the start of each run, so until #639 is in
+main it would execute the OLD one-pass CLI, stop at the 300-page cap, and leave
+`sync_status='running'` with `sync_cursor=300` — re-wedging exactly what this PR fixes.
+
+After merge:
+```powershell
+Enable-ScheduledTask -TaskName 'HadleyBricks-Bricqer-Snapshot-Local'
+```
+The runner `.ps1` is already staged untracked inside `hb-assess-wt` (a `git reset --hard`
+leaves untracked files alone), and the tracked copy replaces it on the first post-merge
+self-update — so nothing else needs doing by hand.
+
+Registered as `Interactive`, not `S4U`, because the registering shell wasn't elevated.
+That matches `HadleyBricks-Store-Assessment-Local`, `-Keepa-Refresh-Local`, `-POV-Refresh`
+and `-RM-Backfill`, so it is the house norm here rather than an anomaly — but it does mean
+the task only fires while Chris is logged on. Re-run the register script from an elevated
+shell if it should run logged-off.
 
 ### §5 Details tab — DONE
 
@@ -150,8 +172,5 @@ predates this branch. Flagged, not fixed — it's a separate piece of work.
 ### Not done
 
 - No e2e coverage for set-lookup or partout (there was none before either).
-- The first live Bricqer snapshot refresh (see §3).
-- The scheduled task is **registered by a script that has not been run** — run
-  `scripts/register-bricqer-snapshot-task.ps1` on the box (elevated preferred) once the
-  refresh itself is approved, and make sure `run-bricqer-snapshot.ps1` exists in
-  `hb-assess-wt` (it self-updates from origin/main, so merge first).
+- **Enable `HadleyBricks-Bricqer-Snapshot-Local` once this PR merges** (see §3). It is
+  registered and correct, but deliberately disabled until the fixed CLI is in main.
