@@ -19,6 +19,14 @@ const QueryParamsSchema = z.object({
     .string()
     .transform((v) => v === 'true')
     .optional(),
+  /**
+   * Reporting basis. Defaults to accrual, which is what this report has always
+   * shown — but the MTD return is filed on CASH, and until this param existed
+   * there was no way to see the filed figures in the app at all. They diverge
+   * meaningfully within a quarter (Q1 2026/27: accrual £17,306.06 vs cash
+   * £16,423.34) and converge over a year (rolling 12mo: £185 apart).
+   */
+  basis: z.enum(['accrual', 'cash']).optional(),
 });
 
 /**
@@ -48,7 +56,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { startMonth, endMonth, startDate, endDate, includeZeroRows } = parsed.data;
+    const { startMonth, endMonth, startDate, endDate, includeZeroRows, basis } = parsed.data;
 
     // Convert date params to month format if provided (backwards compatibility)
     let resolvedStartMonth = startMonth;
@@ -67,6 +75,7 @@ export async function GET(request: NextRequest) {
       startMonth: resolvedStartMonth,
       endMonth: resolvedEndMonth,
       includeZeroRows: includeZeroRows ?? false,
+      basis: basis ?? 'accrual',
     });
 
     return NextResponse.json({ data: report });
