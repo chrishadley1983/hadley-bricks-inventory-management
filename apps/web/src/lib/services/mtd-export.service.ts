@@ -103,6 +103,18 @@ export class MtdExportService {
       basis,
     });
 
+    // A row whose query threw is reported as £0 and then removed by the zero-row
+    // filter, so nothing downstream can tell a failure from a quiet month.
+    // Refuse to build an export from it — this is a tax figure, and filing light
+    // is worse than not filing.
+    if (report.failedRows?.length) {
+      throw new Error(
+        `Refusing to build an MTD export: ${report.failedRows.length} P&L row(s) failed to query ` +
+          `and would be exported as £0 — ` +
+          report.failedRows.map((f) => `${f.transactionType} (${f.error})`).join('; ')
+      );
+    }
+
     const allSales: MtdSalesRow[] = [];
     const allExpenses: MtdExpenseRow[] = [];
 
@@ -147,6 +159,8 @@ export class MtdExportService {
       amazon: 0,
       bricklink: 0,
       brickowl: 0,
+      shopify: 0,
+      otherpaypal: 0,
     };
 
     for (const row of report.rows) {
@@ -155,8 +169,15 @@ export class MtdExportService {
       const value = row.monthlyValues[month] || 0;
       if (value === 0) continue;
 
-      // Map transaction types to platforms
-      if (row.transactionType.toLowerCase().includes('ebay')) {
+      // Map transaction types to platforms.
+      // NOTE ordering: 'Other PayPal' and 'Shopify' are tested first because the
+      // marketplace tests are substring matches and must not swallow them.
+      const label = row.transactionType.toLowerCase();
+      if (label.includes('paypal')) {
+        platformTotals.otherpaypal += value;
+      } else if (label.includes('shopify')) {
+        platformTotals.shopify += value;
+      } else if (row.transactionType.toLowerCase().includes('ebay')) {
         platformTotals.ebay += value;
       } else if (row.transactionType.toLowerCase().includes('amazon')) {
         platformTotals.amazon += value;
@@ -167,6 +188,17 @@ export class MtdExportService {
         row.transactionType.toLowerCase().includes('brickowl')
       ) {
         platformTotals.brickowl += value;
+      } else {
+        // NO silent fall-through. This chain had no else, so any income row not
+        // naming one of the four platforms was dropped without trace — which is
+        // how 'Other PayPal Sales (cash received)' (£120.00) and 'Shopify Sales'
+        // (£24.46) left the QuickFile ledger £144.46 light on Apr-Jun income
+        // while their fees were still being claimed.
+        throw new Error(
+          `Income row "${row.transactionType}" maps to no QuickFile platform. Add it to ` +
+            `buildSalesRows (and PLATFORM_REFERENCE_NAMES) — an unmapped income row must never ` +
+            `be silently omitted from the ledger.`
+        );
       }
     }
 
@@ -252,7 +284,12 @@ export class MtdExportService {
     };
 
     for (const row of report.rows) {
-      const value = Math.abs(row.monthlyValues[month] || 0);
+      // Negate, do NOT Math.abs. Expense rows arrive negative, but a fee row can
+      // legitimately be a net CREDIT for a month (reversals exceeding charges),
+      // which arrives POSITIVE — Math.abs pushed that credit into QuickFile as
+      // an equal-sized CHARGE, a 2x swing. Same defect was fixed in
+      // scripts/mtd-sa103-boxes.ts; this sibling consumer was missed.
+      const value = -(row.monthlyValues[month] || 0);
       if (value === 0) continue;
 
       // Map P&L categories to expense aggregates
@@ -326,6 +363,8 @@ export class MtdExportService {
       amazon: 'Amazon',
       bricklink: 'BrickLink',
       brickowl: 'Brick Owl',
+      shopify: 'Shopify',
+      otherpaypal: 'Direct PayPal',
     };
     return names[platform] || platform;
   }

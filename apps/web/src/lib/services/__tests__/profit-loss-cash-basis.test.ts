@@ -309,6 +309,58 @@ describe('P&L completeness guards (2026-07-25 validation round 2)', () => {
     expect(failure?.error).toMatch(/Unclassified PayPal money-in event code/);
   });
 
+  it('refuses to report an unclassified eBay transaction_type', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      ebay_transactions: [
+        {
+          user_id: USER,
+          transaction_type: 'SOME_NEW_EBAY_THING',
+          booking_entry: 'DEBIT',
+          transaction_date: '2026-06-10T10:00:00+00:00',
+          amount: 42,
+          raw_response: null,
+        },
+      ],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    const failure = result.failedRows.find((f) => f.transactionType === 'eBay Postage Labels');
+    expect(failure?.error).toMatch(/Unclassified eBay transaction_type/);
+  });
+
+  it('claims SHIPPING_LABEL postage, which previously reached no box', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      ebay_transactions: [
+        {
+          user_id: USER,
+          transaction_type: 'SHIPPING_LABEL',
+          booking_entry: 'DEBIT',
+          transaction_date: '2026-06-10T10:00:00+00:00',
+          amount: 4.15,
+          raw_response: null,
+        },
+      ],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    expect(result.failedRows).toEqual([]);
+    const labels = getRow(result, 'eBay Postage Labels');
+    expect(labels!.monthlyValues['2026-06']).toBeCloseTo(-4.15, 2);
+    expect(labels!.category).toBe('Packing & Postage');
+  });
+
   it('counts direct PayPal receipts separately from BrickLink', async () => {
     const supabase = createFilterAwareSupabaseMock({
       paypal_transactions: [

@@ -402,47 +402,41 @@ async function queryEbayGrossSales(
   supabase: SupabaseClient<Database>,
   userId: string,
   startDate: string,
-  endDate: string,
-  excludeFullyRefundedOrders = true
+  endDate: string
 ): Promise<MonthlyAggregation[]> {
-  // First, get all fully refunded order IDs to exclude their sales
-  const { data: refundedOrders, error: refundedError } = excludeFullyRefundedOrders
-    ? await supabase
-        .from('ebay_orders')
-        .select('ebay_order_id')
-        .eq('user_id', userId)
-        .eq('order_payment_status', 'FULLY_REFUNDED')
-    : { data: [], error: null };
-
-  if (refundedError) throw refundedError;
-
-  const refundedOrderIds = new Set((refundedOrders || []).map((o) => o.ebay_order_id));
-
+  // NO exclusion of "fully refunded" orders, on EITHER basis. It used to drop
+  // their sales to match Seller Hub's "Total sales" headline, and that caused
+  // two separate defects:
+  //
+  //  1. Double deduction — the eBay Refunds row already deducts the refund, so
+  //     dropping the receipt as well removed the same money twice (£1,136.95
+  //     across 35 refunds all-time).
+  //  2. `order_payment_status` is NOT TRUSTWORTHY. Four orders (£252.23) are
+  //     flagged FULLY_REFUNDED while their own payment_summary says
+  //     `refunds: []`, `paymentStatus: PAID`, `cancelState: NONE_REQUESTED`
+  //     and a positive totalDueSeller — i.e. paid, fulfilled, never refunded.
+  //     The exclusion silently removed £252.23 of genuine income on the
+  //     strength of one contradicted field.
+  //
+  // Every receipt is now counted and every refund deducted, so a genuinely
+  // refunded order nets out through real transactions rather than a status
+  // flag. Cash figures are unchanged by this (cash never excluded); accrual
+  // turnover rises by the £1,389.18 of sales it had been dropping.
   const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
-    select: 'transaction_date, gross_transaction_amount, ebay_order_id',
+    select: 'transaction_date, gross_transaction_amount',
     eq: { user_id: userId, transaction_type: 'SALE' },
     gte: { transaction_date: startDate },
     lt: { transaction_date: endDate },
   });
 
-  // Filter out sales for fully refunded orders and aggregate by month
   const monthMap = new Map<string, number>();
-  let excludedCount = 0;
-
   for (const row of allData) {
     if (!row.transaction_date) continue;
-    // Exclude sales for fully refunded orders
-    if (row.ebay_order_id && refundedOrderIds.has(row.ebay_order_id)) {
-      excludedCount++;
-      continue;
-    }
     const month = row.transaction_date.substring(0, 7);
     monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_transaction_amount || 0));
   }
 
-  console.log(
-    `[P&L] eBay Gross Sales: found ${allData.length} transactions, excluded ${excludedCount} refunded`
-  );
+  console.log(`[P&L] eBay Gross Sales: found ${allData.length} SALE receipts (none excluded)`);
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
     month,
@@ -752,27 +746,6 @@ async function queryPayPalFees(
 // principle). These functions are only used when the report is generated with
 // basis: 'cash'; the accrual functions above remain the default.
 // =============================================================================
-
-/**
- * Cash: eBay gross sales = every SALE receipt, INCLUDING orders later fully
- * refunded.
- *
- * The accrual row excludes those sales to match Seller Hub's "Total sales", but
- * on a cash basis the refund is already deducted by the eBay Refunds row, so
- * excluding the receipt as well deducts the same money twice. Q1 2026/27: order
- * 25-14618-95530 took £28.75 on 15 May and refunded £24.87 on 18 May — the
- * receipt was dropped while the refund still came off, understating turnover by
- * £28.75. (Also note a refund can land in a LATER period than its sale, so the
- * exclusion silently reaches back and rewrites a period already filed.)
- */
-async function queryEbayGrossSalesCash(
-  supabase: SupabaseClient<Database>,
-  userId: string,
-  startDate: string,
-  endDate: string
-): Promise<MonthlyAggregation[]> {
-  return queryEbayGrossSales(supabase, userId, startDate, endDate, false);
-}
 
 /**
  * Cash: Amazon sales = Shipment financial events with status RELEASED, by
@@ -1240,6 +1213,90 @@ async function queryAmazonFees(
 }
 
 /**
+ * Every eBay `transaction_type` and what the P&L does with it.
+ *
+ * eBay was the last platform without a registry, which is exactly where the next
+ * Reserve-class surprise would have hidden. Measured over all 9,530 rows:
+ *
+ *   SALE             3303 rows  £81,499.38  income
+ *   NON_SALE_CHARGE  5954 rows   £5,480.97  fees (by feeType)
+ *   REFUND            197 rows   £3,035.00  income deduction + fee credits
+ *   SHIPPING_LABEL     48 rows     £185.79  postage — was claimed NOWHERE
+ *   DISPUTE             9 rows     £400.21  offset exactly by CREDIT below
+ *   CREDIT              9 rows     £400.21  the matching credit, so net £0
+ *   TRANSFER            8 rows     £109.72  payout to bank, a balance movement
+ *   ADJUSTMENT          2 rows      £5.96p  net credit, immaterial, undecided
+ */
+const EBAY_TYPE_TREATMENT: Record<string, 'income' | 'refund' | 'fees' | 'postage' | 'excluded'> = {
+  SALE: 'income',
+  REFUND: 'refund',
+  NON_SALE_CHARGE: 'fees',
+  // Real postage bought through eBay. £185.79 all-time and £0.00 in Q1 2026/27,
+  // so no filed figure moves — but it is a deductible cost and belongs in the
+  // Postage row rather than nowhere.
+  SHIPPING_LABEL: 'postage',
+  // DISPUTE debits (£400.21 over 9 rows) are matched one-for-one by CREDIT rows
+  // of exactly £400.21 over 9 rows — equal and opposite, so including either
+  // side alone would distort. Same shape as Amazon's `Reserve`.
+  DISPUTE: 'excluded',
+  CREDIT: 'excluded',
+  // Payout to the bank: money already counted as income when the sale landed.
+  TRANSFER: 'excluded',
+  // 2 rows, net £5.96 CREDIT, £0.00 in both Q1 2026/27 and FY2025/26. Left
+  // excluded pending a decision rather than guessed at; revisit if it grows.
+  ADJUSTMENT: 'excluded',
+}
+
+/** Fail loud on an eBay transaction_type nobody has classified. */
+function assertNoUnclassifiedEbayTypes(rows: { transaction_type: string | null }[]): void {
+  const unknown = new Set<string>();
+  for (const row of rows) {
+    const type = row.transaction_type ?? '(null)';
+    if (!(type in EBAY_TYPE_TREATMENT)) unknown.add(type);
+  }
+  if (unknown.size > 0) {
+    throw new Error(
+      `Unclassified eBay transaction_type(s): ${[...unknown].join(', ')}. Add each to ` +
+        `EBAY_TYPE_TREATMENT — do not leave eBay money outside the report.`
+    );
+  }
+}
+
+/**
+ * eBay postage bought via SHIPPING_LABEL rows.
+ *
+ * Separate from the Monzo-sourced Postage row (Royal Mail card payments) and
+ * additive to it: this is postage paid out of the eBay balance, which never
+ * touches the bank feed.
+ */
+async function queryEbayShippingLabels(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  // Read every type in the window so the registry guard can see a new one.
+  const allRows = await fetchAllRecords(supabase, 'ebay_transactions', {
+    select: 'transaction_date, amount, transaction_type',
+    eq: { user_id: userId },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+
+  assertNoUnclassifiedEbayTypes(allRows);
+
+  const monthMap = new Map<string, number>();
+  for (const row of allRows) {
+    if (EBAY_TYPE_TREATMENT[row.transaction_type ?? ''] !== 'postage') continue;
+    if (!row.transaction_date) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
  * Query eBay fees by fee type from raw_response
  */
 async function queryEbayFeesByType(
@@ -1299,16 +1356,21 @@ async function queryEbaySaleFeesByType(
   endDate: string,
   feeType: string
 ): Promise<MonthlyAggregation[]> {
-  const [allData, reversals] = await Promise.all([
+  const [allData, standalone] = await Promise.all([
     fetchAllRecords(supabase, 'ebay_transactions', {
       select: 'transaction_date, raw_response',
       eq: { user_id: userId, transaction_type: 'SALE', booking_entry: 'CREDIT' },
       gte: { transaction_date: startDate },
       lt: { transaction_date: endDate },
     }),
+    // Standalone NON_SALE_CHARGE rows of this same feeType — BOTH directions.
+    // Credits were already netted; debits were not, so £5.59 of standalone
+    // FINAL_VALUE_FEE / FVF_FIXED / REGULATORY_OPERATING_FEE charges reached no
+    // box at all (£0.00 in Q1 2026/27). Reading both keeps it symmetric.
     fetchAllRecords(supabase, 'ebay_transactions', {
-      select: 'transaction_date, amount, raw_response',
-      eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'CREDIT' },
+      select: 'transaction_date, amount, booking_entry, raw_response',
+      eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE' },
+      in: { booking_entry: ['DEBIT', 'CREDIT'] },
       gte: { transaction_date: startDate },
       lt: { transaction_date: endDate },
     }),
@@ -1338,12 +1400,16 @@ async function queryEbaySaleFeesByType(
     monthMap.set(month, (monthMap.get(month) || 0) + feeTotal);
   }
 
-  // Net standalone reversals of this same feeType
-  for (const row of reversals) {
+  // Standalone charges and reversals of this same feeType
+  for (const row of standalone) {
     const rawResponse = row.raw_response as { feeType?: string } | null;
     if (rawResponse?.feeType !== feeType) continue;
     const month = row.transaction_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) - Math.abs(Number(row.amount || 0)));
+    const signed =
+      row.booking_entry === 'CREDIT'
+        ? -Math.abs(Number(row.amount || 0))
+        : Math.abs(Number(row.amount || 0));
+    monthMap.set(month, (monthMap.get(month) || 0) + signed);
   }
 
   // Net the fee credits carried inside REFUND rows — a separate channel that
@@ -1775,10 +1841,10 @@ async function queryHomeCostsInsurance(
  * recognised on payment dates in both bases.
  *
  * Cash-basis notes:
- * - eBay dates match accrual by construction (buyers pay eBay, our collecting
- *   agent, at the moment of sale) but the query is NOT the same: cash keeps the
- *   receipts of orders later fully refunded, because the refunds row already
- *   deducts them. See queryEbayGrossSalesCash.
+ * - eBay is IDENTICAL on both bases: buyers pay eBay (our collecting agent) at
+ *   the moment of sale, so receipt date == sale date, and neither basis excludes
+ *   a "fully refunded" order — the refunds row deducts the money once. See
+ *   queryEbayGrossSales for why that flag is not trusted.
  * - The BL/BO refunds row only exists on cash basis; on accrual, cancelled
  *   orders are excluded from gross sales instead.
  */
@@ -1788,7 +1854,7 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
       {
         category: 'Income',
         transactionType: 'eBay Gross Sales',
-        queryFn: queryEbayGrossSalesCash,
+        queryFn: queryEbayGrossSales,
         signMultiplier: 1,
       },
       {
@@ -1985,6 +2051,15 @@ function getRowDefinitions(basis: ReportBasis = 'accrual'): RowDefinition[] {
       transactionType: 'Postage',
       queryFn: (supabase, userId, startDate, endDate) =>
         queryMonzoByCategory(supabase, userId, startDate, endDate, 'Postage'),
+      signMultiplier: -1,
+    },
+    {
+      // Postage bought out of the eBay balance, which never reaches the bank
+      // feed — so it is additive to the Monzo Postage row above, not a
+      // duplicate of it. £185.79 all-time; £0.00 in Q1 2026/27.
+      category: 'Packing & Postage',
+      transactionType: 'eBay Postage Labels',
+      queryFn: queryEbayShippingLabels,
       signMultiplier: -1,
     },
     {

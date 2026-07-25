@@ -316,7 +316,7 @@ describe('ProfitLossReportService', () => {
   });
 
   describe('row definitions', () => {
-    it('should define 30 row types across all categories', async () => {
+    it('should define 31 row types across all categories', async () => {
       // This test verifies the service structure by checking the total rows when includeZeroRows is true
       const mockSupabase = createSupabaseMock();
       const service = new ProfitLossReportService(mockSupabase as never);
@@ -341,12 +341,12 @@ describe('ProfitLossReportService', () => {
       expect(incomeRows.length).toBe(7); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Shopify, Amazon Sales, Amazon Refunds
       expect(sellingFeesRows.length).toBe(11); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, PayPal Fees, 8 eBay fee types
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
-      expect(packingRows.length).toBe(2); // Postage, Packing Materials
+      expect(packingRows.length).toBe(3); // Postage, eBay Postage Labels, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website / Software, Office, Mileage
       expect(homeCostsRows.length).toBe(3); // Use of Home, Phone & Broadband, Insurance
 
-      // Total should be 30 rows (7 income + 11 selling fees + 2 stock + 2 packing + 5 bills + 3 home costs)
-      expect(result.rows.length).toBe(30);
+      // Total should be 31 rows (7 income + 11 selling fees + 2 stock + 3 packing + 5 bills + 3 home costs)
+      expect(result.rows.length).toBe(31);
     });
 
     it('should include expected Income row types', async () => {
@@ -553,7 +553,12 @@ describe('ProfitLossReportService', () => {
     });
   });
 
-  describe('cash basis keeps receipts of fully-refunded eBay orders', () => {
+  describe('"fully refunded" eBay orders are kept on BOTH bases', () => {
+    // Two defects came out of excluding these sales, so the exclusion is gone:
+    //   1. double deduction — the refunds row already deducts the money
+    //   2. `order_payment_status` is unreliable — 4 orders (£252.23) are flagged
+    //      FULLY_REFUNDED while their own payment_summary says refunds:[],
+    //      paymentStatus:PAID, cancelState:NONE_REQUESTED
     const mockData = {
       ebay_orders: [{ ebay_order_id: 'REFUNDED-1', order_payment_status: 'FULLY_REFUNDED' }],
       ebay_transactions: [
@@ -569,33 +574,21 @@ describe('ProfitLossReportService', () => {
       ],
     };
 
-    it('accrual excludes the sale (matches Seller Hub Total sales)', async () => {
-      const mockSupabase = createSupabaseMock(mockData);
-      const service = new ProfitLossReportService(mockSupabase as never);
+    for (const basis of ['accrual', 'cash'] as const) {
+      it(`${basis} counts the receipt, because the refunds row deducts the money`, async () => {
+        const mockSupabase = createSupabaseMock(mockData);
+        const service = new ProfitLossReportService(mockSupabase as never);
 
-      const result = await service.generateReport(testUserId, {
-        startMonth: '2026-05',
-        endMonth: '2026-05',
-        basis: 'accrual',
+        const result = await service.generateReport(testUserId, {
+          startMonth: '2026-05',
+          endMonth: '2026-05',
+          basis,
+        });
+
+        const gross = result.rows.find((r) => r.transactionType === 'eBay Gross Sales');
+        expect(gross?.total).toBeCloseTo(28.75, 2);
       });
-
-      const gross = result.rows.find((r) => r.transactionType === 'eBay Gross Sales');
-      expect(gross?.total ?? 0).toBe(0);
-    });
-
-    it('cash includes the sale, because the refunds row already deducts it', async () => {
-      const mockSupabase = createSupabaseMock(mockData);
-      const service = new ProfitLossReportService(mockSupabase as never);
-
-      const result = await service.generateReport(testUserId, {
-        startMonth: '2026-05',
-        endMonth: '2026-05',
-        basis: 'cash',
-      });
-
-      const gross = result.rows.find((r) => r.transactionType === 'eBay Gross Sales');
-      expect(gross?.total).toBeCloseTo(28.75, 2);
-    });
+    }
   });
 
   describe('failedRows', () => {

@@ -43,6 +43,7 @@ const BOX_BY_ROW: Record<string, string> = {
   'Use of Home': '21',
   Insurance: '21',
   Postage: '23',
+  'eBay Postage Labels': '23',
   'Packing Materials': '23',
   'Phone & Broadband': '23',
   'Website / Software': '23',
