@@ -19,7 +19,8 @@ The Set Lookup feature provides comprehensive information about any LEGO set by 
 | **Product Identifiers** | Set number, EAN, UPC, item numbers |
 | **Amazon Pricing** | Buy Box, lowest price, was price, offers |
 | **eBay Pricing** | Min/avg/max for new and used |
-| **BrickLink Pricing** | Min/avg/max for new and used |
+| **BrickLink Pricing** | Min/avg/max for new and used, with a drill-down modal (sold side, STR, dated sold months, catalogue deep links) |
+| **Part-Out Assessment** | Gate verdict, honesty ladder, max buy, STR bands, magnets and store overlap — on the Partout tab |
 | **Inventory Stock** | Your current stock of this set |
 | **Recent Lookups** | Quick access to recently searched sets |
 

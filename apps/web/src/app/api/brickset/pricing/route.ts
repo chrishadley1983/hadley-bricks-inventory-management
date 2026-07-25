@@ -15,6 +15,7 @@ import type { EbayItemSummary } from '@/lib/ebay';
 import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { ensurePriceGuide } from '@/lib/bricklink/price-guide/capture';
+import type { MonthlySold } from '@/lib/bricklink/price-guide/read';
 import { createAmazonCatalogClient, createAmazonPricingClient } from '@/lib/amazon';
 import type { AmazonCredentials } from '@/lib/amazon';
 import { CredentialsRepository } from '@/lib/repositories';
@@ -45,11 +46,34 @@ interface PricingStats {
   listingCount: number;
 }
 
+/**
+ * Why this carries a `status` rather than just going null on failure:
+ *
+ * every BrickLink failure — missing credentials, a rejected key, an outage — used to
+ * return `null`, which renders identically to "this set genuinely has no BrickLink
+ * listings". The panel looked like data, and was actually an error. The status is the
+ * discriminator; `message` carries the detail when there is one.
+ */
+type BrickLinkPanelStatus = 'ok' | 'not-configured' | 'error' | 'no-data';
+
 interface BrickLinkPricingStats {
+  status: BrickLinkPanelStatus;
+  message: string | null;
   minPrice: number | null;
   avgPrice: number | null;
   maxPrice: number | null;
   lotCount: number;
+  /** Sold-side context, so the drill-down can show what backs the asking prices. */
+  soldAvg: number | null;
+  soldMedian: number | null;
+  soldLots: number;
+  soldQty: number;
+  /** Quantity-basis sell-through (the house definition), 0..n. */
+  strQty: number | null;
+  /** Months BL had UK sold rows for — sparse and NOT gap-filled. See SideView.byMonth. */
+  byMonth: Record<string, MonthlySold> | null;
+  /** How fresh the cached price row is, in days. */
+  freshnessDays: number | null;
 }
 
 interface AmazonOffer {
@@ -77,6 +101,25 @@ interface PricingData {
   ebayUsed: PricingStats | null;
   bricklink: BrickLinkPricingStats | null;
   bricklinkUsed: BrickLinkPricingStats | null;
+}
+
+/** Panel payload for the case where the BrickLink fetch itself rejected. */
+function bricklinkPanelError(reason: unknown): BrickLinkPricingStats {
+  return {
+    status: 'error',
+    message: reason instanceof Error ? reason.message : 'BrickLink price lookup failed.',
+    minPrice: null,
+    avgPrice: null,
+    maxPrice: null,
+    lotCount: 0,
+    soldAvg: null,
+    soldMedian: null,
+    soldLots: 0,
+    soldQty: 0,
+    strQty: null,
+    byMonth: null,
+    freshnessDays: null,
+  };
 }
 
 /**
@@ -200,10 +243,13 @@ export async function GET(request: NextRequest) {
       console.error('[GET /api/brickset/pricing] eBay Used error:', ebayUsedResult.reason);
     }
 
+    // A rejected promise here is a bug in fetchBricklinkPricing (it catches its own
+    // errors), but don't let it degrade to an indistinguishable null — say so.
     if (bricklinkResult.status === 'fulfilled') {
       pricing.bricklink = bricklinkResult.value;
     } else {
       console.error('[GET /api/brickset/pricing] BrickLink error:', bricklinkResult.reason);
+      pricing.bricklink = bricklinkPanelError(bricklinkResult.reason);
     }
 
     if (bricklinkUsedResult.status === 'fulfilled') {
@@ -213,6 +259,7 @@ export async function GET(request: NextRequest) {
         '[GET /api/brickset/pricing] BrickLink Used error:',
         bricklinkUsedResult.reason
       );
+      pricing.bricklinkUsed = bricklinkPanelError(bricklinkUsedResult.reason);
     }
 
     if (amazonResult.status === 'fulfilled') {
@@ -300,8 +347,27 @@ async function fetchBricklinkPricing(
   userId: string,
   setNumber: string,
   condition: 'N' | 'U' = 'N'
-): Promise<BrickLinkPricingStats | null> {
+): Promise<BrickLinkPricingStats> {
   console.log(`[fetchBricklinkPricing] Fetching ${condition} condition for set ${setNumber}`);
+
+  const empty = (
+    status: BrickLinkPanelStatus,
+    message: string | null = null
+  ): BrickLinkPricingStats => ({
+    status,
+    message,
+    minPrice: null,
+    avgPrice: null,
+    maxPrice: null,
+    lotCount: 0,
+    soldAvg: null,
+    soldMedian: null,
+    soldLots: 0,
+    soldQty: 0,
+    strQty: null,
+    byMonth: null,
+    freshnessDays: null,
+  });
 
   try {
     // Get BrickLink credentials
@@ -312,7 +378,7 @@ async function fetchBricklinkPricing(
 
     if (!credentials) {
       console.log('[fetchBricklinkPricing] No BrickLink credentials found');
-      return null;
+      return empty('not-configured', 'BrickLink is not connected. Add credentials in Settings.');
     }
 
     const blClient = new BrickLinkClient(credentials, {
@@ -341,15 +407,32 @@ async function fetchBricklinkPricing(
       })
     );
 
+    const hasAnything =
+      side.stockLots > 0 || side.soldLots > 0 || side.stockMin != null || side.soldAvg != null;
+
     return {
+      status: hasAnything ? 'ok' : 'no-data',
+      message: hasAnything
+        ? null
+        : 'BrickLink has no UK listings or sales on record for this set/condition.',
       minPrice: side.stockMin,
       avgPrice: side.stockAvg ?? side.soldAvg,
       maxPrice: side.stockMax,
       lotCount: side.stockLots,
+      soldAvg: side.soldAvg,
+      soldMedian: side.soldMedian,
+      soldLots: side.soldLots,
+      soldQty: side.soldQty,
+      strQty: side.strQty,
+      byMonth: side.byMonth ?? null,
+      freshnessDays: view.freshnessDays,
     };
   } catch (error) {
     console.error(`[fetchBricklinkPricing] Error for ${condition}:`, error);
-    return null;
+    return empty(
+      'error',
+      error instanceof Error ? error.message : 'BrickLink price lookup failed.'
+    );
   }
 }
 

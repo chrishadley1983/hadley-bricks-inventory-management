@@ -14,6 +14,7 @@ import { BrickLinkClient } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { CredentialsRepository } from '@/lib/repositories';
 import { PartoutService } from '@/lib/bricklink/partout.service';
+import { mapPartoutError } from '@/lib/bricklink/partout-error';
 import type { PartoutApiResponse, PartoutApiError } from '@/types/partout';
 
 const QuerySchema = z.object({
@@ -86,23 +87,7 @@ export async function GET(
   } catch (error) {
     console.error('[GET /api/bricklink/partout] Error:', error);
 
-    const errorMessage = 'Internal server error';
-
-    // Check for specific BrickLink API errors
-    if (errorMessage.includes('404') || errorMessage.includes('not found')) {
-      return NextResponse.json(
-        { error: 'Set not found on BrickLink. Please check the set number.' },
-        { status: 404 }
-      );
-    }
-
-    if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
-      return NextResponse.json(
-        { error: 'BrickLink API rate limit exceeded. Please try again later.' },
-        { status: 429 }
-      );
-    }
-
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    const { status, message } = mapPartoutError(error);
+    return NextResponse.json({ error: message }, { status });
   }
 }

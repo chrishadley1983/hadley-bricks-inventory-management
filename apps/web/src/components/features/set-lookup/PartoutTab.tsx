@@ -168,14 +168,21 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     return <EmptyState />;
   }
 
-  // The official BL Part Out Value (one-scrape authoritative figure + multiple) always shows at
-  // the top; the computed, lot-by-lot partout renders below it through its own state machine.
+  // OUR view leads: the computed assessment renders first, through its own state machine.
+  // BrickLink's published POV follows as a cross-check — it sits OUTSIDE that state machine
+  // so it still shows when the computed partout is loading or has failed, but it never
+  // occupies the headline. The reconciliation between the two lives on that card.
   const computed = renderComputedPartout();
 
   return (
     <div className="space-y-6" data-testid="partout-tab">
-      <OfficialPovCard setNumber={setNumber} enabled={enabled} />
       {computed}
+      <OfficialPovCard
+        setNumber={setNumber}
+        enabled={enabled}
+        condition={condition}
+        assessment={data?.assessment?.[condition] ?? null}
+      />
     </div>
   );
 

@@ -68,6 +68,21 @@ function delay(ms: number): Promise<void> {
 }
 
 /**
+ * BrickLink catalogue set numbers carry a sequence suffix ("75192-1"). Asked for a bare
+ * "75192" the API answers `PARAMETER_MISSING_OR_INVALID / Invalid item sequence number:
+ * null`, which surfaced as an opaque 500. The Set Lookup page happens to pass the
+ * Brickset-canonical suffixed form, so the screen worked while the route did not —
+ * normalise here so every caller behaves the same.
+ *
+ * Only bare digits are defaulted to "-1". Anything already carrying a suffix, or a
+ * non-numeric identifier, is passed through untouched.
+ */
+export function normaliseSetNumber(setNumber: string): string {
+  const trimmed = setNumber.trim();
+  return /^\d+$/.test(trimmed) ? `${trimmed}-1` : trimmed;
+}
+
+/**
  * Partout Service
  */
 export class PartoutService {
@@ -83,7 +98,7 @@ export class PartoutService {
    * @returns Complete partout analysis data
    */
   async getPartoutValue(
-    setNumber: string,
+    rawSetNumber: string,
     options: {
       onProgress?: PartoutProgressCallback;
       forceRefresh?: boolean;
@@ -97,8 +112,11 @@ export class PartoutService {
     } = {}
   ): Promise<PartoutData> {
     const { onProgress, forceRefresh = false, userId } = options;
+    const setNumber = normaliseSetNumber(rawSetNumber);
     console.log(
-      `[PartoutService] Getting partout value for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`
+      `[PartoutService] Getting partout value for set ${setNumber}${
+        setNumber !== rawSetNumber.trim() ? ` (normalised from "${rawSetNumber}")` : ''
+      }${forceRefresh ? ' (force refresh)' : ''}`
     );
 
     // forceRefresh: a TTL of 0 makes every cached row count as stale, so

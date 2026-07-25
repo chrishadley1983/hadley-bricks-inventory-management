@@ -19,6 +19,7 @@ import {
   SetStockCard,
   SetStockModal,
   AmazonOffersModal,
+  SetLookupBricklinkModal,
 } from '@/components/features/brickset';
 import { PartoutTab } from '@/components/features/set-lookup';
 import type { SetPricingData } from '@/components/features/brickset';
@@ -151,6 +152,9 @@ export default function SetLookupPage() {
   const [stockModalOpen, setStockModalOpen] = useState(false);
   const [stockModalTab, setStockModalTab] = useState<'current' | 'sold'>('current');
   const [amazonOffersModalOpen, setAmazonOffersModalOpen] = useState(false);
+  const [bricklinkModalCondition, setBricklinkModalCondition] = useState<'new' | 'used' | null>(
+    null
+  );
   const [activeTab, setActiveTab] = useState<string>('details');
 
   // Check if Brickset is configured
@@ -295,6 +299,7 @@ export default function SetLookupPage() {
                   onEbayClick={() => setEbayModalOpen(true)}
                   onEbayUsedClick={() => setEbayUsedModalOpen(true)}
                   onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
+                  onBricklinkClick={(condition) => setBricklinkModalCondition(condition)}
                 />
                 {/* Inventory Stock Card */}
                 <SetStockCard
@@ -331,6 +336,20 @@ export default function SetLookupPage() {
           condition="used"
           isOpen={ebayUsedModalOpen}
           onClose={() => setEbayUsedModalOpen(false)}
+        />
+
+        {/* BrickLink Price Detail Modal */}
+        <SetLookupBricklinkModal
+          setNumber={currentSet?.setNumber ?? null}
+          setName={currentSet?.setName ?? null}
+          condition={bricklinkModalCondition ?? 'new'}
+          stats={
+            bricklinkModalCondition === 'used'
+              ? (pricingData?.bricklinkUsed ?? null)
+              : (pricingData?.bricklink ?? null)
+          }
+          isOpen={bricklinkModalCondition !== null}
+          onClose={() => setBricklinkModalCondition(null)}
         />
 
         {/* Inventory Stock Modal */}

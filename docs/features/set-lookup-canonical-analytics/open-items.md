@@ -1,205 +1,157 @@
 # Set Lookup — canonical analytics: open items
 
 **Branch:** `feature/set-lookup-canonical-analytics`
-**Commit:** `33726ae6` — *feat: Wire Set Lookup Partout tab to the canonical BL decision model*
-**Written:** 2026-07-25
-**Status:** committed locally, **not pushed, no PR, not merged**
+**Written:** 2026-07-25 (laptop handover), **updated:** 2026-07-25 (desktop session)
+**Status:** pushed, PR open
 
-Pick-up doc for switching machines. Everything below is what is **NOT** done.
-
----
-
-## 0. Read this first if you're on a different machine
-
-The local checkout on the other machine was **866 commits behind `origin/main`** (stuck at
-`394b99b`, 2026-01-23). That caused a long argument in which the whole analytics layer was
-reported as "not built" when it had shipped months earlier.
-
-```powershell
-git fetch; git rev-list --left-right --count main...origin/main
-```
-
-If that returns anything non-zero on the right, pull before doing anything else.
-Also run `npm install` — the pull added dependencies (`sonner`, `jszip`, `@tensorflow/tfjs`)
-and typecheck fails with phantom errors until you do.
-
-`npx tsc --noEmit` OOMs at the default heap. Use:
-```powershell
-$env:NODE_OPTIONS="--max-old-space-size=8192"; npx tsc --noEmit
-```
+The original handover listed everything NOT done. This revision records what has since
+been closed and what genuinely remains.
 
 ---
 
-## 1. What WAS built (so you don't redo it)
+## Closed this session
 
-In `apps/web/src`:
+### §2.1 Exercised against live sets — DONE
 
-| File | What |
+Driven through a real browser (Playwright, dev server in a dedicated worktree on :3011,
+never the main checkout — `next dev` there corrupts the bundle the NSSM service serves).
+
+| Question | Answer |
 |---|---|
-| `lib/bricklink/partout-assessment.ts` | **new** — pure assessment engine: honesty ladder, gate verdict, max buy, STR bands, magnets, concentration, overlap |
-| `lib/bricklink/world-supply.ts` | **new** — `readWorldSupply` extracted out of `bl-store-assessment/engine.ts` so both share one query |
-| `lib/bricklink/fees.ts` | `POV_MULTIPLE_MIN`, `POV_MIN_GAP_GBP`, `DEFAULT_MIN_MARGIN` moved in from `engine.ts` |
-| `lib/bricklink/partout.service.ts` | loads world supply + own-stock index, emits `assessment` on `PartoutData` |
-| `types/partout.ts` | assessment types; `strQtyNew/Used`, `worldSupplyLots*`, `overlap*`, `ourQty*` on `PartValue` |
-| `components/features/set-lookup/PartoutAssessmentPanel.tsx` | **new** — the whole decision UI |
-| `components/features/set-lookup/PartoutTab.tsx` | condition toggle moved up to drive the assessment |
-| `components/features/set-lookup/PartoutSummary.tsx` | legacy recommendation card removed |
-| `components/features/set-lookup/PartoutTable.tsx` | STR (qty), World lots, Overlap columns |
-| `lib/bricklink/__tests__/partout-assessment.test.ts` | **new** — 30 tests |
+| Does `assessment` arrive on the SSE `/stream`? | **Yes** — full payload, 4 SSE frames |
+| Does it arrive on the plain `GET /api/bricklink/partout`? | **Yes** (see the bug below) |
+| Does overlap populate? | **Yes** — 75192-1 New: 524 NEW / 16 R-OUT / 1 R-THIN / 143 DUP, £779.35 additional. No `Own-stock index failed` in the log. |
+| Do magnets ever fire? | **Yes** — 7643-1 New: `54200 / Metallic Silver`, world supply 1 lot, STR 0.71 |
+| Is 75192's "0 magnets" masking missing data? | **No** — 683/684 lots carry world-supply data and 683 carry STR; the scarcity leg is what fails (no lot at ≤3 world lots). Genuine absence. |
+| Mobile | Panel itself is sound: 0px horizontal overflow at 375 / 768 / 1440, and the 3-up card row stacks below `lg`. **But see the app-shell finding below.** |
 
-Verified: typecheck clean, lint clean, 311 existing bricklink / bl-store-assessment /
-bl-store-report tests still pass.
+Live figures for 75192-1 (New), for future comparison:
+`gross £905.89 → realisable £396.77 (44% capture) → net £359.47`, multiple 1.03× vs the
+2.0× gate, max buy £280.12, verdict SELL-COMPLETE.
 
----
+### §2.2 Two POV figures — RECONCILED, our view leads
 
-## 2. NOT DONE — blocking, do these first
+Chris's call: **our view leads.**
 
-### 2.1 Never run in a browser
-Nothing here has been exercised against a live set. Typecheck + unit tests only.
+- The assessment panel now renders **first**; BrickLink's published POV follows,
+  retitled "Cross-check: BrickLink's own Part Out Value" and explicitly subtitled as
+  context, not the decision.
+- The card lost its own New/Used toggle — it now follows the tab's single toggle, via a
+  new shared `useOfficialPov` hook (one query-cache entry).
+- A reconciliation note states the relationship in figures: BL's £910.71 is the same
+  kind of number as our **gross** £905.89 (−0.5%); the decision figure is our **net**
+  £359.47 after capture and fees; and the multiples share no denominator — BL divides by
+  RRP (£734.99), we divide by the current set price (£878.11).
+- The card still renders when the computed partout is loading or has failed, so a
+  failure never leaves the tab blank.
 
-```powershell
-npm run dev
-# then look up a real set, e.g. 75192, and open the Partout tab
-```
+### §3 Fortnightly Bricqer refresh — BUILT
 
-Specifically unverified:
-- Does `assessment` actually arrive on both the `/api/bricklink/partout` and the SSE
-  `/stream` responses?
-- Does the overlap section populate, or is `bricqer_inventory_snapshot` stale/empty for
-  this user? (It reports `overlap: null` on failure rather than erroring, so an empty
-  panel is indistinguishable from a broken join by eye — check the server log for
-  `[PartoutService] Own-stock index failed`.)
-- Do magnets ever fire on a real set? Needs `bricklink_pg_summary_cache` rows for the
-  set's parts. If coverage is thin the panel will just say "no magnets", which is
-  honest but might be masking missing data rather than genuine absence.
-- Mobile: no responsive check at 375 / 768 / 1024 was done. The panel uses
-  `lg:grid-cols-3` and several `overflow-x-auto` tables; the tables are probably fine,
-  the 3-up card row at the top is the risk.
+**Cost: ~312 Bricqer API calls per full sweep** (one per 100 inventory items; 31,123
+items as of this session). ~624/month on the fortnightly cadence. **Zero BrickLink calls.**
 
-### 2.2 Two POV figures on screen, unreconciled
-The Partout tab now shows **both**:
-1. `OfficialPovCard` — BrickLink's own authoritative POV (CDP scrape, `bl-part-out-value`)
-2. The new assessment ladder — our computed lot-by-lot POV
+New files:
+- `scripts/register-bricqer-snapshot-task.ps1` — registers
+  `HadleyBricks-Bricqer-Snapshot-Local`, every second Sunday 01:30 (clear of the 02:15
+  store-assessment, 03:00 ebay-pricing and 05:30 keepa-refresh tasks).
+- `scripts/run-bricqer-snapshot.ps1` — runner, modelled on
+  `run-store-assessment-batch.ps1`, including the `ErrorActionPreference` npx-stderr trap.
 
-They will not match, and nothing on screen explains why. This is the most likely thing to
-cause confusion in real use. Decide: reconcile them, explain the difference inline, or
-show only one.
+Two real defects found and fixed while building it:
 
----
+1. **The sync was wedged.** `bricqer_snapshot_meta` had `sync_status='running'`,
+   `sync_cursor=300` since 2026-07-09, and `last_full_sync` was **2026-06-14**. 300 is
+   `MAX_PAGES_PER_INVOCATION`, so the run hit the cap and stopped 12 pages short.
+2. **Stale removal could never run.** `removeStaleItems` only fires when an invocation
+   both starts at page 1 and completes — it deletes everything absent from the IDs seen
+   in that invocation, so resuming mid-way must not prune. With 312 pages against a
+   300-page cap, no run could ever satisfy both conditions, yet a resumed run still
+   stamped `last_full_sync`. The snapshot would have claimed freshness it didn't have.
 
-## 3. NOT DONE — the Bricqer fortnightly refresh
+Fixes: `sync()` takes an optional `maxPages` (default unchanged at 300, so the Vercel
+route is untouched); the CLI raises it so one invocation covers everything; and the CLI
+now defaults to a **full sweep**, clearing any stored cursor first (`--resume` opts back
+into the old behaviour).
 
-You asked for "every other week on Bricqer". **Not built.**
+**NOT YET RUN.** The first live refresh is ~312 calls against Bricqer and prunes rows —
+awaiting Chris's go-ahead. Until it runs, the overlap panel is still reading the
+2026-06-14 snapshot.
 
-Facts as of this commit:
-- `vercel.json` has **no crons at all** any more — scheduled work moved to GCP jobs and
-  local Windows Task Scheduler.
-- The pattern is `scripts/register-<job>-task.ps1`. Eight exist
-  (`register-store-assessment-batch-task.ps1`, `register-keepa-refresh-task.ps1`, …).
-- **There is no `register-bricqer-snapshot-task.ps1`.**
-- The refresh script already exists: `apps/web/scripts/refresh-bricqer-snapshot.ts`,
-  writing via `lib/inventory-explorer/snapshot-sync.service.ts` →
-  `bricqer_inventory_snapshot` + `bricqer_snapshot_meta.last_full_sync`.
+### §5 Details tab — DONE
 
-So the work is: add `scripts/register-bricqer-snapshot-task.ps1` on a fortnightly
-trigger, modelled on `register-store-assessment-batch-task.ps1`.
+- **BrickLink drill-down** (`SetLookupBricklinkModal`): asking side, sold side (avg,
+  median, volume, quantity-basis STR), the dated months behind the sold figures, and
+  cache age. BrickLink was the only panel with no drill-down.
+- **Failures no longer masquerade as "no data".** `/api/brickset/pricing` returned `null`
+  for missing credentials, a rejected key and an outage alike — visually identical to a
+  set with no BrickLink listings. The payload now carries
+  `status: ok | no-data | not-configured | error` plus a message, and the panel renders
+  an amber "not connected" (with a Settings link) or a red "lookup failed" accordingly.
+- **Deep links** to the BrickLink price guide and catalogue page.
+- **Price history: verified, and the earlier assumption corrected.** `byMonth` does exist
+  — but nested under `uk_detail.soldNew` / `soldUsed`, not at `uk_detail.byMonth`, and it
+  is **not** a rolling 6-month series. It is whatever months BL's UK sold table held at
+  fetch time: 75192-1 New is 4 pieces, all from **February–March 2020** (they reconcile
+  exactly with `soldAvg` £475 and `soldQty` 4). So the panel shows a **dated list, not a
+  trend line** — gaps are months with no sales, not zero prices — and the section heading
+  states the real span instead of claiming "last 6 months".
 
-Until that exists the snapshot only refreshes when something triggers it manually, which
-means **the overlap panel silently degrades over time**. The panel does surface
-`snapshotAt`, so staleness is visible — but nobody is looking at it.
+### Bug found and fixed en route
 
----
+`GET /api/bricklink/partout?setNumber=75192` (no `-1`) made BrickLink answer
+`PARAMETER_MISSING_OR_INVALID / Invalid item sequence number: null`, which the route
+turned into an opaque 500. The page happened to work because Brickset supplies the
+suffixed form. Two fixes:
 
-## 4. NOT DONE — model gaps in what was built
+- `normaliseSetNumber` in `partout.service.ts` appends `-1` to a bare numeric set number.
+- Both partout routes now map errors through `partout-error.ts`. The old handler was
+  `const errorMessage = 'Internal server error'` tested against itself — its 404 and 429
+  branches were unreachable, so **every** failure surfaced as a 500.
 
-These are real limitations of the shipped assessment, not bugs:
+10 unit tests cover both.
 
-1. **Max buy excludes acquisition postage and teardown labour.** It's
-   `realisable × (1 − 9.4% − margin)` and nothing else. `DEFAULT_INBOUND_POSTAGE_GBP`
-   (£3) exists in `fees.ts` and is **not** applied. Set-lookup sets aren't necessarily
-   bought from a BL store, so it wasn't obvious it should be — but the number is
-   optimistic as it stands. The UI says so in small print; that isn't a fix.
-2. **Target margin is not adjustable in the UI.** Hardcoded to `DEFAULT_MIN_MARGIN`
-   (0.20). `assessPartout` already takes `targetMargin` as an option — it just needs a
-   control wired to it. This is probably the single highest-value small addition.
-3. **`CAPTURE_CURVE` is uncalibrated.** `liquidity-pov.ts` carries an explicit
-   `TODO(calibration)`: the brackets are the spec's starting guess, never fitted to our
-   own sales. Route is documented in that file — join `arbitrage_purchases` against the
-   STR each lot carried at buy time. Everything on the realisable/net rungs and the max
-   buy inherits this uncertainty.
-4. **The verdict is parts-vs-complete only.** The store-assessment `buildSets` also
-   weighs `FLIP-AMAZON` and requires part-out to beat the best flip channel by 2×. Ours
-   doesn't — the partout service has no Amazon/eBay data. So a set can read `PART-OUT`
-   here and `FLIP-AMAZON` in a store assessment. Not wrong, but it is a different
-   question, and the UI does not say so.
-5. **`PartoutSummary` is now partly redundant** — its POV/ratio cards duplicate the
-   ladder's gross rung. Left in deliberately (it shows both conditions at once, the
-   panel shows one) but it's the obvious next tidy.
+### §7 Housekeeping — DONE
 
----
-
-## 5. NOT DONE — Details tab
-
-Completely untouched this round. From the original review:
-
-- BrickLink New/Used panels are the **only** panels with no drill-down (Amazon, eBay New,
-  eBay Used all open modals). BrickLink is the differentiator and has the thinnest panel.
-- Pricing failures are swallowed silently in `/api/brickset/pricing` — a missing
-  credential renders as an empty panel, not "BrickLink not configured".
-- No deep link to the BrickLink catalogue page for the set.
-- No price history / trend. **Note:** a memory written this session says
-  `uk_detail.byMonth` in the price cache already holds ~6 months of monthly sold history
-  from a single fetch — so a trend line may be much cheaper than assumed. Verify before
-  scoping.
+- The four stale functional docs now describe the gate model, the ladder, magnets,
+  overlap, the unified cache and the BrickLink drill-down (they described the old gross
+  `ratio > 1` model and the retired `bricklink_part_price_cache`).
+- Typecheck clean, lint clean (only pre-existing warnings in unrelated workflow files),
+  **3,602 tests across 159 files pass**.
 
 ---
 
-## 6. NOT DONE — productisation (the actual goal)
+## Still open
 
-The original ask was to formalise **BrickLink Pricing + Store Assessments + Arb pricing**
-into something deployable to members on hadleybricks.co.uk. Deployment model is
-**undecided** — you chose "not decided yet", focus on decoupling.
+### §4 Model gaps — deferred by Chris ("leave for now, address at the end")
 
-Decoupling work still outstanding:
+1. Max buy excludes acquisition postage and teardown labour (`DEFAULT_INBOUND_POSTAGE_GBP`
+   exists and is not applied).
+2. Target margin is hardcoded to `DEFAULT_MIN_MARGIN` (0.20); `assessPartout` already
+   accepts `targetMargin` — it just needs a control. Still the highest-value small add.
+3. `CAPTURE_CURVE` is uncalibrated (`TODO(calibration)` in `liquidity-pov.ts`). Everything
+   from the realisable rung down inherits that uncertainty.
+4. The verdict is parts-vs-complete only — no FLIP-AMAZON comparison, so a set can read
+   `PART-OUT` here and `FLIP-AMAZON` in a store assessment.
+5. `PartoutSummary` partly duplicates the ladder's gross rung.
 
-- **`SetStockCard` reads `inventory_items` directly** — meaningless for a member with no
-  inventory. Needs to become an optional slot.
-- **Overlap is inherently yours-only.** A member has no Bricqer store. Either it's a
-  Hadley-Bricks-only panel, or members need their own store connection. This is a product
-  decision, not a code one.
-- **Per-user API credentials.** BrickLink/Amazon pricing return null without per-user
-  creds. A member won't have Amazon SP-API. Needs server-side shared credentials with
-  quota metering.
-- **No rate limiting per user.** Routes check auth; nothing meters usage.
-- **`page.tsx` still has all fetchers inline** rather than in `lib/api/`.
+### §6 Productisation — deferred by Chris
 
-Store Assessments and Arb pricing were **not touched at all** this round — only Set
-Lookup. Both exist and are well developed (`lib/bl-store-assessment/`, `lib/arbitrage/`,
-`scripts/register-store-assessment-batch-task.ps1`).
+`SetStockCard` reads `inventory_items` directly; overlap is inherently ours-only;
+per-user API credentials and rate limiting are absent; `page.tsx` still has its fetchers
+inline. Deployment model still undecided.
 
----
+### App shell has no mobile layout — pre-existing, out of scope
 
-## 7. NOT DONE — housekeeping
+At 375–390px the sidebar renders expanded and overlays the content;
+`(dashboard)/layout.tsx` renders `<Sidebar />` unconditionally at a fixed `w-64` with no
+breakpoint and no drawer. This affects **every dashboard page**, not just Set Lookup, and
+predates this branch. Flagged, not fixed — it's a separate piece of work.
 
-- **Docs are stale.** These still describe the old gross `ratio > 1` model:
-  - `docs/functional/partout-value/overview.md`
-  - `docs/functional/partout-value/analyse-set.md`
-  - `docs/functional/set-lookup/overview.md`
-  - `docs/functional/set-lookup/viewing-pricing.md`
+### Not done
 
-  Run `/docs update` before merge.
-- **No e2e coverage** for set-lookup or partout (there was none before either).
-- **No `/code-review branch`, no `/verify-done`, no `/test pre-merge`** run yet — the
-  CLAUDE.md pre-merge sequence is untouched.
-- **Not pushed.** `git push -u origin feature/set-lookup-canonical-analytics`, then PR.
-
----
-
-## 8. Suggested order on pick-up
-
-1. `git fetch` + check you're current, `npm install`
-2. `npm run dev`, look up a real set, confirm the panel renders and overlap populates (§2.1)
-3. Decide the two-POV-figures question (§2.2) — it's the one that will bite in real use
-4. Wire the target-margin control (§4.2) — small, high value
-5. `register-bricqer-snapshot-task.ps1` fortnightly (§3)
-6. `/docs update`, then `/code-review branch` → `/test pre-merge` → `/merge-feature`
+- No e2e coverage for set-lookup or partout (there was none before either).
+- The first live Bricqer snapshot refresh (see §3).
+- The scheduled task is **registered by a script that has not been run** — run
+  `scripts/register-bricqer-snapshot-task.ps1` on the box (elevated preferred) once the
+  refresh itself is approved, and make sure `run-bricqer-snapshot.ps1` exists in
+  `hb-assess-wt` (it self-updates from origin/main, so merge first).
