@@ -100,6 +100,23 @@ _tmp_*.txt
 _launch_*.ps1
 tmp/
 
+# Dated one-off investigation scripts. These accumulate (124 of them by
+# 2026-07-25) and drown `git status`, hiding real stragglers — the partout CLI
+# and 11 applied migrations sat untracked for two weeks behind that noise.
+# NOTE: scoped to the `_tmp-` prefix on purpose. Other underscore-prefixed
+# scripts ARE tracked deliberately (_bl-client.ts, _refresh-e2e-auth.ts,
+# _screenshot-dashboard.ts, _export-maxbuy-list.ts, _kill-pov.ps1) — do not
+# broaden this to `_*`.
+apps/web/scripts/_tmp-*
+# Same thing under other prefixes (_asin-, _pov-, _fix-): a trailing date is
+# this repo's marker for "written for one investigation". Already-tracked files
+# are unaffected by a new ignore rule, so nothing committed disappears.
+apps/web/scripts/_*-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].ts
+
+# Script/CLI run logs and debug captures
+apps/web/*.log
+scripts/*-debug.png
+
 # Local analysis outputs and session artifacts (2026-07-10 repo sync)
 analysis/
 /.playwright/
