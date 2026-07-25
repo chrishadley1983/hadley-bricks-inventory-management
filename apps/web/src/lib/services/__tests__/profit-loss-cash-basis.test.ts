@@ -103,6 +103,67 @@ function getRow(result: { rows: Array<{ transactionType: string }> }, transactio
     | undefined;
 }
 
+/**
+ * Amazon money comes from the `breakdowns` tree, never the flat columns —
+ * `gross_sales_amount` is NET of the DigitalServicesFee and `total_fees` is
+ * Commission only, so both drop DSF (found 2026-07-25 misstating a live HMRC
+ * return). These fixtures therefore set the flat columns to the DSF-light values
+ * they really carry, so any regression back to a column fails loudly instead of
+ * quietly agreeing.
+ */
+function shipmentBreakdowns(sales: number, commission: number, dsf: number) {
+  return [
+    {
+      breakdownType: 'Sales',
+      breakdownAmount: { currencyCode: 'GBP', currencyAmount: sales },
+      breakdowns: [
+        {
+          breakdownType: 'ProductCharges',
+          breakdownAmount: { currencyCode: 'GBP', currencyAmount: sales },
+          breakdowns: null,
+        },
+      ],
+    },
+    {
+      breakdownType: 'Expenses',
+      breakdownAmount: { currencyCode: 'GBP', currencyAmount: -(commission + dsf) },
+      breakdowns: [
+        {
+          breakdownType: 'AmazonFees',
+          breakdownAmount: { currencyCode: 'GBP', currencyAmount: -commission },
+          breakdowns: [
+            {
+              breakdownType: 'Commission',
+              breakdownAmount: { currencyCode: 'GBP', currencyAmount: -commission },
+              breakdowns: [],
+            },
+          ],
+        },
+        {
+          breakdownType: 'DigitalServicesFee',
+          breakdownAmount: { currencyCode: 'GBP', currencyAmount: -dsf },
+          breakdowns: null,
+        },
+      ],
+    },
+  ];
+}
+
+function refundBreakdowns(refundedSales: number, refundedFees: number) {
+  return [
+    {
+      breakdownType: 'Refunded Sales',
+      breakdownAmount: { currencyCode: 'GBP', currencyAmount: -refundedSales },
+      breakdowns: null,
+    },
+    {
+      breakdownType: 'Refunded Expenses',
+      breakdownAmount: { currencyCode: 'GBP', currencyAmount: refundedFees },
+      breakdowns: null,
+    },
+  ];
+}
+
 describe('P&L cash basis', () => {
   describe('Amazon cash income (funds released)', () => {
     // One order that went DEFERRED (June) then RELEASED (July) — the classic
@@ -116,9 +177,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'RELEASED',
         amazon_order_id: 'A-1',
         posted_date: '2026-06-10T10:00:00+00:00',
-        gross_sales_amount: 100,
-        total_fees: 17,
+        // Sales leaf 100; the column is 99 because it nets the £1 DSF
+        gross_sales_amount: 99,
+        total_fees: 16,
         total_amount: 83,
+        breakdowns: shipmentBreakdowns(100, 16, 1),
       },
       // Deferred in June, released in July — BOTH rows exist
       {
@@ -127,9 +190,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'DEFERRED',
         amazon_order_id: 'A-2',
         posted_date: '2026-06-22T10:00:00+00:00',
-        gross_sales_amount: 50,
-        total_fees: 9,
+        // Sales leaf 50; the column is 49 because it nets the £1 DSF
+        gross_sales_amount: 49,
+        total_fees: 8,
         total_amount: 41,
+        breakdowns: shipmentBreakdowns(50, 8, 1),
       },
       {
         user_id: USER,
@@ -137,9 +202,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'RELEASED',
         amazon_order_id: 'A-2',
         posted_date: '2026-07-01T10:00:00+00:00',
-        gross_sales_amount: 50,
-        total_fees: 9,
+        // Sales leaf 50; the column is 49 because it nets the £1 DSF
+        gross_sales_amount: 49,
+        total_fees: 8,
         total_amount: 41,
+        breakdowns: shipmentBreakdowns(50, 8, 1),
       },
       // Legacy intermediate row — must never be counted (RELEASED sibling exists)
       {
@@ -148,9 +215,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'DEFERRED_RELEASED',
         amazon_order_id: 'A-3',
         posted_date: '2026-06-05T10:00:00+00:00',
-        gross_sales_amount: 30,
-        total_fees: 5,
+        // Sales leaf 30; the column is 29 because it nets the £1 DSF
+        gross_sales_amount: 29,
+        total_fees: 4,
         total_amount: 25,
+        breakdowns: shipmentBreakdowns(30, 4, 1),
       },
       {
         user_id: USER,
@@ -158,9 +227,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'RELEASED',
         amazon_order_id: 'A-3',
         posted_date: '2026-06-12T10:00:00+00:00',
-        gross_sales_amount: 30,
-        total_fees: 5,
+        // Sales leaf 30; the column is 29 because it nets the £1 DSF
+        gross_sales_amount: 29,
+        total_fees: 4,
         total_amount: 25,
+        breakdowns: shipmentBreakdowns(30, 4, 1),
       },
       // Still deferred — money not received, must be excluded entirely
       {
@@ -169,9 +240,11 @@ describe('P&L cash basis', () => {
         transaction_status: 'DEFERRED',
         amazon_order_id: 'A-4',
         posted_date: '2026-06-28T10:00:00+00:00',
-        gross_sales_amount: 999,
-        total_fees: 170,
+        // Sales leaf 999; the column is 998 because it nets the £1 DSF
+        gross_sales_amount: 998,
+        total_fees: 169,
         total_amount: 829,
+        breakdowns: shipmentBreakdowns(999, 169, 1),
       },
       // Released refund in June
       {
@@ -182,7 +255,12 @@ describe('P&L cash basis', () => {
         posted_date: '2026-06-20T10:00:00+00:00',
         gross_sales_amount: null,
         total_fees: 0,
-        total_amount: -20,
+        // total_amount (-17) is Refunded Sales (-20) PLUS Refunded Expenses
+        // (+3, fees given back). Only the -20 reduces turnover; using
+        // total_amount would understate the refund and leave the fee credit
+        // buried in income.
+        total_amount: -17,
+        breakdowns: refundBreakdowns(20, 3),
       },
       // Deferred refund — excluded until released
       {
@@ -193,7 +271,8 @@ describe('P&L cash basis', () => {
         posted_date: '2026-06-25T10:00:00+00:00',
         gross_sales_amount: null,
         total_fees: 0,
-        total_amount: -15,
+        total_amount: -13,
+        breakdowns: refundBreakdowns(15, 2),
       },
     ];
 
@@ -450,9 +529,10 @@ describe('P&L cash basis', () => {
           transaction_status: 'RELEASED',
           amazon_order_id: 'A-1',
           posted_date: '2026-06-10T10:00:00+00:00',
-          gross_sales_amount: 100,
-          total_fees: 17,
+          gross_sales_amount: 99,
+          total_fees: 16,
           total_amount: 83,
+          breakdowns: shipmentBreakdowns(100, 16, 1),
         },
       ],
       platform_orders: [

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { ProfitLossReportService } from '../profit-loss-report.service';
+import { ProfitLossReportService, sumAmazonBreakdown } from '../profit-loss-report.service';
 
 /**
  * Creates a comprehensive mock for Supabase queries.
@@ -460,6 +460,187 @@ describe('ProfitLossReportService', () => {
 
       // Should default to current month
       expect(result.dateRange.startMonth).toBe(expectedMonth);
+    });
+  });
+
+  // These guard the four defects the 2026-07-25 MTD validation caught, each of
+  // which had silently misstated a tax return.
+  describe('Amazon breakdown sums (DigitalServicesFee defect)', () => {
+    // Shape taken verbatim from a live 2026-04 Shipment event.
+    const shipment = [
+      {
+        breakdownType: 'Sales',
+        breakdownAmount: { currencyAmount: 31.49 },
+        breakdowns: [
+          {
+            breakdownType: 'ProductCharges',
+            breakdownAmount: { currencyAmount: 31.49 },
+            breakdowns: null,
+          },
+        ],
+      },
+      {
+        breakdownType: 'Expenses',
+        breakdownAmount: { currencyAmount: -4.83 },
+        breakdowns: [
+          {
+            breakdownType: 'DigitalServicesFee',
+            breakdownAmount: { currencyAmount: -0.11 },
+            breakdowns: [
+              {
+                breakdownType: 'DigitalServicesFee',
+                breakdownAmount: { currencyAmount: -0.11 },
+                breakdowns: [
+                  { breakdownType: 'Base', breakdownAmount: { currencyAmount: -0.09 }, breakdowns: [] },
+                  { breakdownType: 'Tax', breakdownAmount: { currencyAmount: -0.02 }, breakdowns: [] },
+                ],
+              },
+            ],
+          },
+          {
+            breakdownType: 'AmazonFees',
+            breakdownAmount: { currencyAmount: -4.72 },
+            breakdowns: [
+              { breakdownType: 'Commission', breakdownAmount: { currencyAmount: -4.72 }, breakdowns: [] },
+            ],
+          },
+        ],
+      },
+    ];
+
+    it('does not double-count a type restated by its own children', () => {
+      // DSF appears at three depths (-0.11, -0.11, and -0.09/-0.02). Descending
+      // into a match would return -0.22 or worse.
+      expect(sumAmazonBreakdown(shipment, /^DigitalServicesFee$/i)).toBeCloseTo(-0.11, 2);
+    });
+
+    it('reads gross sales and total fees from the tree, DSF included', () => {
+      expect(sumAmazonBreakdown(shipment, /^Sales$/i)).toBeCloseTo(31.49, 2);
+      // Expenses must carry Commission AND DSF — 4.72 + 0.11. The old
+      // total_fees/referral_fee columns returned 4.72 and dropped the 0.11.
+      expect(sumAmazonBreakdown(shipment, /^Expenses$/i)).toBeCloseTo(-4.83, 2);
+    });
+
+    it('separates refunded sales from refunded fee credits', () => {
+      const refund = [
+        {
+          breakdownType: 'Refunded Sales',
+          breakdownAmount: { currencyAmount: -36.76 },
+          breakdowns: [
+            { breakdownType: 'ProductCharges', breakdownAmount: { currencyAmount: -36.76 }, breakdowns: null },
+          ],
+        },
+        {
+          breakdownType: 'Refunded Expenses',
+          breakdownAmount: { currencyAmount: 5.44 },
+          breakdowns: [
+            { breakdownType: 'AmazonFees', breakdownAmount: { currencyAmount: 5.3 }, breakdowns: null },
+            { breakdownType: 'DigitalServicesFee', breakdownAmount: { currencyAmount: 0.14 }, breakdowns: null },
+          ],
+        },
+      ];
+      // Only -36.76 reduces turnover; the 5.44 is a fee credit for the fees row.
+      expect(sumAmazonBreakdown(refund, /^Refunded Sales$/i)).toBeCloseTo(-36.76, 2);
+      expect(sumAmazonBreakdown(refund, /^Refunded Expenses$/i)).toBeCloseTo(5.44, 2);
+    });
+
+    it('returns 0 for missing or empty breakdowns rather than throwing', () => {
+      expect(sumAmazonBreakdown(null, /^Sales$/i)).toBe(0);
+      expect(sumAmazonBreakdown(undefined, /^Sales$/i)).toBe(0);
+      expect(sumAmazonBreakdown([], /^Sales$/i)).toBe(0);
+    });
+  });
+
+  describe('cash basis keeps receipts of fully-refunded eBay orders', () => {
+    const mockData = {
+      ebay_orders: [{ ebay_order_id: 'REFUNDED-1', order_payment_status: 'FULLY_REFUNDED' }],
+      ebay_transactions: [
+        {
+          transaction_date: '2026-05-15T10:00:00+00:00',
+          gross_transaction_amount: 28.75,
+          ebay_order_id: 'REFUNDED-1',
+          transaction_type: 'SALE',
+          amount: 28.75,
+          raw_response: null,
+          booking_entry: 'CREDIT',
+        },
+      ],
+    };
+
+    it('accrual excludes the sale (matches Seller Hub Total sales)', async () => {
+      const mockSupabase = createSupabaseMock(mockData);
+      const service = new ProfitLossReportService(mockSupabase as never);
+
+      const result = await service.generateReport(testUserId, {
+        startMonth: '2026-05',
+        endMonth: '2026-05',
+        basis: 'accrual',
+      });
+
+      const gross = result.rows.find((r) => r.transactionType === 'eBay Gross Sales');
+      expect(gross?.total ?? 0).toBe(0);
+    });
+
+    it('cash includes the sale, because the refunds row already deducts it', async () => {
+      const mockSupabase = createSupabaseMock(mockData);
+      const service = new ProfitLossReportService(mockSupabase as never);
+
+      const result = await service.generateReport(testUserId, {
+        startMonth: '2026-05',
+        endMonth: '2026-05',
+        basis: 'cash',
+      });
+
+      const gross = result.rows.find((r) => r.transactionType === 'eBay Gross Sales');
+      expect(gross?.total).toBeCloseTo(28.75, 2);
+    });
+  });
+
+  describe('failedRows', () => {
+    it('is empty on a healthy report', async () => {
+      const mockSupabase = createSupabaseMock();
+      const service = new ProfitLossReportService(mockSupabase as never);
+
+      const result = await service.generateReport(testUserId, {
+        startMonth: '2026-05',
+        endMonth: '2026-05',
+      });
+
+      expect(result.failedRows).toEqual([]);
+    });
+
+    it('names every row whose query threw, so £0 cannot pass as quiet', async () => {
+      const mockSupabase = {
+        from: vi.fn().mockImplementation(() => ({
+          select: vi.fn().mockReturnThis(),
+          eq: vi.fn().mockReturnThis(),
+          in: vi.fn().mockReturnThis(),
+          lt: vi.fn().mockReturnThis(),
+          gte: vi.fn().mockReturnThis(),
+          lte: vi.fn().mockReturnThis(),
+          range: vi.fn().mockRejectedValue(new Error('Database error')),
+          order: vi.fn().mockReturnThis(),
+          limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+        })),
+      };
+      const service = new ProfitLossReportService(mockSupabase as never);
+
+      const result = await service.generateReport(testUserId, {
+        startMonth: '2026-05',
+        endMonth: '2026-05',
+      });
+
+      // The rows vanish from `rows` via the zero-row filter — failedRows is the
+      // only remaining evidence, and the MTD export refuses to file without it.
+      expect(result.rows).toEqual([]);
+      expect(result.failedRows.length).toBeGreaterThan(0);
+      expect(result.failedRows.map((f) => f.transactionType)).toContain('Lego Stock Purchases');
+      // Every failure must carry a reason to act on (the message varies by which
+      // part of the chain broke).
+      for (const failure of result.failedRows) {
+        expect(failure.error).toBeTruthy();
+        expect(typeof failure.error).toBe('string');
+      }
     });
   });
 });
