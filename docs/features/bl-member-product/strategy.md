@@ -135,7 +135,7 @@ differentiators identified in the strategy session.
 | 9 | **Pricing-strategy inference** | Highest wow-per-hour on the list. Join their store to the price cache and regress ask against market by condition, item type, price band and colour rarity to infer the formula they are *actually* running: *"you believe you price at market; you're at 1.32× on parts under £1 and 0.81× on minifigs over £10."* The `hist` price→quantity distribution shows where market volume clusters relative to their ask. Nobody knows their own effective pricing strategy, and no free tool can compute it |
 | 10 | **STR trust — spike vs steady** | A 2026 set can show a flattering six-month STR that will not hold. `uk_detail.soldNew.byMonth` answers this directly: was sold quantity spread across months, or did it all land in one? See §4 for readiness |
 | 11 | **POV concentration** | Is the part-out value carried by three minifigs or spread across 800 parts? Transforms part-out risk assessment. `bricklink_part_out_value_cache` is set-level aggregate only (no per-part breakdown), but `partout.service.ts` already walks set inventories part-by-part — persist that breakdown to derive top-N share of POV, minifig share, and a concentration risk flag |
-| 12 | **Per-member fee & pricing config** | `src/lib/bricklink/fees.ts` hardcodes the Bricqer stack: BL 3% + Bricqer 3.5% + PayPal 2.9% = 9.4%. A member not on Bricqer runs ~5.9% and has no pricing formula at all. Fees and the list-price model must become per-member configuration. `fees.ts` remains the single source of truth — it gains a resolver, it does not get re-declared elsewhere |
+| 12 | **Per-member fee & pricing model** | `src/lib/bricklink/fees.ts` hardcodes the Bricqer stack: BL 3% + Bricqer 3.5% + PayPal 2.9% = 9.4%. A member not on Bricqer runs roughly 5.9% and has no pricing formula at all. Both become per-member configuration. `fees.ts` remains the single source of truth — it gains a resolver, it is not re-declared elsewhere. See §4a |
 
 ### Tier 4 — Deliberately withheld
 
@@ -173,6 +173,85 @@ Two honest limits to carry into the spec:
 
 ---
 
+## 4a. Pricing model — catering for Bricqer and non-Bricqer members
+
+**Decision (2026-07-25): assume a mix of Bricqer and non-Bricqer members from the
+first cohort**, so the abstraction is exercised by real variance during testing
+rather than discovered to be load-bearing after launch.
+
+### The abstraction is nearly free
+
+`bricqer-pricing.ts` is named for Bricqer but its *shape* is general:
+
+```
+listPrice = max(floor, ukSoldAvg × multiplier(condition, STR))
+```
+
+Only four things are Bricqer-specific: the multiplier values (New 1.10/0.85; Used
+1.90/1.40/1.25/1.15/0.93/0.90), the STR band edges (New 0.5; Used
+1.5/1.0/0.75/0.5/0.25), the £0.0399 floor, and the exclusion rules (items with a
+comment, and sets). Generalising is therefore a parameter extraction, not a
+rewrite:
+
+```
+listPrice(ukSoldAvg, condition, strQty, model)
+model = { bands: { N: [{minStr, mult}], U: [...] }, floor, exclusions }
+```
+
+Bricqer becomes the default *named* model, versioned as it already is (v1–v4 in
+the file header). Its canonical status is preserved — it just stops being the
+only one.
+
+### Injection points are narrow
+
+| Consumer | Impact |
+|---|---|
+| `bl-store-assessment/engine.ts:210` | The only substantive caller of `bricqerListPrice`. Takes a model parameter |
+| `store-quality/engine.ts:401` | Reads the member's **actual** price from their inventory — no model needed |
+| `brickradar/priceHistogram.ts`, `TupleDetail.tsx` | Use `BRICQER_PRICE_FLOOR` only. Floor moves into the model |
+
+### The seller lens needs no pricing model at all
+
+An important scoping consequence: **"My Store" review (item 8) works for a
+non-Bricqer member on day one with zero pricing-model work.** Their real prices
+arrive in the BSX or scrape, and the review compares those to market. The model is
+only required for the *buy* lens, where the question is "what could **I** list this
+at?" for lots sitting in someone else's store.
+
+So item 12 gates items 1–2 for non-Bricqer members, not items 6–9. It does not
+belong on the critical path.
+
+### Inference is the configuration mechanism
+
+Item 9 outputs exactly the structure item 12 consumes: multipliers against
+benchmark, banded by condition, item type and price band. That closes a loop worth
+building deliberately —
+
+> **infer their actual strategy → propose it as their pricing model → project buy-lens
+> net using their own economics.**
+
+A member is asked to confirm a model derived from their real listings, not to fill
+in a form they cannot answer. For a non-Bricqer seller pricing by hand, this is
+likely the first time anyone has told them what formula they are running. It turns
+the hardest onboarding step into the strongest demo.
+
+### Fee stack
+
+Per-member configuration resolved through `fees.ts`:
+
+| Component | Bricqer member | Non-Bricqer member |
+|---|---|---|
+| BrickLink commission | 3.0% | 3.0% |
+| Bricqer | 3.5% | — |
+| Payment processing | 2.9% (PayPal) | ~2.9% (PayPal or BL onsite) |
+| **Total** | **9.4%** | **~5.9%** |
+
+Two items to verify during the spec rather than assume: BrickLink's current
+commission tiering by monthly sales volume, and the BrickLink Payment System rate
+where a member does not use PayPal. Both are configuration, not constants.
+
+---
+
 ## 5. Architecture decisions
 
 | Decision | Choice | Rationale |
@@ -187,9 +266,8 @@ Two honest limits to carry into the spec:
 
 ## 6. Open items
 
-1. **Member Bricqer usage.** Item 12's shape depends on whether members run
-   Bricqer, BrickStore, BrickSync or manual pricing. Determines how much of the
-   list-price model is configuration versus new code.
+1. ~~**Member Bricqer usage.**~~ **Resolved 2026-07-25:** assume a mix, to exercise
+   both paths during testing. See §4a.
 2. **Seat selection criteria.** Which four, and the rule for avoiding own sourcing
    lanes. Commercial, not technical, but it gates the buy-lens release.
 3. **Buy-lens exposure policy.** Whether members see buy-side signals live or on a
@@ -206,11 +284,18 @@ Two honest limits to carry into the spec:
 1. Land the in-flight polish work (open item 4).
 2. **Item 6** — member store snapshot, BSX route first. Everything depends on it.
 3. **Item 9** — pricing-strategy inference. Earliest demonstrable value; it is the
-   feature that sells the first four seats.
-4. **Item 7** — overlap vs member store. Makes items 1–3 honest for a member.
-5. **Item 8** — "My Store" review. The retention feature.
-6. **Items 10–12** — trust signals, POV concentration, fee config.
-7. Web renderer, auth, member area, staleness alerting — threaded throughout, not
+   feature that sells the first four seats, and it doubles as the configuration
+   mechanism for item 12 (§4a).
+4. **Item 8** — "My Store" review. The retention feature, and it needs **no**
+   pricing model — deliverable to Bricqer and non-Bricqer members alike.
+5. **Item 7** — overlap vs member store. Makes items 1–3 honest for a member.
+6. **Item 12** — pricing model + fee resolver. Gates the buy lens for non-Bricqer
+   members; seed it from item 9's inferred output rather than a config form.
+7. **Items 10–11** — STR trust signal, POV concentration.
+8. Web renderer, auth, member area, staleness alerting — threaded throughout, not
    a phase.
 
 Items 2 and 4–5 need only polish and can fill gaps whenever a larger item blocks.
+
+**A non-Bricqer member is fully served by steps 2–5.** The buy lens is the only
+thing waiting on step 6, which is why the mixed first cohort is safe to run.
