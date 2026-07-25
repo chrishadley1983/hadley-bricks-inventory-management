@@ -30,9 +30,13 @@
  *   --max-sessions=<n>      Hard cap on sessions this run (default 6)
  *   --window-hours=<n>      Run-window budget in hours, from job start (default 7.5 — matches
  *                           the .ps1's ExecutionTimeLimit of 7h30m)
- *   --nav-delay-ms=<n>      Base delay between PG navigations (default 4000, floor 4000)
+ *   --nav-delay-ms=<n>      Base delay between PG navigations (default 4000, floor 2000);
+ *                           a +0..2s jitter is always added on top
  *   --limit-tuples=<n>      Cap total requests this run (0 = no cap; for testing)
  *   --claim-chunk=<n>       Tuples claimed per DB round-trip (default 50)
+ *   --sold-unavailable-brake=<n>  Consecutive sold-unavailable hits treated as a BROAD
+ *                           BL sold-data outage and worth winding the session down for
+ *                           (default 5). One isolated hit never ends a session.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -84,7 +88,22 @@ const SESSION_SIZE = parseInt(argv['session-size'] ?? '350', 10);
 const BREATHER_MINS = parseFloat(argv['breather-mins'] ?? '20');
 const MAX_SESSIONS = parseInt(argv['max-sessions'] ?? '6', 10);
 const WINDOW_HOURS = parseFloat(argv['window-hours'] ?? '7.5');
-const NAV_DELAY_MS = Math.max(4000, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
+// Floor lowered 4000 -> 2000 (2026-07-25, evidence-led): bl_pg_lane_telemetry recorded
+// ZERO block signals across the last 40 sessions / 12,376 requests at a 4s base delay —
+// BL has never throttled this lane. The default stays 4000 so the nightly .ps1 run is
+// unchanged; the floor only lets an operator opt into a faster daytime backlog burn via
+// --nav-delay-ms. The +0..2s jitter below is always applied on top, so 2500 still means
+// a 2.5-4.5s spread, never a fixed drumbeat. Revert the floor if blocks reappear —
+// first_block_at_request in the telemetry is the signal to watch.
+const NAV_DELAY_MS = Math.max(2000, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
+/** Consecutive PgSoldUnavailableError hits that constitute a BROAD sold-data outage.
+ *  Below this, an isolated one is just an item that never sold in either condition
+ *  (indistinguishable on the page) and must not end the session — see the planner's
+ *  nextAction note and the 2026-07-25 incident. Override with --sold-unavailable-brake. */
+const SOLD_UNAVAILABLE_BRAKE = Math.max(
+  1,
+  parseInt(argv['sold-unavailable-brake'] ?? '5', 10),
+);
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
 
@@ -732,6 +751,8 @@ async function main(): Promise<void> {
   const state: PlannerState = {
     requestsThisSession: 0,
     consecutiveFails: 0,
+    consecutiveSoldUnavailable: 0,
+    soldUnavailableBrake: SOLD_UNAVAILABLE_BRAKE,
     sessionsCompleted: 0,
     blockedSessions: 0,
     sessionSize: SESSION_SIZE,
@@ -788,6 +809,7 @@ async function main(): Promise<void> {
         state.blockedSessions = action === 'backoff' ? state.blockedSessions + 1 : 0;
         state.requestsThisSession = 0;
         state.consecutiveFails = 0;
+        state.consecutiveSoldUnavailable = 0;
         sessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0, soldUnavailable: 0 };
         firstBlockAtRequest = null;
         sessionStartedAt = new Date().toISOString();
@@ -861,6 +883,7 @@ async function main(): Promise<void> {
         batches.queueUpdates.push(toOkQueueUpdate(tuple));
         sessionCounts.ok += 1;
         state.consecutiveFails = 0;
+        state.consecutiveSoldUnavailable = 0;
       } catch (err) {
         if (err instanceof PgBlockError || err instanceof PgCaptchaError) {
           sessionCounts.failed += 1;
@@ -876,21 +899,31 @@ async function main(): Promise<void> {
           batches.summaryRows.push(toNoDataSummaryRow(tuple));
           batches.queueUpdates.push(toNoDataQueueUpdate(tuple));
           state.consecutiveFails = 0;
+          state.consecutiveSoldUnavailable = 0;
         } else if (err instanceof PgNotFoundError) {
           sessionCounts.ok += 1;
           sessionCounts.notFound += 1;
           batches.queueUpdates.push(toNotFoundQueueUpdate(tuple, err));
           state.consecutiveFails = 0;
+          state.consecutiveSoldUnavailable = 0;
         } else if (err instanceof PgSoldUnavailableError) {
-          // BL sold-data outage: a failure (never a zero row), and it feeds the
-          // consecutive-fail brake so a night where BL withholds sold data broadly
-          // winds the session down instead of burning the whole request budget.
+          // BL sold-data outage: a failure (never a zero row). It feeds its OWN brake —
+          // not consecutiveFails, which the planner documents as block/captcha-only —
+          // so a night where BL withholds sold data BROADLY still winds the session
+          // down, but a lone item does not. Both sold quadrants rendering
+          // "(Unavailable)" is also exactly how an item that never sold in either
+          // condition renders, and the tail is full of those; treating one as a
+          // site-wide outage killed three runs on 2026-07-25 (1,098 / 2,352 / 16
+          // tuples) with zero 403s in 12,376 requests of telemetry.
           sessionCounts.failed += 1;
           sessionCounts.soldUnavailable += 1;
           runSoldUnavailable += 1;
-          state.consecutiveFails += 1;
+          state.consecutiveSoldUnavailable += 1;
           batches.queueUpdates.push(toSoldUnavailableQueueUpdate(tuple));
-          console.warn(`[pg-refresh-cycle] SOLD-UNAVAILABLE on ${tupleLabel(item)} — BL outage, requeued +1d`);
+          console.warn(
+            `[pg-refresh-cycle] SOLD-UNAVAILABLE on ${tupleLabel(item)} — requeued +1d ` +
+              `(${state.consecutiveSoldUnavailable}/${SOLD_UNAVAILABLE_BRAKE} consecutive)`,
+          );
         } else if (err instanceof PgLoginError || err instanceof PgCurrencyError) {
           console.error(
             `[pg-refresh-cycle] FATAL on ${tupleLabel(item)}: ${err.message} — the CDP session is unusable ` +

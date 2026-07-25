@@ -116,6 +116,16 @@ export interface PlannerState {
    *  driver should reset this to 0 on every non-block outcome (success,
    *  PgNotFoundError, PgNoDataError, or any other error that isn't a block). */
   consecutiveFails: number;
+  /** Consecutive PgSoldUnavailableError hits since the last successful fetch (or the
+   *  last backoff). Tracked SEPARATELY from `consecutiveFails` because a sold-data
+   *  outage is not a throttle: a single item whose sold quadrants both render
+   *  "(Unavailable)" is indistinguishable from an item that genuinely never sold in
+   *  either condition, and those are common in the tail. Only a BROAD withholding —
+   *  `soldUnavailableBrake` of them back to back — is the outage signature that should
+   *  wind a session down. See the 2026-07-25 incident note on `nextAction`. */
+  consecutiveSoldUnavailable: number;
+  /** How many consecutive sold-unavailable hits constitute a broad outage. */
+  soldUnavailableBrake: number;
   /** Sessions fully ended (via breather or backoff) so far this run. */
   sessionsCompleted: number;
   /** Consecutive sessions that ended via backoff (block). A normal
@@ -140,14 +150,26 @@ export interface PlannerState {
  *   2. two consecutive blocked sessions -> stop
  *   3. maxSessions reached -> stop
  *   4. a block signal is live -> backoff
- *   5. session quota reached -> breather
- *   6. otherwise -> fetch
+ *   5. a BROAD sold-data outage is live -> backoff
+ *   6. session quota reached -> breather
+ *   7. otherwise -> fetch
+ *
+ * Rule 5 exists because of the 2026-07-25 incident: `PgSoldUnavailableError` was being
+ * fed into `consecutiveFails`, so ONE item ended a whole session (155-of-156 scored the
+ * same as blocked-from-the-first-request) and two such sessions killed the run. Three
+ * runs died that way — 1,098 / 2,352 / 16 tuples — while lane telemetry recorded ZERO
+ * 403s across 12,376 requests. A single sold-unavailable is not evidence of anything
+ * site-wide (the other 155 items scraped fine); only a run of them is. The driver's own
+ * comment always said "a night where BL withholds sold data BROADLY winds the session
+ * down" — this makes the code match that intent, and honours the `consecutiveFails`
+ * contract above, which is documented as block/captcha-only.
  */
 export function nextAction(state: PlannerState): PlannerAction {
   if (state.elapsedMinutes >= state.windowMinutes) return 'stop';
   if (state.blockedSessions >= 2) return 'stop';
   if (state.sessionsCompleted >= state.maxSessions) return 'stop';
   if (state.consecutiveFails > 0) return 'backoff';
+  if (state.consecutiveSoldUnavailable >= state.soldUnavailableBrake) return 'backoff';
   if (state.requestsThisSession >= state.sessionSize) return 'breather';
   return 'fetch';
 }
