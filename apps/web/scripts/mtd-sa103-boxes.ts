@@ -25,7 +25,7 @@
 import { writeFileSync } from 'node:fs';
 import { config } from 'dotenv';
 config({ path: '.env.local' });
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
   ProfitLossReportService,
   type ProfitLossReport,
@@ -136,7 +136,122 @@ export function boxesFromReport(report: ProfitLossReport) {
     );
   }
 
+  // SA103F has no concept of a negative expense box. A net-credit period would
+  // otherwise be filed as a negative figure and rejected (or worse, accepted).
+  for (const [box, value] of Object.entries(boxes)) {
+    if (box !== '15' && value < 0) {
+      throw new Error(
+        `Box ${box} is negative (${value}) — a period whose fee reversals exceed its charges ` +
+          `cannot be filed as-is. Decide how to present the credit before submitting.`
+      );
+    }
+  }
+
   return { boxes, detail, turnover, expenses, profit: r2(turnover - expenses) };
+}
+
+/**
+ * SOURCE → report completeness check.
+ *
+ * The reconciliation above compares the boxes to the report's own rows, which
+ * cannot catch a row that is never queried — and that is exactly how the Amazon
+ * `Adjustment` costs and the non-T0006 PayPal receipts survived two validation
+ * rounds. This goes back to the raw tables and asserts every money-bearing
+ * source is represented by at least one non-zero row, so a whole stream going
+ * missing fails the run instead of quietly shrinking the return.
+ */
+export async function assertSourcesRepresented(
+  supabase: SupabaseClient,
+  userId: string,
+  startDate: string,
+  endDateExclusive: string,
+  report: ProfitLossReport,
+  basis: ReportBasis
+): Promise<string[]> {
+  const notes: string[] = [];
+  const rowTotal = (name: string) =>
+    Math.abs(report.rows.find((r) => r.transactionType === name)?.total ?? 0);
+
+  const checks: {
+    label: string
+    present: () => Promise<boolean>
+    rows: string[]
+    /** Rows that only exist on one basis — skip the check on the other. */
+    onlyBasis?: ReportBasis
+  }[] = [
+    {
+      label: 'Amazon Adjustment costs (return postage billed back)',
+      rows: ['Amazon Fees'],
+      present: async () => {
+        const { data } = await supabase
+          .from('amazon_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('transaction_type', 'Adjustment')
+          .eq('transaction_status', 'RELEASED')
+          .gte('posted_date', startDate)
+          .lt('posted_date', endDateExclusive)
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      },
+    },
+    {
+      label: 'PayPal receipts outside the marketplace checkout code (T0011/T0000)',
+      rows: ['Other PayPal Sales (cash received)'],
+      // Accrual takes BL/BO income from the order tables, not PayPal receipts,
+      // so this row legitimately does not exist there.
+      onlyBasis: 'cash',
+      present: async () => {
+        const { data } = await supabase
+          .from('paypal_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .in('transaction_event_code', ['T0011', 'T0000'])
+          .gt('gross_amount', 0)
+          .gte('transaction_date', startDate)
+          .lt('transaction_date', endDateExclusive)
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      },
+    },
+    {
+      label: 'Shopify orders',
+      rows: ['Shopify Sales'],
+      present: async () => {
+        const { data } = await supabase
+          .from('platform_orders')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('platform', 'shopify')
+          .gte('order_date', startDate)
+          .lt('order_date', endDateExclusive)
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      },
+    },
+  ];
+
+  for (const check of checks) {
+    if (check.onlyBasis && check.onlyBasis !== basis) {
+      notes.push(`${check.label}: not applicable on ${basis} basis`);
+      continue;
+    }
+    const sourceHasRows = await check.present();
+    const represented = check.rows.some((r) => rowTotal(r) > 0.005);
+    if (sourceHasRows && !represented) {
+      throw new Error(
+        `${check.label}: the source has rows in this period but ${check.rows.join('/')} is £0 — ` +
+          `a whole income/expense stream is missing from the return.`
+      );
+    }
+    notes.push(
+      `${check.label}: source ${sourceHasRows ? 'has rows' : 'empty'}, report ${
+        represented ? 'represents it' : 'shows £0'
+      }`
+    );
+  }
+
+  return notes;
 }
 
 async function main() {
@@ -165,6 +280,17 @@ async function main() {
     basis,
   });
   const result = boxesFromReport(report);
+
+  // Completeness: prove every money-bearing source reached a row, not just that
+  // the boxes add up to the rows we happened to query.
+  const sourceNotes = await assertSourcesRepresented(
+    supabase as unknown as SupabaseClient,
+    USER_ID,
+    startDate,
+    endDateExclusive,
+    report,
+    basis
+  );
 
   if (asJson) {
     const json = JSON.stringify(

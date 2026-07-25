@@ -316,7 +316,7 @@ describe('ProfitLossReportService', () => {
   });
 
   describe('row definitions', () => {
-    it('should define 29 row types across all categories', async () => {
+    it('should define 30 row types across all categories', async () => {
       // This test verifies the service structure by checking the total rows when includeZeroRows is true
       const mockSupabase = createSupabaseMock();
       const service = new ProfitLossReportService(mockSupabase as never);
@@ -335,16 +335,18 @@ describe('ProfitLossReportService', () => {
       const billsRows = result.rows.filter((r) => r.category === 'Bills');
       const homeCostsRows = result.rows.filter((r) => r.category === 'Home Costs');
 
-      // Expected row counts per category
-      expect(incomeRows.length).toBe(6); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Amazon Sales, Amazon Refunds
+      // Expected row counts per category (accrual basis, the default)
+      // Shopify was added 2026-07-25: real trading income once the store started
+      // selling, previously omitted from both bases.
+      expect(incomeRows.length).toBe(7); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Shopify, Amazon Sales, Amazon Refunds
       expect(sellingFeesRows.length).toBe(11); // BrickLink/Brick Owl/Bricqer Fees, Amazon Fees, PayPal Fees, 8 eBay fee types
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(2); // Postage, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website / Software, Office, Mileage
       expect(homeCostsRows.length).toBe(3); // Use of Home, Phone & Broadband, Insurance
 
-      // Total should be 29 rows (6 income + 11 selling fees + 2 stock + 2 packing + 5 bills + 3 home costs)
-      expect(result.rows.length).toBe(29);
+      // Total should be 30 rows (7 income + 11 selling fees + 2 stock + 2 packing + 5 bills + 3 home costs)
+      expect(result.rows.length).toBe(30);
     });
 
     it('should include expected Income row types', async () => {

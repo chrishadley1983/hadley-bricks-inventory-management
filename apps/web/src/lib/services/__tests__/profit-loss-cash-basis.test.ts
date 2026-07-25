@@ -164,6 +164,187 @@ function refundBreakdowns(refundedSales: number, refundedFees: number) {
   ];
 }
 
+describe('P&L completeness guards (2026-07-25 validation round 2)', () => {
+  /**
+   * Amazon `Reserve` adjustments hold Sales +X and Expenses −X — a balance
+   * movement netting to exactly zero. Taking one side inflates that side by
+   * £6,263.55 across the account (a full year of expenses came out £4,945.88
+   * heavy before this was caught); taking both inflates turnover by the same.
+   * They must be excluded outright.
+   */
+  const reserveRow = {
+    user_id: USER,
+    transaction_type: 'Adjustment',
+    transaction_status: 'RELEASED',
+    description: 'Reserve',
+    posted_date: '2026-06-15T10:00:00+00:00',
+    total_amount: 0,
+    breakdowns: [
+      { breakdownType: 'Sales', breakdownAmount: { currencyAmount: 2754.35 }, breakdowns: [] },
+      {
+        breakdownType: 'Expenses',
+        breakdownAmount: { currencyAmount: -2754.35 },
+        breakdowns: [
+          { breakdownType: 'ReserveDebit', breakdownAmount: { currencyAmount: -2754.35 }, breakdowns: null },
+        ],
+      },
+    ],
+  };
+
+  const returnPostageRow = {
+    user_id: USER,
+    transaction_type: 'Adjustment',
+    transaction_status: 'RELEASED',
+    description: 'LabmanLabelReturn',
+    posted_date: '2026-06-20T10:00:00+00:00',
+    total_amount: -3.28,
+    breakdowns: [
+      { breakdownType: 'Sales', breakdownAmount: { currencyAmount: 0 }, breakdowns: [] },
+      {
+        breakdownType: 'Expenses',
+        breakdownAmount: { currencyAmount: -3.28 },
+        breakdowns: [
+          { breakdownType: 'Other', breakdownAmount: { currencyAmount: -3.28 }, breakdowns: null },
+        ],
+      },
+    ],
+  };
+
+  it('excludes Reserve adjustments from BOTH sales and fees', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      amazon_transactions: [reserveRow, returnPostageRow],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    expect(result.failedRows).toEqual([]);
+    // The reserve's £2,754.35 must appear on neither side.
+    const sales = getRow(result, 'Amazon Sales (funds released)');
+    expect(sales?.monthlyValues['2026-06'] ?? 0).toBe(0);
+    // Only the genuine £3.28 of return postage is a cost.
+    const fees = getRow(result, 'Amazon Fees');
+    expect(fees!.monthlyValues['2026-06']).toBeCloseTo(-3.28, 2);
+  });
+
+  it('counts Adjustment return postage that the Shipment-only query missed', async () => {
+    const supabase = createFilterAwareSupabaseMock({ amazon_transactions: [returnPostageRow] });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    expect(getRow(result, 'Amazon Fees')!.monthlyValues['2026-06']).toBeCloseTo(-3.28, 2);
+  });
+
+  it('refuses to report an unclassified Amazon transaction_type', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      amazon_transactions: [
+        { ...returnPostageRow, transaction_type: 'SomeNewAmazonThing', description: null },
+      ],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    // Fails the row rather than silently omitting the money.
+    expect(result.failedRows.map((f) => f.transactionType)).toContain('Amazon Fees');
+    expect(result.failedRows.find((f) => f.transactionType === 'Amazon Fees')!.error).toMatch(
+      /Unclassified Amazon transaction_type/
+    );
+  });
+
+  it('refuses to report an unclassified Adjustment description', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      amazon_transactions: [{ ...returnPostageRow, description: 'SomeNewAdjustmentKind' }],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    expect(result.failedRows.find((f) => f.transactionType === 'Amazon Fees')!.error).toMatch(
+      /Unclassified Amazon Adjustment description/
+    );
+  });
+
+  it('refuses to report an unclassified PayPal money-in event code', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      paypal_transactions: [
+        {
+          user_id: USER,
+          transaction_event_code: 'T9999',
+          transaction_type: null,
+          transaction_date: '2026-06-05T09:00:00+00:00',
+          gross_amount: 42,
+          fee_amount: -1,
+        },
+      ],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    const failure = result.failedRows.find((f) =>
+      f.transactionType.startsWith('BrickLink Sales')
+    );
+    expect(failure?.error).toMatch(/Unclassified PayPal money-in event code/);
+  });
+
+  it('counts direct PayPal receipts separately from BrickLink', async () => {
+    const supabase = createFilterAwareSupabaseMock({
+      paypal_transactions: [
+        {
+          user_id: USER,
+          transaction_event_code: 'T0006',
+          transaction_type: null,
+          transaction_date: '2026-06-05T09:00:00+00:00',
+          gross_amount: 40,
+          fee_amount: -1.8,
+        },
+        {
+          user_id: USER,
+          transaction_event_code: 'T0011',
+          transaction_type: null,
+          transaction_date: '2026-06-07T09:00:00+00:00',
+          gross_amount: 95,
+          fee_amount: -3.06,
+        },
+      ],
+    });
+    const service = new ProfitLossReportService(supabase as never);
+
+    const result = await service.generateReport(USER, {
+      startMonth: '2026-06',
+      endMonth: '2026-06',
+      basis: 'cash',
+    });
+
+    // BrickLink must stay reconcilable against bricklink_transactions...
+    expect(getRow(result, 'BrickLink Sales (cash received)')!.monthlyValues['2026-06']).toBe(40);
+    // ...while the direct receipt is still declared, in its own row.
+    expect(getRow(result, 'Other PayPal Sales (cash received)')!.monthlyValues['2026-06']).toBe(95);
+  });
+});
+
 describe('P&L cash basis', () => {
   describe('Amazon cash income (funds released)', () => {
     // One order that went DEFERRED (June) then RELEASED (July) — the classic
