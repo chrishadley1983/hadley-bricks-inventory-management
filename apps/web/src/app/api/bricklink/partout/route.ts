@@ -73,7 +73,10 @@ export async function GET(
     const partoutService = new PartoutService(brickLinkClient, supabase);
 
     // 5. Get partout value
-    const data = await partoutService.getPartoutValue(setNumber, { forceRefresh });
+    const data = await partoutService.getPartoutValue(setNumber, {
+      forceRefresh,
+      userId: user.id,
+    });
 
     console.log(
       `[GET /api/bricklink/partout] Success: ${data.totalParts} parts, POV £${data.povNew.toFixed(2)} (new)`

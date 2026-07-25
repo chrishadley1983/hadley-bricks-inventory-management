@@ -16,8 +16,22 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { RateLimitError, type BrickLinkClient } from './client';
 import type { BrickLinkItemType, BrickLinkSubsetEntry } from './types';
 import { ensurePriceGuide } from './price-guide/capture';
-import { readPriceGuide, pgKey, type ItemRef, type PgType, type PriceGuideView } from './price-guide/read';
+import {
+  readPriceGuide,
+  pgKey,
+  type ItemRef,
+  type PgType,
+  type PriceGuideView,
+} from './price-guide/read';
 import { loadColourMap, type ColourMap } from './colour-map';
+import { readWorldSupply, type WorldSupply } from './world-supply';
+import { assessPartoutBoth } from './partout-assessment';
+import {
+  loadOwnStockIndex,
+  classifyOverlap,
+  type OwnStockIndex,
+} from '@/lib/bl-store-assessment/overlap';
+import type { ItemTypeCode } from '@/lib/bl-store-assessment/types';
 import type {
   PartoutData,
   PartValue,
@@ -73,9 +87,16 @@ export class PartoutService {
     options: {
       onProgress?: PartoutProgressCallback;
       forceRefresh?: boolean;
+      /**
+       * When supplied, the set's lots are classified against our own Bricqer stock
+       * (NEW / RESTOCK_OUT / RESTOCK_THIN / DUPLICATE). Omit to skip the overlap
+       * read entirely — the assessment then reports `overlap: null` rather than
+       * pretending we hold nothing.
+       */
+      userId?: string;
     } = {}
   ): Promise<PartoutData> {
-    const { onProgress, forceRefresh = false } = options;
+    const { onProgress, forceRefresh = false, userId } = options;
     console.log(
       `[PartoutService] Getting partout value for set ${setNumber}${forceRefresh ? ' (force refresh)' : ''}`
     );
@@ -123,15 +144,30 @@ export class PartoutService {
     onProgress?.(0, uncached.length, cached.length);
 
     // 4. Fetch uncached parts in batches — each fetch captures into the unified cache
-    const fetchedCount = await this.fetchUncached(uncached, views, ttlDays, cached.length, onProgress);
+    const fetchedCount = await this.fetchUncached(
+      uncached,
+      views,
+      ttlDays,
+      cached.length,
+      onProgress
+    );
 
-    // 5. Get set prices for ratio calculation (captured to the unified cache too)
-    const setView = await this.getSetView(setNumber, ttlDays);
+    // 5. Get set prices for ratio calculation (captured to the unified cache too),
+    //    plus the two decision inputs the assessment needs: worldwide supply for
+    //    magnets and our own stock index for overlap. Neither is on the critical
+    //    path for POV, so a failure degrades the assessment rather than the page.
+    const [setView, supply, ownStock] = await Promise.all([
+      this.getSetView(setNumber, ttlDays),
+      this.readSupplySafely(parts),
+      this.readOwnStockSafely(userId),
+    ]);
     const setPriceNew = setView ? (setView.new.stockAvg ?? setView.new.soldAvg) : null;
     const setPriceUsed = setView ? (setView.used.stockAvg ?? setView.used.soldAvg) : null;
 
     // 6. Build part values from the views
-    const partValues = parts.map((p) => this.toPartValue(p, views.get(keyOf(p)), isCached(p)));
+    const partValues = parts.map((p) =>
+      this.toPartValue(p, views.get(keyOf(p)), isCached(p), supply.get(keyOf(p)), ownStock)
+    );
 
     // 7. Calculate totals
     const povNew = partValues.reduce((sum, p) => sum + p.totalNew, 0);
@@ -141,8 +177,22 @@ export class PartoutService {
     const ratioNew = setPriceNew ? povNew / setPriceNew : null;
     const ratioUsed = setPriceUsed ? povUsed / setPriceUsed : null;
 
-    // 9. Determine recommendation based on new condition ratio
+    // 9. Legacy headline recommendation. Kept for back-compat with existing
+    //    consumers, but it is the OLD gross ratio > 1 test — the canonical verdict
+    //    (fee- and liquidity-aware, gated at POV_MULTIPLE_MIN) lives on `assessment`.
     const recommendation = ratioNew !== null && ratioNew > 1 ? 'part-out' : 'sell-complete';
+
+    // 10. Canonical assessment: honesty ladder, part-out gate, STR bands, magnets,
+    //     value concentration and store overlap — per condition.
+    const assessment = assessPartoutBoth(
+      partValues,
+      { new: setPriceNew, used: setPriceUsed },
+      {
+        overlapMeta: ownStock
+          ? { snapshotAt: ownStock.snapshotAt, salesWindowDays: ownStock.salesWindowDays }
+          : null,
+      }
+    );
 
     return {
       setNumber,
@@ -162,7 +212,42 @@ export class PartoutService {
         total: parts.length,
       },
       parts: partValues.sort((a, b) => b.totalNew - a.totalNew), // Sort by value descending
+      assessment,
     };
+  }
+
+  /**
+   * Worldwide supply for magnet detection. Non-fatal: without it magnets simply
+   * don't fire, which is the honest outcome — we can't claim scarcity we can't see.
+   */
+  private async readSupplySafely(parts: PartIdentifier[]): Promise<Map<string, WorldSupply>> {
+    try {
+      return await readWorldSupply(
+        this.supabase,
+        parts.map((p) => ({
+          itemType: toPgType(p.partType),
+          itemNo: p.partNumber,
+          blColourId: toPgType(p.partType) === 'P' ? p.colourId : 0,
+        }))
+      );
+    } catch (error) {
+      console.warn('[PartoutService] World supply read failed; magnets disabled:', error);
+      return new Map();
+    }
+  }
+
+  /**
+   * Our own stock index for overlap tagging. Non-fatal and skipped entirely when no
+   * userId was supplied.
+   */
+  private async readOwnStockSafely(userId: string | undefined): Promise<OwnStockIndex | null> {
+    if (!userId) return null;
+    try {
+      return await loadOwnStockIndex(this.supabase, userId);
+    } catch (error) {
+      console.warn('[PartoutService] Own-stock index failed; overlap disabled:', error);
+      return null;
+    }
   }
 
   /**
@@ -271,10 +356,34 @@ export class PartoutService {
   }
 
   /** Build a PartValue from a price view (or an empty one when no data). */
-  private toPartValue(part: PartIdentifier, view: PriceGuideView | undefined, fromCache: boolean): PartValue {
+  private toPartValue(
+    part: PartIdentifier,
+    view: PriceGuideView | undefined,
+    fromCache: boolean,
+    supply: WorldSupply | undefined,
+    ownStock: OwnStockIndex | null
+  ): PartValue {
     const hasData = view != null && view.coverage === 'uk';
     const priceNew = hasData ? (view.new.soldAvg ?? view.new.stockAvg) : null;
     const priceUsed = hasData ? (view.used.soldAvg ?? view.used.stockAvg) : null;
+
+    // Overlap is condition-specific: holding 40 of a part in Used says nothing about
+    // whether we're short of it in New.
+    const itemType: ItemTypeCode = part.partType === 'MINIFIG' ? 'M' : 'P';
+    const blColourId = itemType === 'P' ? part.colourId : 0;
+    const overlapFor = (condition: 'N' | 'U') =>
+      classifyOverlap(
+        {
+          itemType,
+          itemNo: part.partNumber,
+          blColourId,
+          colourName: part.colourName ?? null,
+          condition,
+        },
+        ownStock
+      );
+    const overlapN = overlapFor('N');
+    const overlapU = overlapFor('U');
 
     return {
       partNumber: part.partNumber,
@@ -290,6 +399,16 @@ export class PartoutService {
       totalUsed: (priceUsed ?? 0) * part.quantity,
       sellThroughRateNew: hasData && view.new.strLots !== null ? view.new.strLots * 100 : null,
       sellThroughRateUsed: hasData && view.used.strLots !== null ? view.used.strLots * 100 : null,
+      // Qty-basis STR as a fraction — what every gate, magnet test and capture-curve
+      // lookup consumes. Deliberately NOT the ×100 lots-basis fields above.
+      strQtyNew: hasData ? view.new.strQty : null,
+      strQtyUsed: hasData ? view.used.strQty : null,
+      worldSupplyLotsNew: supply?.stockLotsNew ?? null,
+      worldSupplyLotsUsed: supply?.stockLotsUsed ?? null,
+      overlapNew: overlapN.tag,
+      overlapUsed: overlapU.tag,
+      ourQtyNew: overlapN.ourQty,
+      ourQtyUsed: overlapU.ourQty,
       stockAvailableNew: hasData ? view.new.stockLots : null,
       stockAvailableUsed: hasData ? view.used.stockLots : null,
       timesSoldNew: hasData ? view.new.soldLots : null,
@@ -330,6 +449,9 @@ export class PartoutService {
       recommendation: 'sell-complete',
       cacheStats: { fromCache: 0, fromApi: 0, total: 0 },
       parts: [],
+      // No parts means nothing to assess — null rather than a zeroed assessment that
+      // would render as a confident "SKIP" verdict on data we never had.
+      assessment: null,
     };
   }
 }

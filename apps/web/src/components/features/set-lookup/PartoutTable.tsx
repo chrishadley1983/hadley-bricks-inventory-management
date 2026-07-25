@@ -215,6 +215,60 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
         (condition === 'new' ? row.original.timesSoldNew : row.original.timesSoldUsed) ?? '-',
     },
     {
+      // Quantity-basis STR — the figure the gates, magnet test and capture curve all
+      // use. The "Sell-Through" column above is the legacy lots-basis percentage; they
+      // will not agree, which is why this one is labelled explicitly.
+      id: 'strQty',
+      accessorFn: (row) => (condition === 'new' ? row.strQtyNew : row.strQtyUsed),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="-ml-4"
+        >
+          STR (qty)
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) => {
+        const str = condition === 'new' ? row.original.strQtyNew : row.original.strQtyUsed;
+        return str == null ? '-' : str.toFixed(2);
+      },
+    },
+    {
+      id: 'worldSupply',
+      accessorFn: (row) => (condition === 'new' ? row.worldSupplyLotsNew : row.worldSupplyLotsUsed),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+          className="-ml-4"
+        >
+          World lots
+          <ArrowUpDown className="ml-2 h-4 w-4" />
+        </Button>
+      ),
+      cell: ({ row }) =>
+        (condition === 'new'
+          ? row.original.worldSupplyLotsNew
+          : row.original.worldSupplyLotsUsed) ?? '-',
+    },
+    {
+      id: 'overlap',
+      accessorFn: (row) => (condition === 'new' ? row.overlapNew : row.overlapUsed) ?? '',
+      header: 'Overlap',
+      cell: ({ row }) => {
+        const tag = condition === 'new' ? row.original.overlapNew : row.original.overlapUsed;
+        const ourQty = condition === 'new' ? row.original.ourQtyNew : row.original.ourQtyUsed;
+        if (!tag) return <span className="text-muted-foreground">-</span>;
+        return (
+          <span title={ourQty != null ? `We hold ${ourQty}` : undefined}>
+            {tag.replace('RESTOCK_', 'R-')}
+          </span>
+        );
+      },
+    },
+    {
       id: 'cache',
       header: '',
       cell: ({ row }) =>
@@ -261,13 +315,19 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         quantity: 'Qty',
         price: 'Price',
         total: 'Total',
-        sellThroughRate: 'Sell-Through',
+        sellThroughRate: 'Sell-Through (lots)',
+        strQty: 'STR (qty)',
         stockAvailable: 'Stock',
         timesSold: 'Sold',
+        worldSupply: 'World lots',
+        overlap: 'Overlap',
         cache: 'Cache',
       }}
       initialColumnVisibility={{
         cache: false, // Hide cache indicator by default
+        // The legacy lots-basis percentage is superseded by STR (qty) but kept
+        // available behind the column picker rather than removed outright.
+        sellThroughRate: false,
       }}
       columnVisibilityStorageKey="partout-table-columns"
     />

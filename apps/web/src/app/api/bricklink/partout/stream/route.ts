@@ -114,6 +114,7 @@ export async function GET(request: NextRequest): Promise<Response> {
       // 6. Get partout value with progress callback
       const data = await partoutService.getPartoutValue(setNumber, {
         forceRefresh,
+        userId: user.id,
         onProgress: async (fetched: number, total: number, cached: number) => {
           await writer.write(
             encoder.encode(
