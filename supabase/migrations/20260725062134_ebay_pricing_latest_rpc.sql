@@ -61,7 +61,7 @@ $$;
 COMMENT ON FUNCTION get_latest_ebay_pricing(text[], text, text) IS
   'Latest ebay_pricing row per set for a batch. Lateral LIMIT 1 so the planner stops '
   'after one row per set instead of scanning every snapshot and de-duplicating in the '
-  'client. See migration 20260725080000 for the measured plans.';
+  'client. See migration 20260725062134 for the measured plans.';
 
 GRANT EXECUTE ON FUNCTION get_latest_ebay_pricing(text[], text, text) TO authenticated, service_role;
 

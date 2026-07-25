@@ -4,7 +4,7 @@
 -- (PR #500) before the corrupt Keepa triple-parse snapshots were deleted from
 -- price_snapshots. It has served its purpose and is pure dead weight: 309MB /
 -- 1,252,729 rows, ~8% of a 3.9GB database that runs on a 1GB-RAM instance, where
--- cache residency is the binding constraint (see 20260725080000 for the outage
+-- cache residency is the binding constraint (see 20260725062134 for the outage
 -- post-mortem this came out of).
 --
 -- Verified unused before dropping:
