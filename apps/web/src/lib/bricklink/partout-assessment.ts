@@ -175,8 +175,11 @@ function buildConcentration(
 
   const topLots = valued.slice(0, TOP_LOTS).map(({ part, value }) => ({
     partNumber: part.partNumber,
+    partType: part.partType,
     name: part.name,
+    colourId: part.colourId,
     colourName: part.colourName,
+    imageUrl: part.imageUrl,
     quantity: part.quantity,
     lineValue: round(value),
     shareOfPov: grossPov > 0 ? round(value / grossPov, 4) : 0,
@@ -213,6 +216,37 @@ function buildConcentration(
       other: round(byType.other),
     },
   };
+}
+
+/**
+ * Headline sell-through across priced lots.
+ *
+ * Median first: STR is skewed by design — one seller sitting on a 500-piece lot, or one
+ * bulk clear-out, moves the mean a long way from what a typical lot does. Both are
+ * reported so the gap between them is visible, because that gap IS the signal.
+ * Lots with no STR data are excluded rather than counted as zero.
+ */
+function buildStrSummary(
+  parts: PartValue[],
+  lens: Lens
+): { median: number | null; mean: number | null; lotsWithStr: number } {
+  const values = parts
+    .filter((p) => {
+      const price = lens.price(p);
+      return price != null && Number.isFinite(price);
+    })
+    .map((p) => lens.str(p))
+    .filter((v): v is number => v != null && Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (values.length === 0) return { median: null, mean: null, lotsWithStr: 0 };
+
+  const mid = Math.floor(values.length / 2);
+  const median =
+    values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+
+  return { median: round(median, 3), mean: round(mean, 3), lotsWithStr: values.length };
 }
 
 /** Roll the per-lot overlap tags into a set-level summary. Null when no index ran. */
@@ -377,6 +411,7 @@ export function assessPartout(
       beforePostage: beforePostage == null ? null : round(beforePostage),
       price: maxBuyPrice == null ? null : round(maxBuyPrice),
     },
+    strSummary: buildStrSummary(parts, lens),
     strBands: buildStrBands(parts, lens, gross),
     magnets: findMagnets(parts, lens),
     concentration: buildConcentration(parts, lens, gross),

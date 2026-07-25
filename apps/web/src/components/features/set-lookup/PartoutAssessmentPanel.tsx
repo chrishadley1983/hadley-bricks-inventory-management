@@ -10,12 +10,14 @@ import {
   AlertTriangle,
   Wallet,
   Info,
+  ExternalLink,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
+import { bricklinkItemUrl } from '@/lib/bricklink/catalogue-url';
 import type { PartoutAssessment, PartoutMagnet } from '@/types/partout';
 
 /**
@@ -254,7 +256,8 @@ function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
 
 /** STR band ladder — inclusive gates, so each row is "lots at STR ≥ gate". */
 function StrBandsCard({ assessment }: { assessment: PartoutAssessment }) {
-  const { strBands, pricedLots } = assessment;
+  const { strBands, pricedLots, strSummary } = assessment;
+  const str = (v: number | null): string => (v == null ? '—' : v.toFixed(2));
 
   return (
     <Card>
@@ -265,6 +268,27 @@ function StrBandsCard({ assessment }: { assessment: PartoutAssessment }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
+        {/*
+          Median leads, mean alongside — the house standard. A wide gap between them says
+          the set's sell-through is carried by a few outliers rather than the typical lot.
+        */}
+        <div className="flex flex-wrap items-end gap-6 pb-3">
+          <div>
+            <div className="text-xs text-muted-foreground">Median STR</div>
+            <div className="text-2xl font-bold tabular-nums" data-testid="str-median">
+              {str(strSummary.median)}
+            </div>
+          </div>
+          <div>
+            <div className="text-xs text-muted-foreground">Mean</div>
+            <div className="text-lg font-semibold tabular-nums text-muted-foreground">
+              {str(strSummary.mean)}
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            across {strSummary.lotsWithStr} of {pricedLots} priced lots with STR data
+          </div>
+        </div>
         <p className="pb-3 text-xs text-muted-foreground">
           Inclusive gates on quantity-basis STR. Each row is the lots at or above that sell-through,
           and what they are worth.
@@ -325,7 +349,15 @@ function MagnetRow({ magnet }: { magnet: PartoutMagnet }) {
             />
           </div>
           <div className="min-w-0">
-            <div className="truncate font-medium">{magnet.name}</div>
+            <a
+              href={bricklinkItemUrl(magnet)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1 truncate font-medium hover:underline"
+            >
+              <span className="truncate">{magnet.name}</span>
+              <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+            </a>
             <div className="truncate text-xs text-muted-foreground">
               {magnet.partNumber} · {magnet.colourName}
             </div>
@@ -490,9 +522,31 @@ function ConcentrationCard({ assessment }: { assessment: PartoutAssessment }) {
                     className="border-b last:border-0"
                   >
                     <td className="py-2 pr-3">
-                      <div className="truncate font-medium">{lot.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {lot.partNumber} · {lot.colourName}
+                      <div className="flex items-center gap-3">
+                        <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded bg-muted">
+                          <Image
+                            src={lot.imageUrl}
+                            alt={lot.name}
+                            fill
+                            sizes="40px"
+                            className="object-contain"
+                            unoptimized
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <a
+                            href={bricklinkItemUrl(lot)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1 truncate font-medium hover:underline"
+                          >
+                            <span className="truncate">{lot.name}</span>
+                            <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          </a>
+                          <div className="truncate text-xs text-muted-foreground">
+                            {lot.partNumber} · {lot.colourName}
+                          </div>
+                        </div>
                       </div>
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{lot.quantity}</td>

@@ -63,7 +63,8 @@ function soldGbp(row: OfficialPovRow | undefined): number | null {
  *
  *  - BL's published POV is the same KIND of number as our Gross rung (every lot at guide
  *    price, before fees). It should land close to it; a wide gap is a data signal.
- *  - Our decision figure is Net, after the liquidity haircut and the fee stack.
+ *  - Our decision figure is Net: the same full POV less the fee stack. (The liquidity
+ *    view is FYI only and no longer moves it — see LadderCard.)
  *  - The two multiples share no denominator: BL divides by UK RRP, we divide by what the
  *    complete set actually costs today.
  */
@@ -89,7 +90,7 @@ function Reconciliation({
         {blSold != null ? (
           <>
             BrickLink&apos;s <strong>{formatCurrency(blSold)}</strong> is the same kind of figure as
-            our <strong>Gross POV</strong> ({formatCurrency(ourGross)}
+            our <strong>Full POV</strong> ({formatCurrency(ourGross)}
             {delta != null && (
               <>
                 , {Math.abs(delta) < 0.005 ? 'in line' : `${delta > 0 ? '+' : ''}${(delta * 100).toFixed(1)}%`}
@@ -100,14 +101,12 @@ function Reconciliation({
         ) : (
           <>
             BrickLink&apos;s published POV is the same kind of figure as our{' '}
-            <strong>Gross POV</strong> ({formatCurrency(ourGross)}) — every lot at guide price,
+            <strong>Full POV</strong> ({formatCurrency(ourGross)}) — every lot at guide price,
             before fees.
           </>
         )}{' '}
-        Neither is money we would see. The decision figure is our{' '}
-        <strong>Net {formatCurrency(assessment.netPov)}</strong>, after the{' '}
-        {(assessment.captureRate * 100).toFixed(0)}% liquidity capture and{' '}
-        {(assessment.feePct * 100).toFixed(1)}% fees.
+        The decision figure is our <strong>Net {formatCurrency(assessment.netPov)}</strong> — the
+        same full POV less {(assessment.feePct * 100).toFixed(1)}% fees.
       </p>
       {(blMultiple != null || assessment.povMultiple != null) && (
         <p>
@@ -218,18 +217,29 @@ export function OfficialPovCard({
         ) : (
           <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/*
+                GBP leads. Everything else on this screen is sterling, so showing BL's
+                native currency as the headline made the cross-check read as a different
+                order of magnitude ($36.47 next to a £29.91 Full POV). Native is kept
+                underneath as provenance.
+              */}
               <div>
                 <div className="text-xs text-muted-foreground">Sold avg (6mo)</div>
-                <div className="text-xl font-semibold">{money(row?.sold_6mo_native, ccy)}</div>
+                <div className="text-xl font-semibold">{gbp(soldGbp(row))}</div>
                 <div className="text-xs text-muted-foreground">
                   {row?.sold_6mo_items ?? '?'} items · {row?.sold_6mo_lots ?? '?'} lots
-                  {ccy !== 'GBP' && n(row?.sold_6mo_avg_gbp) != null ? ` · ≈ ${gbp(row?.sold_6mo_avg_gbp)}` : ''}
+                  {ccy !== 'GBP' ? ` · ${money(row?.sold_6mo_native, ccy)} native` : ''}
                 </div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">For-sale avg</div>
-                <div className="text-xl font-semibold">{money(row?.for_sale_native, ccy)}</div>
-                <div className="text-xs text-muted-foreground">current listings</div>
+                <div className="text-xl font-semibold">
+                  {gbp(ccy === 'GBP' ? n(row?.for_sale_native) : n(row?.for_sale_avg_gbp))}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  current listings
+                  {ccy !== 'GBP' ? ` · ${money(row?.for_sale_native, ccy)} native` : ''}
+                </div>
               </div>
               <div>
                 <div className="text-xs text-muted-foreground">UK RRP</div>

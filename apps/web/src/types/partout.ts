@@ -82,8 +82,12 @@ export interface PartoutConcentration {
   /** Highest-value lots, descending. */
   topLots: Array<{
     partNumber: string;
+    /** Needed to build the right BrickLink catalogue URL (parts carry a colour, minifigs don't). */
+    partType: BrickLinkItemType;
     name: string;
+    colourId: number;
     colourName: string;
+    imageUrl: string;
     quantity: number;
     lineValue: number;
     shareOfPov: number;
@@ -176,6 +180,12 @@ export interface PartoutAssessment {
      */
     price: number | null;
   };
+  /**
+   * Headline sell-through across the priced lots. Median leads and mean sits alongside
+   * (house standard) — a handful of bulk-dumped lots can drag the mean a long way from
+   * what a typical lot in the set actually does.
+   */
+  strSummary: { median: number | null; mean: number | null; lotsWithStr: number };
   strBands: PartoutStrBand[];
   magnets: PartoutMagnet[];
   concentration: PartoutConcentration;
