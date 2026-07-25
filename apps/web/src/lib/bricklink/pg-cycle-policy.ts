@@ -25,6 +25,33 @@ export const NO_DATA_REQUEUE_DAYS = 90;
 /** Gap-fill parks a tuple for operator attention after this many failed attempts. */
 export const ERROR_PARK_ATTEMPTS = 8;
 
+/** Marker written to `bl_pg_refresh_queue.last_error` by a sold-unavailable hit. The
+ *  presence of this marker on the NEXT attempt is what promotes a tuple to no-data. */
+export const SOLD_UNAVAILABLE_MARKER = 'sold_unavailable';
+
+/**
+ * Sold-unavailable escalation ladder (Chris, 2026-07-25).
+ *
+ * BL rendering "(Unavailable)" in BOTH sold quadrants is ambiguous on a single page: it
+ * is the signature of a site-side sold-data outage AND of an item that simply never sold
+ * in either condition. The first hit is therefore treated as a possible outage and
+ * requeued +1d. Because that requeue is a full day, a SECOND hit on the same tuple means
+ * BL has withheld both quadrants across a day boundary — which an outage does not do, but
+ * a permanently dead item does. At that point we accept the empty answer and move the
+ * tuple to the 90d NO_DATA cycle instead of retrying it +1d for ever.
+ *
+ * Any successful scrape in between clears `last_error`, restarting the ladder — so this
+ * only ever fires on genuinely consecutive failures.
+ *
+ * Rate context that motivated it: on 2026-07-25 the tail measured ~17% sold-unavailable
+ * (33 of 197 in one session) against 0.17% on the active tier. That is a dead-item
+ * population, not an outage, and without this ladder every one of them returns +1d daily
+ * for ever.
+ */
+export function isRepeatSoldUnavailable(lastError: string | null | undefined): boolean {
+  return (lastError ?? '').startsWith(SOLD_UNAVAILABLE_MARKER);
+}
+
 /** Tier-based cycle length. The new-for-year 28d refinement needs catalogue knowledge —
  * callers that have it (pg-refresh-cycle) layer it on top; ad-hoc writers use this. */
 export function cycleDaysForTier(tier: 'active' | 'tail'): number {
