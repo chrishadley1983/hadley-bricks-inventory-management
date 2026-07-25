@@ -165,6 +165,20 @@ function getLastMonthFromExclusiveEndDate(endDateExclusive: string): string {
 }
 
 /**
+ * These bounds feed HMRC submissions, so a malformed date must never degrade
+ * quietly into an empty or wrong period — reject it at the door.
+ */
+function assertValidDateBound(label: string, value: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    throw new Error(`${label} must be 'YYYY-MM-DD', got '${value}'`);
+  }
+  const dt = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(dt.getTime()) || dt.toISOString().substring(0, 10) !== value) {
+    throw new Error(`${label} is not a real calendar date: '${value}'`);
+  }
+}
+
+/**
  * Generate array of months between start and end (inclusive)
  */
 function generateMonthRange(startMonth: string, endMonth: string): string[] {
@@ -1581,6 +1595,19 @@ export class ProfitLossReportService {
 
     // Exact-date bounds win over month bounds when supplied (HMRC standard tax
     // periods run 6th–5th, not month-to-month).
+    if (options.startDate) assertValidDateBound('startDate', options.startDate);
+    if (options.endDateExclusive) {
+      assertValidDateBound('endDateExclusive', options.endDateExclusive);
+    }
+    if (
+      options.startDate &&
+      options.endDateExclusive &&
+      options.startDate >= options.endDateExclusive
+    ) {
+      throw new Error(
+        `startDate '${options.startDate}' must be before endDateExclusive '${options.endDateExclusive}'`
+      );
+    }
     const startDate = options.startDate ?? getMonthStartDate(startMonth);
     // Exclusive upper bound (first day of the following month) — see
     // getMonthEndExclusive for why the inclusive last-day bound was wrong.

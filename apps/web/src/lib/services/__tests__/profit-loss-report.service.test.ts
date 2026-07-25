@@ -243,6 +243,45 @@ describe('ProfitLossReportService', () => {
         expect(result.months).toEqual(['2026-04', '2026-05', '2026-06']);
       });
 
+      it('rolls the trailing month back across a year boundary', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        // Q3 of a standard tax year ends 5 Jan — January must stay in range.
+        const q3 = await service.generateReport(testUserId, {
+          startDate: '2026-10-06',
+          endDateExclusive: '2027-01-06',
+        });
+        expect(q3.months).toEqual(['2026-10', '2026-11', '2026-12', '2027-01']);
+
+        // Whereas an exclusive 1 Jan bound must NOT reach into January.
+        const toYearEnd = await service.generateReport(testUserId, {
+          startDate: '2026-10-01',
+          endDateExclusive: '2027-01-01',
+        });
+        expect(toYearEnd.months).toEqual(['2026-10', '2026-11', '2026-12']);
+      });
+
+      it('rejects malformed or impossible date bounds instead of degrading', async () => {
+        const mockSupabase = createSupabaseMock();
+        const service = new ProfitLossReportService(mockSupabase as never);
+
+        await expect(
+          service.generateReport(testUserId, { startDate: '06/04/2026' })
+        ).rejects.toThrow(/startDate must be 'YYYY-MM-DD'/);
+
+        await expect(
+          service.generateReport(testUserId, { endDateExclusive: '2026-02-30' })
+        ).rejects.toThrow(/not a real calendar date/);
+
+        await expect(
+          service.generateReport(testUserId, {
+            startDate: '2026-07-06',
+            endDateExclusive: '2026-04-06',
+          })
+        ).rejects.toThrow(/must be before/);
+      });
+
       it('still honours month bounds when no dates are supplied', async () => {
         const mockSupabase = createSupabaseMock();
         const service = new ProfitLossReportService(mockSupabase as never);

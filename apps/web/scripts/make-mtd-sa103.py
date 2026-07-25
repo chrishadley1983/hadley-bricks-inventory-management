@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import sys
 import zipfile
 from pathlib import Path
@@ -36,7 +35,9 @@ TEMPLATE = (
 # are mutually exclusive with box 31 (consolidated) — never fill both.
 CELL_BY_BOX = {
     "15": "C7",  # turnover
-    "16": "I7",  # any other business income
+    # Box 16 (any other business income) is deliberately absent: its cell has
+    # never been confirmed against the template, and guessing a cell on a tax
+    # return is worse than failing. Verify the sheet, then add it.
     "17": "C19",  # cost of goods bought for resale
     "20": "C31",  # car, van and travel expenses
     "21": "C35",  # rent, rates, power and insurance
@@ -104,7 +105,6 @@ def main() -> None:
         raise SystemExit(f"Template missing: {TEMPLATE}")
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(TEMPLATE, out)
 
     with zipfile.ZipFile(TEMPLATE) as z:
         sheet_name = next(n for n in z.namelist() if n.startswith("xl/worksheets/sheet"))
