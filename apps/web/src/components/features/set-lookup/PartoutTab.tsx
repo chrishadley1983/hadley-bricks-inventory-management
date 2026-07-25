@@ -12,6 +12,7 @@ import { PartoutSummary } from './PartoutSummary';
 import { PartoutTable, type PartoutCondition } from './PartoutTable';
 import { PartoutProgress } from './PartoutProgress';
 import { OfficialPovCard } from './OfficialPovCard';
+import { PartoutAssessmentPanel } from './PartoutAssessmentPanel';
 
 interface PartoutTabProps {
   setNumber: string | null;
@@ -167,14 +168,21 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     return <EmptyState />;
   }
 
-  // The official BL Part Out Value (one-scrape authoritative figure + multiple) always shows at
-  // the top; the computed, lot-by-lot partout renders below it through its own state machine.
+  // OUR view leads: the computed assessment renders first, through its own state machine.
+  // BrickLink's published POV follows as a cross-check — it sits OUTSIDE that state machine
+  // so it still shows when the computed partout is loading or has failed, but it never
+  // occupies the headline. The reconciliation between the two lives on that card.
   const computed = renderComputedPartout();
 
   return (
     <div className="space-y-6" data-testid="partout-tab">
-      <OfficialPovCard setNumber={setNumber} enabled={enabled} />
       {computed}
+      <OfficialPovCard
+        setNumber={setNumber}
+        enabled={enabled}
+        condition={condition}
+        assessment={data?.assessment?.[condition] ?? null}
+      />
     </div>
   );
 
@@ -238,51 +246,71 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
       return <NoPartsState />;
     }
 
-    // Success - render summary and table
+    // Success - render assessment, summary and table
     return (
       <div className="space-y-6">
         {/* Refresh indicator and force refresh button */}
-      <div className="flex items-center justify-between">
-        {isFetching || isForceRefreshing ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            {isForceRefreshing ? 'Refreshing all prices from BrickLink...' : 'Refreshing...'}
-          </div>
+        <div className="flex items-center justify-between">
+          {isFetching || isForceRefreshing ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              {isForceRefreshing ? 'Refreshing all prices from BrickLink...' : 'Refreshing...'}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">
+              {data.cacheStats.fromCache > 0 && (
+                <span>
+                  {data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache
+                </span>
+              )}
+            </div>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleForceRefresh}
+            disabled={isFetching || isForceRefreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-1 ${isForceRefreshing ? 'animate-spin' : ''}`} />
+            Force Refresh
+          </Button>
+        </div>
+
+        {/*
+          The condition toggle drives the assessment AND the parts table, so it sits
+          above both — the verdict, ladder, bands and magnets are all condition-specific.
+        */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Part-Out Assessment</h3>
+          <Tabs
+            value={condition}
+            onValueChange={(v: string) => setCondition(v as PartoutCondition)}
+          >
+            <TabsList>
+              <TabsTrigger value="new">New</TabsTrigger>
+              <TabsTrigger value="used">Used</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+
+        {/* Canonical assessment for the selected condition */}
+        {data.assessment ? (
+          <PartoutAssessmentPanel assessment={data.assessment[condition]} />
         ) : (
-          <div className="text-sm text-muted-foreground">
-            {data.cacheStats.fromCache > 0 && (
-              <span>
-                {data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache
-              </span>
-            )}
-          </div>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Assessment unavailable</AlertTitle>
+            <AlertDescription>
+              No parts data was returned for this set, so the part-out gate can&apos;t be applied.
+            </AlertDescription>
+          </Alert>
         )}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleForceRefresh}
-          disabled={isFetching || isForceRefreshing}
-        >
-          <RefreshCw className={`h-4 w-4 mr-1 ${isForceRefreshing ? 'animate-spin' : ''}`} />
-          Force Refresh
-        </Button>
-      </div>
 
-      {/* Summary cards */}
-      <PartoutSummary data={data} />
-
-      {/* Condition toggle */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-semibold">Parts Breakdown</h3>
-        <Tabs value={condition} onValueChange={(v: string) => setCondition(v as PartoutCondition)}>
-          <TabsList>
-            <TabsTrigger value="new">New</TabsTrigger>
-            <TabsTrigger value="used">Used</TabsTrigger>
-          </TabsList>
-        </Tabs>
-      </div>
+        {/* Raw POV figures for both conditions, plus data-quality context */}
+        <PartoutSummary data={data} />
 
         {/* Parts table */}
+        <h3 className="text-lg font-semibold">Parts Breakdown</h3>
         <PartoutTable parts={data.parts} condition={condition} />
       </div>
     );

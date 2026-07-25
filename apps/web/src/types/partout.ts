@@ -6,6 +6,9 @@
  */
 
 import type { BrickLinkItemType } from '@/lib/bricklink/types';
+import type { OverlapTag } from '@/lib/bl-store-assessment/overlap';
+
+export type PartoutCondition = 'new' | 'used';
 
 /** Complete partout analysis data returned from the API */
 export interface PartoutData {
@@ -26,6 +29,135 @@ export interface PartoutData {
     total: number;
   };
   parts: PartValue[];
+  /**
+   * Canonical assessment per condition — the honesty ladder, part-out gate, STR
+   * bands, magnets, value concentration and store overlap. Null only when the
+   * assessment could not be computed (no parts).
+   */
+  assessment: { new: PartoutAssessment; used: PartoutAssessment } | null;
+}
+
+/** One inclusive STR gate row — "lots at STR ≥ gate". Mirrors the store-report ladder. */
+export interface PartoutStrBand {
+  /** Inclusive qty-basis STR floor (from STR_GATES). */
+  gate: number;
+  /** Distinct part lots at or above this gate (priced lots only). */
+  lots: number;
+  /** Total pieces across those lots. */
+  qty: number;
+  /** Σ qty × price for those lots. */
+  grossValue: number;
+  /** Σ qty × price × f(STR) for those lots. */
+  realisableValue: number;
+  /** grossValue as a share of the set's total gross POV (0–1). */
+  shareOfPov: number;
+}
+
+/**
+ * A magnet lot: very low worldwide supply + decent sell-through. Flagged
+ * independently of the margin gate — magnets pull buyers to the store even when
+ * the set as a whole fails the part-out gate.
+ */
+export interface PartoutMagnet {
+  partNumber: string;
+  partType: BrickLinkItemType;
+  name: string;
+  colourId: number;
+  colourName: string;
+  imageUrl: string;
+  quantity: number;
+  price: number | null;
+  /** Qty-basis STR fraction. */
+  str: number | null;
+  /** Worldwide seller lots — the scarcity side of the magnet test. */
+  worldSupplyLots: number | null;
+  /** quantity × price. */
+  lineValue: number;
+  /** Our own holding of this part+colour, when the overlap index was available. */
+  overlap: OverlapTag | null;
+}
+
+/** Where the money sits — concentration of POV across lots and item types. */
+export interface PartoutConcentration {
+  /** Highest-value lots, descending. */
+  topLots: Array<{
+    partNumber: string;
+    name: string;
+    colourName: string;
+    quantity: number;
+    lineValue: number;
+    shareOfPov: number;
+  }>;
+  /** Share of gross POV held by the top 10 lots (0–1). */
+  top10Share: number;
+  /** How many lots it takes to reach 50% of gross POV. */
+  lotsToHalfPov: number;
+  /** Gross POV split by catalogue item type. */
+  byType: { minifig: number; part: number; other: number };
+}
+
+/** Overlap of the set's parts against our own Bricqer stock. */
+export interface PartoutOverlapSummary {
+  /** bricqer_snapshot_meta.last_full_sync — staleness is surfaced, never hidden. */
+  snapshotAt: string | null;
+  salesWindowDays: number;
+  counts: { NEW: number; RESTOCK_OUT: number; RESTOCK_THIN: number; DUPLICATE: number };
+  /** Gross POV of lots additional to our store (NEW + RESTOCK_OUT). */
+  additionalValue: number;
+  /** Gross POV of lots we already hold in depth (DUPLICATE). */
+  duplicateValue: number;
+}
+
+/**
+ * Canonical part-out assessment for one condition.
+ *
+ * The headline is the honesty ladder — gross → realisable → net — mirroring the
+ * bl-store-report rule that the raw figure flatters and must never lead alone.
+ */
+export interface PartoutAssessment {
+  condition: PartoutCondition;
+  /** Σ qty × price. Assumes every lot clears at guide price. */
+  grossPov: number;
+  /** Gross discounted by the STR capture curve — what we'd actually realise. */
+  realisablePov: number;
+  /** realisablePov ÷ grossPov (0 when gross is 0). */
+  captureRate: number;
+  /** realisablePov after the 9.4% variable fee stack. */
+  netPov: number;
+  /** The fee stack applied (VAR_FEE_PCT), echoed so the card is self-describing. */
+  feePct: number;
+  /** Complete-set price used as the gate's ask basis. */
+  setPrice: number | null;
+  /** grossPov ÷ setPrice — the canonical gate basis (matches store-assessment SETS). */
+  povMultiple: number | null;
+  /** grossPov − setPrice. */
+  gapGbp: number | null;
+  verdict: 'PART-OUT' | 'SELL-COMPLETE' | 'SKIP';
+  /** Plain-English reason the verdict landed where it did. */
+  verdictReason: string;
+  /** Echo of the gate thresholds actually applied. */
+  gate: { povMultipleMin: number; minGapGbp: number };
+  /** Most we should pay for the set and still hit the target margin on a part-out. */
+  maxBuy: { targetMargin: number; price: number | null };
+  strBands: PartoutStrBand[];
+  magnets: PartoutMagnet[];
+  concentration: PartoutConcentration;
+  /** Null when no Bricqer snapshot was available for this user. */
+  overlap: PartoutOverlapSummary | null;
+  /** Lots with a usable price. */
+  pricedLots: number;
+  /** Lots with no UK price data — these contribute £0 and understate POV. */
+  unpricedLots: number;
+  /**
+   * How many lots the magnet test could actually be applied to.
+   *
+   * Magnets need worldwide supply from `bricklink_pg_summary_cache`. That read is
+   * non-fatal — a failure (or thin coverage) yields an empty supply map, and every lot
+   * then silently fails the scarcity leg. Without this, "no magnets" is indistinguishable
+   * from "we couldn't check", and the panel would be asserting absence from missing
+   * evidence. Surface the denominator so the UI can tell the two apart.
+   */
+  magnetCoverage: { withSupplyData: number; total: number };
 }
 
 /** Individual part value in the partout analysis */
@@ -41,10 +173,31 @@ export interface PartValue {
   priceUsed: number | null;
   totalNew: number;
   totalUsed: number;
-  /** Sell-through rate for New condition */
+  /** Sell-through rate for New condition — LOTS basis, ×100 (display legacy). */
   sellThroughRateNew: number | null;
-  /** Sell-through rate for Used condition */
+  /** Sell-through rate for Used condition — LOTS basis, ×100 (display legacy). */
   sellThroughRateUsed: number | null;
+  /**
+   * QUANTITY-basis STR as a fraction (sold_qty ÷ stock_qty) for New.
+   * This is the house standard (Chris 2026-07-14, consistent with bl-basket) and is
+   * what every gate, magnet test and capture-curve lookup must use — never the
+   * lots-basis ×100 fields above.
+   */
+  strQtyNew: number | null;
+  /** QUANTITY-basis STR as a fraction for Used. See `strQtyNew`. */
+  strQtyUsed: number | null;
+  /** Worldwide seller lots (New) from `bricklink_pg_summary_cache` — magnet input. */
+  worldSupplyLotsNew: number | null;
+  /** Worldwide seller lots (Used) from `bricklink_pg_summary_cache` — magnet input. */
+  worldSupplyLotsUsed: number | null;
+  /** Overlap vs our own Bricqer stock (New). Null when no overlap index was loaded. */
+  overlapNew: OverlapTag | null;
+  /** Overlap vs our own Bricqer stock (Used). Null when no overlap index was loaded. */
+  overlapUsed: OverlapTag | null;
+  /** Units of this part+colour we currently hold (New) — null when no overlap index. */
+  ourQtyNew: number | null;
+  /** Units of this part+colour we currently hold (Used) — null when no overlap index. */
+  ourQtyUsed: number | null;
   /** Number of lots available for New condition */
   stockAvailableNew: number | null;
   /** Number of lots available for Used condition */

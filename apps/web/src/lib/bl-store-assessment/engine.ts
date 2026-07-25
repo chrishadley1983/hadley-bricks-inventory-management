@@ -145,7 +145,8 @@ function weightedMedian(pairs: { value: number; weight: number }[]): number | nu
 // One price scale everywhere: per-lot buckets, the store label, and the verdict's
 // price signal all break at the same points. Canonical home: ../bricklink/fees.
 export { PRICE_BANDS } from '../bricklink/fees';
-import { PRICE_BANDS, STR_GATES as CANONICAL_STR_GATES } from '../bricklink/fees';
+import { PRICE_BANDS, STR_GATES as CANONICAL_STR_GATES, POV_MULTIPLE_MIN, POV_MIN_GAP_GBP } from '../bricklink/fees';
+import { readWorldSupply, type WorldSupply } from '../bricklink/world-supply';
 
 function classifyPosition(askVsMarket: number | null): PricePosition {
   if (askVsMarket == null) return 'UNKNOWN';
@@ -158,40 +159,8 @@ function classifyPosition(askVsMarket: number | null): PricePosition {
 
 // ---- worldwide supply (pg_summary) for magnet detection ----
 
-interface WorldSupply { stockLotsNew: number | null; stockLotsUsed: number | null; demandRank: number | null }
-
-async function readWorldSupply(
-  supabase: SupabaseClient,
-  refs: { itemType: ItemTypeCode; itemNo: string; blColourId: number }[],
-): Promise<Map<string, WorldSupply>> {
-  const out = new Map<string, WorldSupply>();
-  const itemNos = [...new Set(refs.map((r) => r.itemNo))];
-  if (itemNos.length === 0) return out;
-  const COLS = 'item_type,item_no,colour_id,stock_new_lots,stock_used_lots,demand_rank';
-  for (let i = 0; i < itemNos.length; i += 300) {
-    const batch = itemNos.slice(i, i + 300);
-    let from = 0;
-    for (;;) {
-      const { data, error } = await supabase
-        .from('bricklink_pg_summary_cache')
-        .select(COLS)
-        .in('item_no', batch)
-        .order('id')
-        .range(from, from + 999);
-      if (error) throw new Error(`readWorldSupply failed: ${error.message}`);
-      for (const r of (data ?? []) as Record<string, unknown>[]) {
-        out.set(pgKey(String(r.item_type), String(r.item_no), Number(r.colour_id)), {
-          stockLotsNew: r.stock_new_lots == null ? null : Number(r.stock_new_lots),
-          stockLotsUsed: r.stock_used_lots == null ? null : Number(r.stock_used_lots),
-          demandRank: r.demand_rank == null ? null : Number(r.demand_rank),
-        });
-      }
-      if (!data || data.length < 1000) break;
-      from += 1000;
-    }
-  }
-  return out;
-}
+// readWorldSupply + WorldSupply moved to ../bricklink/world-supply (imported above)
+// so the set-lookup Partout tab resolves magnet supply through the same query.
 
 // ---- scoring ----
 
@@ -583,11 +552,8 @@ function buildStrCoverage(scored: ScoredLot[]): StrCoverageSection {
 
 // ---- sets decision (separate from the parts grade) ----
 
-/** POV must clear this multiple of the ask before part-out beats flipping — parting out
- * is labour-heavy, so a thin multiple isn't worth the bench time. */
-const POV_MULTIPLE_MIN = 2.0;
-/** ...and the absolute POV-vs-ask gap must be worth the labour at all. */
-const POV_MIN_GAP_GBP = 10;
+// POV_MULTIPLE_MIN / POV_MIN_GAP_GBP now live in ../bricklink/fees (imported above)
+// so the set-lookup Partout tab applies the same gate as this SETS section.
 
 function buildSets(
   scored: ScoredLot[],

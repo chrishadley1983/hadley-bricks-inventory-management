@@ -76,7 +76,16 @@ export interface SyncResult {
   error?: string;
 }
 
-/** Max pages per invocation to stay within Vercel timeout */
+/**
+ * Max pages per invocation to stay within Vercel timeout.
+ *
+ * NOTE this is a hard correctness boundary, not just a performance knob: stale-item
+ * removal only runs on an invocation that both STARTED at page 1 and COMPLETED, because
+ * it deletes everything absent from the IDs seen in that invocation. An inventory bigger
+ * than this cap therefore resumes mid-way and can never prune. Long-running callers (the
+ * CLI, scheduled jobs) should raise it via `sync({ maxPages })` so one invocation covers
+ * the whole inventory.
+ */
 const MAX_PAGES_PER_INVOCATION = 300;
 
 /** Batch size for upsert operations */
@@ -93,8 +102,15 @@ export class SnapshotSyncService {
    */
   async sync(options?: {
     onProgress?: (progress: SyncProgress) => void;
+    /**
+     * Pages to process in this invocation. Defaults to MAX_PAGES_PER_INVOCATION
+     * (Vercel-safe). Raise it off-platform so the sweep finishes in one go and
+     * stale-item removal can run — see the note on that constant.
+     */
+    maxPages?: number;
   }): Promise<SyncResult> {
     const onProgress = options?.onProgress;
+    const maxPages = options?.maxPages ?? MAX_PAGES_PER_INVOCATION;
 
     // 1. Get Bricqer credentials
     const credRepo = new CredentialsRepository(this.supabase);
@@ -136,7 +152,7 @@ export class SnapshotSyncService {
       // 4. Paginate through Bricqer API
       let hasMore = true;
 
-      while (hasMore && pagesProcessed < MAX_PAGES_PER_INVOCATION) {
+      while (hasMore && pagesProcessed < maxPages) {
         const result = await client.fetchInventoryPage(page);
         totalCount = result.totalCount;
         const totalPages = Math.ceil(totalCount / 100);

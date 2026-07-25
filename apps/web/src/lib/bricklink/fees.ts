@@ -48,6 +48,23 @@ export const MAGNET = { maxSupplyLots: 3, minStr: 0.5 } as const;
 /** Ask-vs-market price bands — shared by assessment + store-quality position bucketing. */
 export const PRICE_BANDS = { under: 0.7, keen: 0.95, atMarket: 1.15, premium: 1.5 } as const;
 
+/**
+ * Default net-margin threshold for "within margin" / max-buy back-solving
+ * (AssessmentInputs.minMargin default; bl-basket `--min-margin` default).
+ */
+export const DEFAULT_MIN_MARGIN = 0.2;
+
+/**
+ * Part-out gate (moved here from bl-store-assessment/engine.ts so the set-lookup
+ * Partout tab and the store-assessment SETS section apply ONE gate).
+ *
+ * POV must clear this multiple of the ask before part-out beats flipping — parting
+ * out is labour-heavy, so a thin multiple isn't worth the bench time — AND the
+ * absolute POV-vs-ask gap must be worth the labour at all.
+ */
+export const POV_MULTIPLE_MIN = 2.0;
+export const POV_MIN_GAP_GBP = 10;
+
 /** Net proceeds per unit after variable fees, before postage allocation. */
 export function netAfterFees(listPrice: number, unitCost: number): number {
   return listPrice * (1 - VAR_FEE_PCT) - unitCost;
