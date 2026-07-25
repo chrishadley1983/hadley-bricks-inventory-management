@@ -670,14 +670,20 @@ export class EbayFpDetectorService {
 
         const batch = setNumbers.slice(i, i + BATCH_SIZE);
 
-        // Fetch current ebay_pricing rows for this batch
-        const { data: pricingRows, error: fetchError } = await this.supabase
-          .from('ebay_pricing')
-          .select('id, set_number, listings_json, min_price, avg_price, max_price, total_listings')
-          .in('set_number', batch)
-          .eq('condition', 'NEW')
-          .eq('country_code', 'GB')
-          .order('snapshot_date', { ascending: false });
+        // Fetch the CURRENT ebay_pricing row for each set in this batch.
+        //
+        // This used to select every snapshot row for the batch (ORDER BY snapshot_date
+        // DESC) and keep only the newest per set in JS. ebay_pricing holds ~12 snapshots
+        // per set, so that fetched 184 rows to use 15 — each dragging a TOASTed
+        // listings_json blob — and pg_stat_statements ranked it the single most expensive
+        // query on the database (60,595 calls / 11,368s / 8.98M block reads), ~3x the
+        // next worst. get_latest_ebay_pricing() does a lateral LIMIT 1 per set so the
+        // planner stops after one row each: 12 rows scanned instead of 184, buffers
+        // 190 -> 57. See migration 20260725080000.
+        const { data: pricingRows, error: fetchError } = await this.supabase.rpc(
+          'get_latest_ebay_pricing',
+          { p_set_numbers: batch, p_condition: 'NEW', p_country_code: 'GB' }
+        );
 
         if (fetchError) {
           console.error('[EbayFpDetector] Failed to fetch ebay_pricing:', fetchError.message);
@@ -687,8 +693,9 @@ export class EbayFpDetectorService {
 
         if (!pricingRows || pricingRows.length === 0) continue;
 
-        // Deduplicate: keep only the latest row per set_number
-        const latestBySet = new Map<string, typeof pricingRows[0]>();
+        // The RPC already returns exactly one (the newest) row per set, but keep keying
+        // by set_number so the loop below is unchanged and stays defensive about dupes.
+        const latestBySet = new Map<string, (typeof pricingRows)[0]>();
         for (const row of pricingRows) {
           if (!latestBySet.has(row.set_number)) {
             latestBySet.set(row.set_number, row);
