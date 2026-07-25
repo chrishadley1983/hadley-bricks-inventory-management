@@ -37,11 +37,27 @@ POV multiple = Gross POV / complete set price   (must be >= POV_MULTIPLE_MIN, 2.
 Gap          = Gross POV - complete set price   (must be >= POV_MIN_GAP_GBP, £10)
 ```
 
+**Two different questions live here, and only one needs a complete-set price:**
+
+- **Priority** — part out or sell whole? A comparison, so it needs the set price.
+- **Acquisition** — worth doing at all, and up to what buy price? Needs only the
+  realisable POV.
+
 | Verdict | Meaning |
 |---------|---------|
-| `PART-OUT` | Both gates cleared |
-| `SELL-COMPLETE` | Gates not cleared — the bench time isn't worth it |
-| `SKIP` | No complete-set price on record, so the gate can't be applied |
+| `PART-OUT` | Set price known, both gates cleared |
+| `SELL-COMPLETE` | Set price known, gates not cleared — complete beats parting |
+| `PART-OUT BELOW £X` | **No** set price, so no route comparison — but the part-out stands on its own under max buy |
+| `NOT WORTH PARTING OUT` | No set price and max buy is at or below zero — no purchase price makes it work |
+| `SKIP` | No priced parts at all — nothing to value |
+
+A missing set price used to report `SKIP` / "Insufficient Data" — directly above a Max
+Buy card that had already answered the acquisition question. It now narrows the answer
+rather than withholding it.
+
+When a set price DOES exist the priority verdict leads, even if max buy is negative.
+"Part this one out rather than sell it whole" and "don't buy another to part out" are
+different statements; the verdict answers the first, the max-buy card the second.
 
 Every threshold comes from `lib/bricklink/fees.ts`. Nothing in the assessment engine or
 the UI declares a cutoff of its own.
@@ -51,11 +67,23 @@ the UI declares a cutoff of its own.
 The most we should pay for the set and still hit the target margin:
 
 ```
-Max buy = Realisable × (1 − fee stack − target margin)
+Before postage = Realisable × (1 − fee stack − target margin)
+Max buy        = Before postage − inbound postage
 ```
 
-Target margin defaults to `DEFAULT_MIN_MARGIN` (20%). **Excludes acquisition postage and
-teardown labour**, so treat it as an optimistic ceiling.
+Target margin defaults to `DEFAULT_MIN_MARGIN` (20%); postage to
+`DEFAULT_INBOUND_POSTAGE_GBP` (£3), overridable per call — pass 0 for a local collection.
+Postage comes off as a **cash cost**, not a percentage, because you pay it on top of the
+purchase price. Both lines are shown so the deduction is visible rather than baked in.
+
+**Not clamped at zero.** A negative ceiling is the finding — clamping it disguised an
+unbuyable set as a free one. On a thin set the postage IS the story: 7643 used is a
+£2.54 ceiling against £3.00 postage, so **−£0.46** and `NOT WORTH PARTING OUT`.
+
+**Teardown labour is deliberately absent.** It is already priced into the 2× POV gate and
+the target margin (Chris, 2026-07-25: *"labour is baked into the POV ×, that is the margin
+where the time input makes sense"*), so a separate line would double-count it. If you want
+to charge more for your time, raise the target margin.
 
 ### Magnets
 

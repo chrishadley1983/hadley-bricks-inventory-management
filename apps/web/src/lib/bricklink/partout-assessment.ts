@@ -23,6 +23,7 @@ import {
   POV_MULTIPLE_MIN,
   POV_MIN_GAP_GBP,
   DEFAULT_MIN_MARGIN,
+  DEFAULT_INBOUND_POSTAGE_GBP,
 } from './fees';
 import { liquidityAdjustedPov, captureFraction, type PovLot } from './liquidity-pov';
 import type {
@@ -38,6 +39,9 @@ import type { OverlapTag } from '@/lib/bl-store-assessment/overlap';
 
 /** How many lots the "where the value sits" panel lists. */
 const TOP_LOTS = 10;
+
+/** Percent label for verdict copy, without trailing zeros ("20%", "9.4%"). */
+const pctLabel = (v: number): string => `${Number((v * 100).toFixed(1))}%`;
 
 const round = (v: number, dp = 2): number => {
   const f = 10 ** dp;
@@ -246,6 +250,11 @@ function buildOverlap(
 export interface AssessPartoutOptions {
   /** Target net margin for the max-buy back-solve. Defaults to DEFAULT_MIN_MARGIN. */
   targetMargin?: number;
+  /**
+   * Inbound postage to get the set to the bench, as a cash cost off the max buy.
+   * Defaults to DEFAULT_INBOUND_POSTAGE_GBP (£3). Pass 0 for a local collection.
+   */
+  inboundPostageGbp?: number;
   /** Overlap index metadata; omit/null when no Bricqer snapshot was loaded. */
   overlapMeta?: { snapshotAt: string | null; salesWindowDays: number } | null;
 }
@@ -266,6 +275,7 @@ export function assessPartout(
 ): PartoutAssessment {
   const lens = LENSES[condition];
   const targetMargin = options.targetMargin ?? DEFAULT_MIN_MARGIN;
+  const postageGbp = options.inboundPostageGbp ?? DEFAULT_INBOUND_POSTAGE_GBP;
 
   const lots: PovLot[] = parts.map((p) => ({
     qty: p.quantity,
@@ -290,31 +300,54 @@ export function assessPartout(
     povMultiple >= POV_MULTIPLE_MIN &&
     gapGbp >= POV_MIN_GAP_GBP;
 
-  let verdict: PartoutAssessment['verdict'];
-  let verdictReason: string;
-  if (gross <= 0) {
-    verdict = 'SKIP';
-    verdictReason = 'No UK price data for this set’s parts — nothing to value.';
-  } else if (setPrice == null || setPrice <= 0) {
-    verdict = 'SKIP';
-    verdictReason = 'No complete-set price to compare against — the gate cannot be applied.';
-  } else if (gatePasses) {
-    verdict = 'PART-OUT';
-    verdictReason = `POV is ${povMultiple!.toFixed(2)}× the set price (gate ${POV_MULTIPLE_MIN}×) with a £${gapGbp!.toFixed(2)} gap (gate £${POV_MIN_GAP_GBP}).`;
-  } else {
-    verdict = 'SELL-COMPLETE';
-    const failedMultiple = povMultiple! < POV_MULTIPLE_MIN;
-    verdictReason = failedMultiple
-      ? `POV is only ${povMultiple!.toFixed(2)}× the set price — below the ${POV_MULTIPLE_MIN}× gate, so parting out isn’t worth the bench time.`
-      : `POV clears ${POV_MULTIPLE_MIN}× but the £${gapGbp!.toFixed(2)} gap is under the £${POV_MIN_GAP_GBP} labour floor.`;
-  }
-
   // Max buy, in the same reverse-calc form as purchase-evaluator:
   //   revenue − fees − target profit, where target profit = revenue × margin.
   // Revenue is the REALISABLE POV, not gross — paying against a figure we can't
-  // actually clear is how you overpay.
-  const maxBuyPrice =
-    realisable > 0 ? Math.max(0, realisable * (1 - VAR_FEE_PCT - targetMargin)) : null;
+  // actually clear is how you overpay. Inbound postage then comes off as a flat cash
+  // cost, because you pay it on top of the purchase price.
+  //
+  // Teardown labour is NOT deducted here. It is already expressed in the 2× POV gate and
+  // the target margin (Chris, 2026-07-25: "labour is baked into the POV ×, that is the
+  // margin where the time input makes sense"), so a separate line would double-count it.
+  const beforePostage = realisable > 0 ? realisable * (1 - VAR_FEE_PCT - targetMargin) : null;
+  const maxBuyPrice = beforePostage == null ? null : beforePostage - postageGbp;
+  // Not clamped at zero: a negative ceiling IS the answer for a thin set.
+  const viable = maxBuyPrice != null && maxBuyPrice > 0;
+
+  let verdict: PartoutAssessment['verdict'];
+  let verdictReason: string;
+  const hasSetPrice = setPrice != null && setPrice > 0;
+
+  if (gross <= 0) {
+    verdict = 'SKIP';
+    verdictReason = 'No UK price data for this set’s parts — nothing to value.';
+  } else if (hasSetPrice) {
+    // A complete-set price exists, so the PRIORITY question is answerable and it is the
+    // more useful headline: it says which ROUTE to take. A negative max buy alongside it
+    // is not a contradiction — "part this one out rather than sell it whole" and "don't
+    // buy another to part out" are different statements — and the max-buy card carries
+    // that second message in red.
+    if (gatePasses) {
+      verdict = 'PART-OUT';
+      verdictReason = `POV is ${povMultiple!.toFixed(2)}× the set price (gate ${POV_MULTIPLE_MIN}×) with a £${gapGbp!.toFixed(2)} gap (gate £${POV_MIN_GAP_GBP}).`;
+    } else {
+      verdict = 'SELL-COMPLETE';
+      const failedMultiple = povMultiple! < POV_MULTIPLE_MIN;
+      verdictReason = failedMultiple
+        ? `POV is only ${povMultiple!.toFixed(2)}× the set price — below the ${POV_MULTIPLE_MIN}× gate, so parting out isn’t worth the bench time.`
+        : `POV clears ${POV_MULTIPLE_MIN}× but the £${gapGbp!.toFixed(2)} gap is under the £${POV_MIN_GAP_GBP} labour floor.`;
+    }
+  } else if (viable) {
+    // No complete-set price, so there is no route comparison to make — but the
+    // ACQUISITION question stands on its own, and it is the actionable half.
+    verdict = 'PART-OUT-BELOW';
+    verdictReason = `No complete-set price on record, so there’s no sell-complete comparison. The part-out stands on its own: worth doing if you can buy under £${maxBuyPrice!.toFixed(2)}.`;
+  } else {
+    // The negative counterpart of PART-OUT-BELOW. Stronger and more useful than the old
+    // "insufficient data", which withheld an answer we already had.
+    verdict = 'NOT-VIABLE';
+    verdictReason = `Even at £0 the part-out doesn’t clear ${pctLabel(targetMargin)} after ${pctLabel(VAR_FEE_PCT)} fees and £${postageGbp.toFixed(2)} postage — not worth it at any purchase price.`;
+  }
 
   const pricedLots = parts.filter((p) => {
     const price = lens.price(p);
@@ -334,7 +367,12 @@ export function assessPartout(
     verdict,
     verdictReason,
     gate: { povMultipleMin: POV_MULTIPLE_MIN, minGapGbp: POV_MIN_GAP_GBP },
-    maxBuy: { targetMargin, price: maxBuyPrice == null ? null : round(maxBuyPrice) },
+    maxBuy: {
+      targetMargin,
+      postageGbp,
+      beforePostage: beforePostage == null ? null : round(beforePostage),
+      price: maxBuyPrice == null ? null : round(maxBuyPrice),
+    },
     strBands: buildStrBands(parts, lens, gross),
     magnets: findMagnets(parts, lens),
     concentration: buildConcentration(parts, lens, gross),
