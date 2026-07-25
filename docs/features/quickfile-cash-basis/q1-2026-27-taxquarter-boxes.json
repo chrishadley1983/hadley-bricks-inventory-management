@@ -5,20 +5,20 @@
   },
   "basis": "cash",
   "boxes": {
-    "15": 16256.24,
+    "15": 16287.73,
     "17": 5519.37,
     "20": 25.2,
     "21": 445.44,
     "23": 2470.06,
     "26": 386.28,
-    "30": 1984.31,
-    "24.1": 114.34
+    "30": 1986.57,
+    "24.1": 114.82
   },
   "detail": {
     "15": [
       {
         "row": "eBay Gross Sales",
-        "value": 2700.26
+        "value": 2729.01
       },
       {
         "row": "eBay Refunds",
@@ -38,11 +38,11 @@
       },
       {
         "row": "Amazon Sales (funds released)",
-        "value": 5566.92
+        "value": 5587.18
       },
       {
         "row": "Amazon Refunds (funds released)",
-        "value": -101.14
+        "value": -118.66
       }
     ],
     "17": [
@@ -106,7 +106,7 @@
       },
       {
         "row": "Amazon Fees",
-        "value": 1006.1
+        "value": 1008.84
       },
       {
         "row": "eBay Insertion Fees",
@@ -114,7 +114,7 @@
       },
       {
         "row": "eBay Fixed Fees",
-        "value": 41.16
+        "value": 40.68
       },
       {
         "row": "eBay Variable Fees",
@@ -144,11 +144,11 @@
     "24.1": [
       {
         "row": "eBay Ad Fees - Standard",
-        "value": 114.34
+        "value": 114.82
       }
     ]
   },
-  "turnover": 16256.24,
-  "expenses": 10945,
-  "profit": 5311.24
+  "turnover": 16287.73,
+  "expenses": 10947.74,
+  "profit": 5339.99
 }

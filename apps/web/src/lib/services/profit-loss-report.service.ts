@@ -47,6 +47,18 @@ export interface ProfitLossReport {
   rows: ProfitLossReportRow[];
   categoryTotals: Record<ProfitLossCategory, Record<string, number>>;
   grandTotal: Record<string, number>;
+  /**
+   * Rows whose query threw. A failed row is reported as £0 so the dashboard
+   * still renders, which means a transient Supabase error is indistinguishable
+   * from a genuinely quiet month: the row totals zero, the zero-row filter drops
+   * it, and it disappears from `rows` entirely. One failure on Lego Stock
+   * Purchases would have removed £4,848 from SA103F box 17 with nothing but a
+   * console.error to show for it.
+   *
+   * ANY consumer that must not under-report — every tax export — has to check
+   * this is empty before trusting the numbers.
+   */
+  failedRows: { transactionType: string; error: string }[];
 }
 
 /**
@@ -216,6 +228,58 @@ function toMonthlyValues(
 }
 
 // =============================================================================
+// AMAZON FINANCIAL-EVENT BREAKDOWNS
+// =============================================================================
+
+/**
+ * One node of an Amazon financial-event `breakdowns` tree.
+ *
+ * A Shipment event has a top-level `Sales` node (gross, positive) and an
+ * `Expenses` node (fees, negative); a Refund event has `Refunded Sales`
+ * (negative) and `Refunded Expenses` (positive fee credits). Children RESTATE
+ * their parent's amount, so a sum must not descend into a matched node.
+ */
+interface AmazonBreakdownNode {
+  breakdownType?: string | null;
+  breakdownAmount?: { currencyAmount?: number | null } | null;
+  breakdowns?: AmazonBreakdownNode[] | null;
+}
+
+/**
+ * Sum one breakdownType, WITHOUT descending into a matched node.
+ *
+ * The flat columns on `amazon_transactions` are NOT equivalent and must not be
+ * used for money that reaches a tax return (verified 2026-07-25 over all 1,575
+ * RELEASED Shipment rows since 2025-02, 100% of which carry breakdowns):
+ *   • `gross_sales_amount` is NET of the DigitalServicesFee — £20.26 light in
+ *     Q1 2026/27, £220.08 across all history.
+ *   • `total_fees` and `referral_fee` are Commission ONLY — they drop the same
+ *     DSF, so it vanished from both sides of the P&L at once.
+ *   • `other_fees` is junk (£8,075 against £1,026 of real fees in Q1).
+ * The tree self-proves: `Sales` + `Expenses` == `total_amount`, the actual
+ * Amazon payout, to the penny across that whole history.
+ */
+export function sumAmazonBreakdown(
+  nodes: AmazonBreakdownNode[] | null | undefined,
+  wanted: RegExp
+): number {
+  let total = 0;
+  for (const node of nodes ?? []) {
+    if (node.breakdownType && wanted.test(node.breakdownType)) {
+      total += Number(node.breakdownAmount?.currencyAmount ?? 0);
+    } else {
+      total += sumAmazonBreakdown(node.breakdowns, wanted);
+    }
+  }
+  return total;
+}
+
+/** Rows whose breakdowns are missing entirely — never silently treat as zero. */
+function countMissingBreakdowns(rows: { breakdowns: unknown }[]): number {
+  return rows.filter((r) => !Array.isArray(r.breakdowns) || r.breakdowns.length === 0).length;
+}
+
+// =============================================================================
 // QUERY FUNCTIONS
 // =============================================================================
 
@@ -228,14 +292,17 @@ async function queryEbayGrossSales(
   supabase: SupabaseClient<Database>,
   userId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  excludeFullyRefundedOrders = true
 ): Promise<MonthlyAggregation[]> {
   // First, get all fully refunded order IDs to exclude their sales
-  const { data: refundedOrders, error: refundedError } = await supabase
-    .from('ebay_orders')
-    .select('ebay_order_id')
-    .eq('user_id', userId)
-    .eq('order_payment_status', 'FULLY_REFUNDED');
+  const { data: refundedOrders, error: refundedError } = excludeFullyRefundedOrders
+    ? await supabase
+        .from('ebay_orders')
+        .select('ebay_order_id')
+        .eq('user_id', userId)
+        .eq('order_payment_status', 'FULLY_REFUNDED')
+    : { data: [], error: null };
 
   if (refundedError) throw refundedError;
 
@@ -494,6 +561,27 @@ async function queryPayPalFees(
 // =============================================================================
 
 /**
+ * Cash: eBay gross sales = every SALE receipt, INCLUDING orders later fully
+ * refunded.
+ *
+ * The accrual row excludes those sales to match Seller Hub's "Total sales", but
+ * on a cash basis the refund is already deducted by the eBay Refunds row, so
+ * excluding the receipt as well deducts the same money twice. Q1 2026/27: order
+ * 25-14618-95530 took £28.75 on 15 May and refunded £24.87 on 18 May — the
+ * receipt was dropped while the refund still came off, understating turnover by
+ * £28.75. (Also note a refund can land in a LATER period than its sale, so the
+ * exclusion silently reaches back and rewrites a period already filed.)
+ */
+async function queryEbayGrossSalesCash(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  return queryEbayGrossSales(supabase, userId, startDate, endDate, false);
+}
+
+/**
  * Cash: Amazon sales = Shipment financial events with status RELEASED, by
  * posted_date (the date Amazon credited the funds to the seller balance).
  *
@@ -513,17 +601,28 @@ async function queryAmazonSalesCash(
   endDate: string
 ): Promise<MonthlyAggregation[]> {
   const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
-    select: 'posted_date, gross_sales_amount',
+    select: 'posted_date, breakdowns',
     eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
     gte: { posted_date: startDate },
     lt: { posted_date: endDate },
   });
 
+  // Gross sales come from the `Sales` breakdown, NOT `gross_sales_amount`,
+  // which is net of the DigitalServicesFee — see sumAmazonBreakdown.
+  const missing = countMissingBreakdowns(allData);
+  if (missing > 0) {
+    throw new Error(
+      `Amazon cash sales: ${missing} of ${allData.length} RELEASED Shipment rows have no breakdowns — ` +
+        `cannot derive gross sales. Re-sync amazon_transactions rather than reporting a partial figure.`
+    );
+  }
+
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     if (!row.posted_date) continue;
     const month = row.posted_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) + Number(row.gross_sales_amount || 0));
+    const sales = sumAmazonBreakdown(row.breakdowns as AmazonBreakdownNode[], /^Sales$/i);
+    monthMap.set(month, (monthMap.get(month) || 0) + sales);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
@@ -540,18 +639,35 @@ async function queryAmazonRefundsCash(
   endDate: string
 ): Promise<MonthlyAggregation[]> {
   const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
-    select: 'posted_date, total_amount',
+    select: 'posted_date, breakdowns',
     eq: { user_id: userId, transaction_status: 'RELEASED' },
     in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
     gte: { posted_date: startDate },
     lt: { posted_date: endDate },
   });
 
+  // Only the `Refunded Sales` part reduces turnover. `total_amount` on a refund
+  // event is Refunded Sales PLUS `Refunded Expenses` (fees Amazon gives back —
+  // £17.52 in Q1 2026/27), and netting a fee credit against income overstates
+  // turnover and overstates fees by the same amount. The credit is applied to
+  // the Amazon Fees row instead, in queryAmazonFees.
+  const missing = countMissingBreakdowns(allData);
+  if (missing > 0) {
+    throw new Error(
+      `Amazon cash refunds: ${missing} of ${allData.length} RELEASED refund rows have no breakdowns — ` +
+        `cannot separate refunded sales from refunded fees.`
+    );
+  }
+
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     if (!row.posted_date) continue;
     const month = row.posted_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.total_amount || 0)));
+    const refundedSales = sumAmazonBreakdown(
+      row.breakdowns as AmazonBreakdownNode[],
+      /^Refunded Sales$/i
+    );
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(refundedSales));
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
@@ -722,7 +838,12 @@ async function queryBrickLinkFees(
 }
 
 /**
- * Query Amazon Fees (total_fees for RELEASED Shipment transactions)
+ * Query Amazon Fees: the `Expenses` breakdown on RELEASED Shipment events, less
+ * the `Refunded Expenses` credited back on RELEASED refund events.
+ *
+ * NOT `total_fees` (the previous source) — that column carries Commission only
+ * and dropped every DigitalServicesFee: £20.26 in Q1 2026/27, £220.08 since
+ * Feb 2025. See sumAmazonBreakdown for the column-by-column evidence.
  */
 async function queryAmazonFees(
   supabase: SupabaseClient<Database>,
@@ -730,18 +851,46 @@ async function queryAmazonFees(
   startDate: string,
   endDate: string
 ): Promise<MonthlyAggregation[]> {
-  const allData = await fetchAllRecords(supabase, 'amazon_transactions', {
-    select: 'posted_date, total_fees',
-    eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
-    gte: { posted_date: startDate },
-    lt: { posted_date: endDate },
-  });
+  const [charges, refunds] = await Promise.all([
+    fetchAllRecords(supabase, 'amazon_transactions', {
+      select: 'posted_date, breakdowns',
+      eq: { user_id: userId, transaction_type: 'Shipment', transaction_status: 'RELEASED' },
+      gte: { posted_date: startDate },
+      lt: { posted_date: endDate },
+    }),
+    fetchAllRecords(supabase, 'amazon_transactions', {
+      select: 'posted_date, breakdowns',
+      eq: { user_id: userId, transaction_status: 'RELEASED' },
+      in: { transaction_type: ['Refund', 'GuaranteeClaimRefund'] },
+      gte: { posted_date: startDate },
+      lt: { posted_date: endDate },
+    }),
+  ]);
+
+  const missing = countMissingBreakdowns(charges) + countMissingBreakdowns(refunds);
+  if (missing > 0) {
+    throw new Error(
+      `Amazon fees: ${missing} RELEASED rows have no breakdowns — cannot derive fees. ` +
+        `Re-sync amazon_transactions rather than under-reporting the fee total.`
+    );
+  }
 
   const monthMap = new Map<string, number>();
-  for (const row of allData) {
+  for (const row of charges) {
     if (!row.posted_date) continue;
     const month = row.posted_date.substring(0, 7);
-    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.total_fees || 0)));
+    const fees = Math.abs(
+      sumAmazonBreakdown(row.breakdowns as AmazonBreakdownNode[], /^Expenses$/i)
+    );
+    monthMap.set(month, (monthMap.get(month) || 0) + fees);
+  }
+  for (const row of refunds) {
+    if (!row.posted_date) continue;
+    const month = row.posted_date.substring(0, 7);
+    const credited = Math.abs(
+      sumAmazonBreakdown(row.breakdowns as AmazonBreakdownNode[], /^Refunded Expenses$/i)
+    );
+    monthMap.set(month, (monthMap.get(month) || 0) - credited);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -760,9 +909,14 @@ async function queryEbayFeesByType(
   endDate: string,
   feeType: string
 ): Promise<MonthlyAggregation[]> {
+  // DEBIT charges less CREDIT reversals OF THE SAME feeType. Matching feeType on
+  // both sides is what keeps a reversal against the fee it actually reverses —
+  // an unfiltered credit sweep put a £0.48 FINAL_VALUE_FEE_FIXED_PER_ORDER
+  // credit against Promoted Listings in Q1 2026/27.
   const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
-    select: 'transaction_date, amount, raw_response',
-    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'DEBIT' },
+    select: 'transaction_date, amount, booking_entry, raw_response',
+    eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE' },
+    in: { booking_entry: ['DEBIT', 'CREDIT'] },
     gte: { transaction_date: startDate },
     lt: { transaction_date: endDate },
   });
@@ -770,10 +924,13 @@ async function queryEbayFeesByType(
   const monthMap = new Map<string, number>();
   for (const row of allData) {
     const rawResponse = row.raw_response as { feeType?: string } | null;
-    if (rawResponse?.feeType === feeType) {
-      const month = row.transaction_date.substring(0, 7);
-      monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.amount || 0)));
-    }
+    if (rawResponse?.feeType !== feeType) continue;
+    const month = row.transaction_date.substring(0, 7);
+    const signed =
+      row.booking_entry === 'CREDIT'
+        ? -Math.abs(Number(row.amount || 0))
+        : Math.abs(Number(row.amount || 0));
+    monthMap.set(month, (monthMap.get(month) || 0) + signed);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -783,7 +940,17 @@ async function queryEbayFeesByType(
 }
 
 /**
- * Helper to query eBay SALE transaction fees by fee type with pagination
+ * Helper to query eBay SALE transaction fees by fee type with pagination.
+ *
+ * Sale-embedded fees are charged inside the SALE row's `marketplaceFees`, but
+ * eBay reverses them later as a standalone NON_SALE_CHARGE CREDIT carrying the
+ * same feeType — so the reversal must be netted here, against the fee it
+ * actually reverses. Q1 2026/27 had one: a £0.48
+ * FINAL_VALUE_FEE_FIXED_PER_ORDER credit, which previously fell against
+ * Promoted Listings and, once that was fixed, against nothing at all.
+ *
+ * No double-count risk: each feeType is served by exactly one of
+ * queryEbaySaleFeesByType / queryEbayFeesByType / queryEbayAdFeesStandard.
  */
 async function queryEbaySaleFeesByType(
   supabase: SupabaseClient<Database>,
@@ -792,12 +959,20 @@ async function queryEbaySaleFeesByType(
   endDate: string,
   feeType: string
 ): Promise<MonthlyAggregation[]> {
-  const allData = await fetchAllRecords(supabase, 'ebay_transactions', {
-    select: 'transaction_date, raw_response',
-    eq: { user_id: userId, transaction_type: 'SALE', booking_entry: 'CREDIT' },
-    gte: { transaction_date: startDate },
-    lt: { transaction_date: endDate },
-  });
+  const [allData, reversals] = await Promise.all([
+    fetchAllRecords(supabase, 'ebay_transactions', {
+      select: 'transaction_date, raw_response',
+      eq: { user_id: userId, transaction_type: 'SALE', booking_entry: 'CREDIT' },
+      gte: { transaction_date: startDate },
+      lt: { transaction_date: endDate },
+    }),
+    fetchAllRecords(supabase, 'ebay_transactions', {
+      select: 'transaction_date, amount, raw_response',
+      eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'CREDIT' },
+      gte: { transaction_date: startDate },
+      lt: { transaction_date: endDate },
+    }),
+  ]);
 
   const monthMap = new Map<string, number>();
   for (const row of allData) {
@@ -821,6 +996,14 @@ async function queryEbaySaleFeesByType(
       }
     }
     monthMap.set(month, (monthMap.get(month) || 0) + feeTotal);
+  }
+
+  // Net standalone reversals of this same feeType
+  for (const row of reversals) {
+    const rawResponse = row.raw_response as { feeType?: string } | null;
+    if (rawResponse?.feeType !== feeType) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) - Math.abs(Number(row.amount || 0)));
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({
@@ -882,9 +1065,12 @@ async function queryEbayAdFeesStandard(
     lt: { transaction_date: endDate },
   });
 
-  // Get fee refunds (CREDIT entries)
+  // Get AD_FEE reversals only. Sweeping up EVERY NON_SALE_CHARGE credit put
+  // other fee types' reversals against advertising: a £0.48
+  // FINAL_VALUE_FEE_FIXED_PER_ORDER credit landed in SA103F box 24.1
+  // (advertising) instead of box 30 in Q1 2026/27.
   const allRefunds = await fetchAllRecords(supabase, 'ebay_transactions', {
-    select: 'transaction_date, amount',
+    select: 'transaction_date, amount, raw_response',
     eq: { user_id: userId, transaction_type: 'NON_SALE_CHARGE', booking_entry: 'CREDIT' },
     gte: { transaction_date: startDate },
     lt: { transaction_date: endDate },
@@ -901,15 +1087,20 @@ async function queryEbayAdFeesStandard(
     }
   }
 
-  // Subtract fee refunds
+  // Subtract AD_FEE refunds only
   for (const row of allRefunds) {
+    const rawResponse = row.raw_response as { feeType?: string } | null;
+    if (rawResponse?.feeType !== 'AD_FEE') continue;
     const month = row.transaction_date.substring(0, 7);
     monthMap.set(month, (monthMap.get(month) || 0) - Math.abs(Number(row.amount || 0)));
   }
 
+  // No Math.max(0, …) floor: a month whose reversals genuinely exceed its
+  // charges is a real credit and must show as one. The floor silently ate the
+  // difference, so a large mis-posted reversal would have been invisible.
   return Array.from(monthMap.entries()).map(([month, total]) => ({
     month,
-    total: Math.max(0, total), // Ensure non-negative
+    total,
   }));
 }
 
@@ -1231,8 +1422,10 @@ async function queryHomeCostsInsurance(
  * recognised on payment dates in both bases.
  *
  * Cash-basis notes:
- * - eBay reuses the accrual queries: buyers pay eBay (our collecting agent) at
- *   the moment of sale, so receipt dates equal sale dates by construction.
+ * - eBay dates match accrual by construction (buyers pay eBay, our collecting
+ *   agent, at the moment of sale) but the query is NOT the same: cash keeps the
+ *   receipts of orders later fully refunded, because the refunds row already
+ *   deducts them. See queryEbayGrossSalesCash.
  * - The BL/BO refunds row only exists on cash basis; on accrual, cancelled
  *   orders are excluded from gross sales instead.
  */
@@ -1242,7 +1435,7 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
       {
         category: 'Income',
         transactionType: 'eBay Gross Sales',
-        queryFn: queryEbayGrossSales,
+        queryFn: queryEbayGrossSalesCash,
         signMultiplier: 1,
       },
       {
@@ -1644,11 +1837,24 @@ export class ProfitLossReportService {
         return {
           definition: def,
           aggregations: [],
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     });
 
     const queryResults = await Promise.all(queryPromises);
+
+    // Surface swallowed failures instead of letting them read as £0 — see
+    // ProfitLossReport.failedRows.
+    const failedRows = queryResults
+      .filter((r): r is typeof r & { error: string } => 'error' in r && r.error !== undefined)
+      .map((r) => ({ transactionType: r.definition.transactionType, error: r.error }));
+    if (failedRows.length > 0) {
+      console.error(
+        `[P&L] ${failedRows.length} row(s) FAILED and are reported as zero: ` +
+          failedRows.map((f) => f.transactionType).join(', ')
+      );
+    }
 
     // Build report rows
     const rows: ProfitLossReportRow[] = [];
@@ -1722,6 +1928,7 @@ export class ProfitLossReportService {
       rows,
       categoryTotals,
       grandTotal,
+      failedRows,
     };
   }
 }

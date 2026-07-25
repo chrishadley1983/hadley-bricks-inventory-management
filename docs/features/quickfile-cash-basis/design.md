@@ -129,3 +129,63 @@ Q1 2026/27 filed figures — cash basis, 6 Apr – 5 Jul 2026:
 box 15 £16,256.24 · 17 £5,519.37 · 20 £25.20 · 21 £445.44 · 23 £2,470.06 ·
 24.1 £114.34 · 26 £386.28 · 30 £1,984.31 → expenses £10,945.00, profit
 £5,311.24. File: `MTD_SA103_2026-27_Q1_6Apr-5Jul.xlsx`.
+
+## Four source-column defects found by validation (2026-07-25) — FIXED
+
+The `validate-mtd-standard-quarter` workflow FAILED the first Q1 file. Every
+defect was a wrong SOURCE for money that reaches a return, and every one
+understated tax. All four are fixed in `profit-loss-report.service.ts`.
+
+**1. Amazon flat columns are not equivalent to the breakdowns tree.**
+`gross_sales_amount` is NET of the DigitalServicesFee, and
+`total_fees`/`referral_fee` carry Commission ONLY — so DSF vanished from both
+sides of the P&L at once (£20.26 in Q1, £220.08 since Feb 2025). `other_fees` is
+junk (£8,075 against £1,026 of real fees). Gross sales now come from the `Sales`
+breakdown and fees from `Expenses`. The tree self-proves: `Sales + Expenses ==
+total_amount` (the actual payout) to the penny across all 1,575 RELEASED rows,
+100% of which carry breakdowns — so the source throws rather than falls back.
+
+**2. Amazon refund events mix a fee credit into turnover.** `total_amount` on a
+refund is `Refunded Sales` PLUS `Refunded Expenses` (fees given back, £17.52 in
+Q1). Only Refunded Sales reduces turnover; the credit now reduces the fees row.
+Profit-neutral, but it had turnover and fees each overstated by £17.52.
+
+**3. The FULLY_REFUNDED exclusion double-deducts on cash basis.** Accrual
+excludes those sales to match Seller Hub; on cash the refunds row already
+deducts the money, so dropping the receipt too deducts it twice (order
+25-14618-95530: took £28.75 on 15 May, refunded £24.87 on 18 May). Cash now uses
+`queryEbayGrossSalesCash`; accrual is unchanged. Note a refund can also land in a
+LATER period than its sale, so the exclusion silently rewrote periods already
+filed.
+
+**4. Fee reversals were swept into advertising.** `queryEbayAdFeesStandard`
+subtracted EVERY `NON_SALE_CHARGE` CREDIT with no feeType filter, so a £0.48
+`FINAL_VALUE_FEE_FIXED_PER_ORDER` credit reduced box 24.1 instead of box 30.
+Credits are now matched to their own feeType on both the NON_SALE_CHARGE and
+SALE-embedded fee paths, and the `Math.max(0, total)` monthly floor is gone (it
+would have silently eaten a large mis-posted reversal).
+
+**Plus a silent-drop path closed.** `generateReport` swallows a failed row's
+query, the row totals £0, and the zero-row filter removes it — so one transient
+error could have dropped £4,848 of stock from box 17 with only a console.error.
+Failures are now returned as `ProfitLossReport.failedRows`, and
+`mtd-sa103-boxes.ts` refuses to build a return when it is non-empty, as well as
+reconciling the boxes against the report's own row totals.
+
+### Corrected figures (all cash basis)
+
+| Period | Turnover | Expenses | Profit | Was (profit) |
+|---|---|---|---|---|
+| **Q1 2026/27, 6 Apr – 5 Jul** | **16,287.73** | **10,947.74** | **5,339.99** | 5,311.24 |
+| Q1 calendar, 1 Apr – 30 Jun | 15,995.08 | 10,793.42 | 5,201.66 | 5,159.19 |
+| FY2025/26, 6 Apr 25 – 5 Apr 26 | 74,432.36 | 52,283.92 | 22,148.44 | 21,031.91 |
+| FY2025/26, 1 Apr 25 – 31 Mar 26 | 76,108.14 | 52,896.27 | 23,211.87 | 22,109.11 |
+
+Q1 boxes: 15 £16,287.73 · 17 £5,519.37 · 20 £25.20 · 21 £445.44 · 23 £2,470.06 ·
+24.1 £114.82 · 26 £386.28 · 30 £1,986.57.
+
+**Follow-up:** the QuickFile ledger still holds the pre-fix Apr–Jun push
+(£15,948.23 income / £10,789.04 expenses from 2026-07-02). QuickFile is the books
+only and the return goes via My Tax Digital bridging, so this is not a
+double-filing risk, but the books are now £46.85 light on income and should be
+re-pushed or adjusted.

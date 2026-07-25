@@ -65,6 +65,17 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const m = (n: number) => n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export function boxesFromReport(report: ProfitLossReport) {
+  // A row whose query threw is reported as £0 and then dropped by the zero-row
+  // filter, so the unmapped-row guard below can never see it. Refuse to build a
+  // return from a report that had ANY failure.
+  if (report.failedRows?.length) {
+    throw new Error(
+      `Refusing to build a tax return: ${report.failedRows.length} P&L row(s) failed to query and ` +
+        `would be filed as £0 — ` +
+        report.failedRows.map((f) => `${f.transactionType} (${f.error})`).join('; ')
+    );
+  }
+
   const boxes: Record<string, number> = {};
   const detail: Record<string, { row: string; value: number }[]> = {};
   const unmapped: string[] = [];
@@ -97,7 +108,29 @@ export function boxesFromReport(report: ProfitLossReport) {
       .filter(([b]) => b !== '15')
       .reduce((s, [, v]) => s + v, 0)
   );
-  return { boxes, detail, turnover: boxes['15'] ?? 0, expenses, profit: r2((boxes['15'] ?? 0) - expenses) };
+  const turnover = boxes['15'] ?? 0;
+
+  // Every pound in the report must land in exactly one box: independently
+  // re-add the report's own rows and require the boxes to reconcile. This is
+  // what catches a row silently dropped between report and return.
+  const reportIncome = r2(
+    report.rows.filter((r) => r.category === 'Income').reduce((s, r) => s + r.total, 0)
+  );
+  const reportExpenses = r2(
+    report.rows.filter((r) => r.category !== 'Income').reduce((s, r) => s + Math.abs(r.total), 0)
+  );
+  if (Math.abs(reportIncome - turnover) > 0.01) {
+    throw new Error(
+      `Box 15 (${turnover}) does not reconcile with the report's Income rows (${reportIncome})`
+    );
+  }
+  if (Math.abs(reportExpenses - expenses) > 0.01) {
+    throw new Error(
+      `Expense boxes (${expenses}) do not reconcile with the report's expense rows (${reportExpenses})`
+    );
+  }
+
+  return { boxes, detail, turnover, expenses, profit: r2(turnover - expenses) };
 }
 
 async function main() {
