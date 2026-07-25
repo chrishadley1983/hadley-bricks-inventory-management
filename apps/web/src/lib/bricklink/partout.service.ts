@@ -276,7 +276,18 @@ export class PartoutService {
    * Flatten subset entries into a list of part identifiers
    */
   private flattenSubsets(subsets: BrickLinkSubsetEntry[], colourMap: ColourMap): PartIdentifier[] {
-    const parts: PartIdentifier[] = [];
+    // MERGED BY part+colour, not appended.
+    //
+    // BrickLink returns subsets grouped, and the same part+colour can legitimately appear
+    // in more than one group (71741 lists 98138pb027 White twice, qty 2 and qty 1). Kept
+    // as separate rows that produced a duplicate lot for a single sellable lot: the parts
+    // table rendered two rows with the same React key — which is what made a sorted column
+    // put an out-of-place row at the top — and every lot COUNT was inflated (1,145 rows for
+    // 1,141 real lots), which feeds pricedLots, the STR bands and the concentration split.
+    //
+    // Quantities are summed, which is both the correct total and how we would actually
+    // list it: one lot of 3, not a lot of 2 and a lot of 1.
+    const merged = new Map<string, PartIdentifier>();
 
     for (const subset of subsets) {
       for (const entry of subset.entries) {
@@ -287,8 +298,15 @@ export class PartoutService {
 
         // Colour ids in subsets are BL-scheme; name from the canonical map
         const colourName = colourMap.name(entry.color_id) || entry.color_name || 'Unknown';
+        const key = `${entry.item.type}:${entry.item.no}:${entry.color_id}`;
 
-        parts.push({
+        const existing = merged.get(key);
+        if (existing) {
+          existing.quantity += entry.quantity;
+          continue;
+        }
+
+        merged.set(key, {
           partNumber: entry.item.no,
           partType: entry.item.type,
           colourId: entry.color_id,
@@ -299,7 +317,7 @@ export class PartoutService {
       }
     }
 
-    return parts;
+    return [...merged.values()];
   }
 
   /**
