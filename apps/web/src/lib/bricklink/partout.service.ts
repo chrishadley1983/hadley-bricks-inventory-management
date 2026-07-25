@@ -9,7 +9,11 @@
  * Semantics preserved from the legacy implementation:
  *  - prices are UK sold averages, falling back to UK stock (asking) averages
  *  - sell-through rate is LOTS-based ×100 (sold lots / stock lots)
- *  - stockAvailable and timesSold fields are lot counts
+ *  - stockAvailable and timesSold are QUANTITIES (pieces), matching the qty-basis STR
+ *    the whole screen gates on. They were lot counts, which put two different
+ *    denominators on one table row: njo0658 showed Stock 12 / Sold 6 next to STR 0.02,
+ *    because 12 listings held 333 pieces. Same basis everywhere now, so Sold ÷ Stock
+ *    visibly reconciles with the STR column.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -427,10 +431,10 @@ export class PartoutService {
       overlapUsed: overlapU.tag,
       ourQtyNew: overlapN.ourQty,
       ourQtyUsed: overlapU.ourQty,
-      stockAvailableNew: hasData ? view.new.stockLots : null,
-      stockAvailableUsed: hasData ? view.used.stockLots : null,
-      timesSoldNew: hasData ? view.new.soldLots : null,
-      timesSoldUsed: hasData ? view.used.soldLots : null,
+      stockAvailableNew: hasData ? view.new.stockQty : null,
+      stockAvailableUsed: hasData ? view.used.stockQty : null,
+      timesSoldNew: hasData ? view.new.soldQty : null,
+      timesSoldUsed: hasData ? view.used.soldQty : null,
       fromCache: hasData && fromCache,
     };
   }

@@ -26,14 +26,6 @@ interface PartoutTableProps {
 }
 
 /**
- * Format sell-through rate as percentage
- */
-function formatPercentage(value: number | null): string {
-  if (value === null) return '-';
-  return `${value.toFixed(1)}%`;
-}
-
-/**
  * Part image cell with fallback
  */
 function PartImageCell({ part }: { part: PartValue }) {
@@ -164,24 +156,6 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
       ),
     },
     {
-      id: 'sellThroughRate',
-      accessorFn: (row) => (condition === 'new' ? row.sellThroughRateNew : row.sellThroughRateUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Sell-Through
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) =>
-        formatPercentage(
-          condition === 'new' ? row.original.sellThroughRateNew : row.original.sellThroughRateUsed
-        ),
-    },
-    {
       id: 'stockAvailable',
       accessorFn: (row) => (condition === 'new' ? row.stockAvailableNew : row.stockAvailableUsed),
       header: ({ column }) => (
@@ -190,7 +164,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           className="-ml-4"
         >
-          Stock
+          Stock qty
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -207,7 +181,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           className="-ml-4"
         >
-          Sold
+          Sold qty
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
@@ -215,9 +189,11 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
         (condition === 'new' ? row.original.timesSoldNew : row.original.timesSoldUsed) ?? '-',
     },
     {
-      // Quantity-basis STR — the figure the gates, magnet test and capture curve all
-      // use. The "Sell-Through" column above is the legacy lots-basis percentage; they
-      // will not agree, which is why this one is labelled explicitly.
+      // Quantity-basis STR — the figure the gates, magnet test and capture curve all use,
+      // and now the same basis as the Stock qty / Sold qty columns beside it, so the row
+      // reconciles: Sold qty / Stock qty = this. (It previously sat next to LOT counts,
+      // which is how njo0658 read "Stock 12 / Sold 6" against an STR of 0.02 — 12 listings
+      // holding 333 pieces.) The legacy lots-basis percentage column has been removed.
       id: 'strQty',
       accessorFn: (row) => (condition === 'new' ? row.strQtyNew : row.strQtyUsed),
       header: ({ column }) => (
@@ -315,10 +291,9 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         quantity: 'Qty',
         price: 'Price',
         total: 'Total',
-        sellThroughRate: 'Sell-Through (lots)',
         strQty: 'STR (qty)',
-        stockAvailable: 'Stock',
-        timesSold: 'Sold',
+        stockAvailable: 'Stock qty',
+        timesSold: 'Sold qty',
         worldSupply: 'World lots',
         overlap: 'Overlap',
         cache: 'Cache',
@@ -327,7 +302,6 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         cache: false, // Hide cache indicator by default
         // The legacy lots-basis percentage is superseded by STR (qty) but kept
         // available behind the column picker rather than removed outright.
-        sellThroughRate: false,
       }}
       columnVisibilityStorageKey="partout-table-columns"
     />

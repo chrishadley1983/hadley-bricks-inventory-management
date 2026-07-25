@@ -246,10 +246,12 @@ export interface PartValue {
   /** Units of this part+colour we currently hold (Used) — null when no overlap index. */
   ourQtyUsed: number | null;
   /** Number of lots available for New condition */
+  /** UK stock QUANTITY (pieces), not lots — same basis as strQty. */
   stockAvailableNew: number | null;
   /** Number of lots available for Used condition */
   stockAvailableUsed: number | null;
   /** Number of times sold for New condition */
+  /** UK sold QUANTITY (pieces) over the guide window, not lots. */
   timesSoldNew: number | null;
   /** Number of times sold for Used condition */
   timesSoldUsed: number | null;
