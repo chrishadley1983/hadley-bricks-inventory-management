@@ -75,17 +75,48 @@ into the old behaviour).
 
 **First sweep RUN and verified, 2026-07-25** (approved by Chris). 322 pages, 32,142 items
 fetched, 30,506 rows persisted (≈1,636 items carry no `definition` and are skipped by
-`toSnapshotRow`), 0 stale removed — inventory only grew. Afterwards:
-`sync_status=idle`, `sync_cursor=0`, `last_full_sync=2026-07-25T12:11:58Z`, and every
-row's `synced_at` falls inside that single invocation — which is exactly the condition
-stale removal requires and could never previously reach.
+`toSnapshotRow`), **0 stale removed**. Afterwards: `sync_status=idle`, `sync_cursor=0`,
+`last_full_sync=2026-07-25T12:11:58Z`, and every row's `synced_at` falls inside that
+single invocation — which is exactly the condition stale removal requires and could
+never previously reach.
 
-⚠️ **The scheduled task is registered but DISABLED — enable it after this PR merges.**
+#### "0 stale removed" — challenged, and explained
+
+Chris flagged this as implausible: plenty of lots have sold out since 14 June. It is
+correct, but only because of a Bricqer behaviour worth writing down.
+
+**Bricqer keeps sold-out lots in `/inventory/item/` at `quantity = 0`.** They are never
+absent from the fetch, so they are never "stale" — `removeStaleItems` only prunes lots
+*deleted outright* from Bricqer, which is genuinely rare. Verified rather than assumed:
+
+| Check | Result |
+|---|---|
+| Rows at `quantity = 0` | **9,458 of 30,506 (31%)** |
+| Rows at `quantity > 0` | 21,048 |
+| Paginated read of the table | saw **30,506 of 30,506** — so the removal path is not silently truncating |
+| Rows with a stale `synced_at` | none; oldest is 12:10:27 from this run |
+
+So the sweep is sound, but **the snapshot is ~31% sold-out lots** and every consumer must
+filter on quantity. Audited:
+
+| Consumer | Filters `quantity > 0`? |
+|---|---|
+| `bl-store-assessment/overlap.ts` (drives the part-out overlap panel) | **Yes** — `.gt('quantity', 0)` |
+| `store-quality/engine.ts` | **Yes** — `.gt('quantity', 0)` |
+| `scripts/find-piece.ts` | **Yes** — filtered in JS behind an `INCLUDE_ZERO` flag |
+| `scripts/evaluate-job-lot.ts` | N/A — reads the colour crosswalk only |
+| `api/inventory/explorer/overview` + `/items` | **No** — a zero-qty lot still becomes a lot, so `totalLots` counts sold-out lots |
+
+The decision surfaces are correct. **The Inventory Explorer's lot counts are inflated** —
+pre-existing, a different feature, flagged not fixed here.
+
+⚠️ **The scheduled task is registered `S4U` but DISABLED — enable it after this PR merges.**
 `hb-assess-wt` hard-resets to `origin/main` at the start of each run, so until #639 is in
 main it would execute the OLD one-pass CLI, stop at the 300-page cap, and leave
 `sync_status='running'` with `sync_cursor=300` — re-wedging exactly what this PR fixes.
 
-After merge:
+After merge, **from an elevated shell** (the task is registered S4U, so a non-elevated
+shell gets `Access is denied`):
 ```powershell
 Enable-ScheduledTask -TaskName 'HadleyBricks-Bricqer-Snapshot-Local'
 ```
@@ -93,11 +124,14 @@ The runner `.ps1` is already staged untracked inside `hb-assess-wt` (a `git rese
 leaves untracked files alone), and the tracked copy replaces it on the first post-merge
 self-update — so nothing else needs doing by hand.
 
-Registered as `Interactive`, not `S4U`, because the registering shell wasn't elevated.
-That matches `HadleyBricks-Store-Assessment-Local`, `-Keepa-Refresh-Local`, `-POV-Refresh`
-and `-RM-Backfill`, so it is the house norm here rather than an anomaly — but it does mean
-the task only fires while Chris is logged on. Re-run the register script from an elevated
-shell if it should run logged-off.
+Registered **`S4U`** (via an elevated UAC prompt), so it runs whether Chris is logged on
+or not — unlike `HadleyBricks-Store-Assessment-Local`, `-Keepa-Refresh-Local`,
+`-POV-Refresh` and `-RM-Backfill`, which are all still `Interactive` and only fire while
+logged on. Those are candidates for the same treatment.
+
+Note the re-registration re-enabled the task (`Register-ScheduledTask` always creates it
+enabled), so it had to be disabled again afterwards. Anyone re-running the register
+script before the merge must remember to re-disable.
 
 ### §5 Details tab — DONE
 
@@ -172,5 +206,11 @@ predates this branch. Flagged, not fixed — it's a separate piece of work.
 ### Not done
 
 - No e2e coverage for set-lookup or partout (there was none before either).
-- **Enable `HadleyBricks-Bricqer-Snapshot-Local` once this PR merges** (see §3). It is
-  registered and correct, but deliberately disabled until the fixed CLI is in main.
+- **Enable `HadleyBricks-Bricqer-Snapshot-Local` once this PR merges** (see §3), from an
+  elevated shell. It is registered S4U and correct, but deliberately disabled until the
+  fixed CLI is in main.
+- Inventory Explorer counts sold-out (`quantity = 0`) lots in `totalLots` — 31% of the
+  snapshot. Pre-existing, separate feature.
+- The four `Interactive` scheduled tasks (`Store-Assessment-Local`, `Keepa-Refresh-Local`,
+  `POV-Refresh`, `RM-Backfill`) only fire while logged on; consider re-registering them
+  S4U as this one now is.
