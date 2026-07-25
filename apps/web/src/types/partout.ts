@@ -148,6 +148,16 @@ export interface PartoutAssessment {
   pricedLots: number;
   /** Lots with no UK price data — these contribute £0 and understate POV. */
   unpricedLots: number;
+  /**
+   * How many lots the magnet test could actually be applied to.
+   *
+   * Magnets need worldwide supply from `bricklink_pg_summary_cache`. That read is
+   * non-fatal — a failure (or thin coverage) yields an empty supply map, and every lot
+   * then silently fails the scarcity leg. Without this, "no magnets" is indistinguishable
+   * from "we couldn't check", and the panel would be asserting absence from missing
+   * evidence. Surface the denominator so the UI can tell the two apart.
+   */
+  magnetCoverage: { withSupplyData: number; total: number };
 }
 
 /** Individual part value in the partout analysis */

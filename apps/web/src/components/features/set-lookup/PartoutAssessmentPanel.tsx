@@ -279,7 +279,14 @@ function MagnetRow({ magnet }: { magnet: PartoutMagnet }) {
  * gate and still be worth buying for the traffic these pull to the store.
  */
 function MagnetsCard({ assessment }: { assessment: PartoutAssessment }) {
-  const { magnets, verdict } = assessment;
+  const { magnets, verdict, magnetCoverage } = assessment;
+
+  // "No magnets" is only an honest claim if we could actually run the test. The supply
+  // read is non-fatal, so an outage or a cache gap otherwise renders as a confident
+  // absence. Distinguish no-evidence from no-magnets.
+  const noSupplyData = magnetCoverage.total > 0 && magnetCoverage.withSupplyData === 0;
+  const partialSupply =
+    !noSupplyData && magnetCoverage.withSupplyData < magnetCoverage.total;
 
   return (
     <Card>
@@ -295,9 +302,22 @@ function MagnetsCard({ assessment }: { assessment: PartoutAssessment }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {magnets.length === 0 ? (
+        {noSupplyData ? (
+          <p className="text-sm text-muted-foreground">
+            Worldwide supply data is unavailable for every lot in this set, so the magnet test
+            couldn&apos;t be applied. This is <strong>not</strong> a finding of &ldquo;no
+            magnets&rdquo; — nothing is claimed either way.
+          </p>
+        ) : magnets.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             No magnet lots in this set — nothing clears both the scarcity and sell-through tests.
+            {partialSupply && (
+              <>
+                {' '}
+                Checked against {magnetCoverage.withSupplyData} of {magnetCoverage.total} lots;
+                the rest have no supply data.
+              </>
+            )}
           </p>
         ) : (
           <>

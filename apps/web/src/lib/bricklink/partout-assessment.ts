@@ -341,6 +341,13 @@ export function assessPartout(
     overlap: buildOverlap(parts, lens, options.overlapMeta ?? null),
     pricedLots,
     unpricedLots: parts.length - pricedLots,
+    // The magnet test's denominator. `readSupplySafely` swallows failures and returns an
+    // empty map, so without this an outage reads on screen as "no magnets" — a positive
+    // claim built on absent evidence.
+    magnetCoverage: {
+      withSupplyData: parts.filter((p) => lens.worldSupplyLots(p) != null).length,
+      total: parts.length,
+    },
   };
 }
 

@@ -230,6 +230,37 @@ describe('assessPartout — magnets', () => {
     expect(a.magnets).toHaveLength(1);
   });
 
+  // The supply read is non-fatal: a failure yields an empty map and every lot silently
+  // fails the scarcity leg. Without a denominator, "no magnets" would be a positive claim
+  // built on absent evidence — magnetCoverage is what lets the UI tell the two apart.
+  it('reports zero supply coverage when no lot has world-supply data', () => {
+    const a = assessPartout(
+      [part({ worldSupplyLotsNew: null }), part({ worldSupplyLotsNew: null })],
+      1,
+      'new'
+    );
+    expect(a.magnets).toHaveLength(0);
+    expect(a.magnetCoverage).toEqual({ withSupplyData: 0, total: 2 });
+  });
+
+  it('counts partial supply coverage so a thin cache is distinguishable from absence', () => {
+    const a = assessPartout(
+      [magnetPart(), part({ worldSupplyLotsNew: null }), part({ worldSupplyLotsNew: 50 })],
+      1,
+      'new'
+    );
+    expect(a.magnets).toHaveLength(1);
+    expect(a.magnetCoverage).toEqual({ withSupplyData: 2, total: 3 });
+  });
+
+  it('counts a zero supply count as data present but failing the scarcity leg', () => {
+    // 0 is "no data" for the MAGNET test, but the field IS populated — coverage should
+    // not claim the read failed.
+    const a = assessPartout([magnetPart({ worldSupplyLotsNew: 0 })], 1, 'new');
+    expect(a.magnets).toHaveLength(0);
+    expect(a.magnetCoverage).toEqual({ withSupplyData: 1, total: 1 });
+  });
+
   it('orders scarcest first, then by sell-through', () => {
     const a = assessPartout(
       [

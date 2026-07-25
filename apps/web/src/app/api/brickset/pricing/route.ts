@@ -12,7 +12,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { getEbayBrowseClient } from '@/lib/ebay';
 import type { EbayItemSummary } from '@/lib/ebay';
-import { BrickLinkClient } from '@/lib/bricklink';
+import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { ensurePriceGuide } from '@/lib/bricklink/price-guide/capture';
 import type { MonthlySold } from '@/lib/bricklink/price-guide/read';
@@ -103,11 +103,14 @@ interface PricingData {
   bricklinkUsed: BrickLinkPricingStats | null;
 }
 
-/** Panel payload for the case where the BrickLink fetch itself rejected. */
-function bricklinkPanelError(reason: unknown): BrickLinkPricingStats {
+/**
+ * Panel payload for the case where the BrickLink fetch itself rejected. fetchBricklinkPricing
+ * catches its own errors, so reaching here is a bug — the reason is logged, not returned.
+ */
+function bricklinkPanelError(): BrickLinkPricingStats {
   return {
     status: 'error',
-    message: reason instanceof Error ? reason.message : 'BrickLink price lookup failed.',
+    message: 'BrickLink price lookup failed. See the server log for detail.',
     minPrice: null,
     avgPrice: null,
     maxPrice: null,
@@ -249,7 +252,7 @@ export async function GET(request: NextRequest) {
       pricing.bricklink = bricklinkResult.value;
     } else {
       console.error('[GET /api/brickset/pricing] BrickLink error:', bricklinkResult.reason);
-      pricing.bricklink = bricklinkPanelError(bricklinkResult.reason);
+      pricing.bricklink = bricklinkPanelError();
     }
 
     if (bricklinkUsedResult.status === 'fulfilled') {
@@ -259,7 +262,7 @@ export async function GET(request: NextRequest) {
         '[GET /api/brickset/pricing] BrickLink Used error:',
         bricklinkUsedResult.reason
       );
-      pricing.bricklinkUsed = bricklinkPanelError(bricklinkUsedResult.reason);
+      pricing.bricklinkUsed = bricklinkPanelError();
     }
 
     if (amazonResult.status === 'fulfilled') {
@@ -429,11 +432,22 @@ async function fetchBricklinkPricing(
     };
   } catch (error) {
     console.error(`[fetchBricklinkPricing] Error for ${condition}:`, error);
-    return empty(
-      'error',
-      error instanceof Error ? error.message : 'BrickLink price lookup failed.'
-    );
+    // Only BrickLink's own error text reaches the client. Any other message (Supabase
+    // internals, network detail) stays in the server log — the panel needs to say
+    // "this failed", not leak how.
+    return empty('error', blClientMessage(error));
   }
+}
+
+/** Client-safe failure text: BrickLink's own error, else a generic line. */
+function blClientMessage(error: unknown): string {
+  if (error instanceof RateLimitError) {
+    return 'BrickLink rate limit hit. Try again shortly.';
+  }
+  if (error instanceof BrickLinkApiError) {
+    return `BrickLink API error (${error.code}): ${error.message}`;
+  }
+  return 'BrickLink price lookup failed. See the server log for detail.';
 }
 
 /**
