@@ -69,7 +69,9 @@ export interface PartoutMagnet {
   price: number | null;
   /** Qty-basis STR fraction. */
   str: number | null;
-  /** Worldwide seller lots — the scarcity side of the magnet test. */
+  /** UK seller lots — the scarcity side of the magnet test. */
+  ukStockLots: number | null;
+  /** Worldwide seller lots — context only; no longer gates. */
   worldSupplyLots: number | null;
   /** quantity × price. */
   lineValue: number;
@@ -234,6 +236,9 @@ export interface PartValue {
   /** QUANTITY-basis STR as a fraction for Used. See `strQtyNew`. */
   strQtyUsed: number | null;
   /** Worldwide seller lots (New) from `bricklink_pg_summary_cache` — magnet input. */
+  /** UK seller lots — the scarcity basis for magnets (see UK_MAGNET). */
+  ukStockLotsNew: number | null;
+  ukStockLotsUsed: number | null;
   worldSupplyLotsNew: number | null;
   /** Worldwide seller lots (Used) from `bricklink_pg_summary_cache` — magnet input. */
   worldSupplyLotsUsed: number | null;

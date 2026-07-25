@@ -180,6 +180,13 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
       },
     },
     {
+      id: 'ukStockLots',
+      accessorFn: (row) => (condition === 'new' ? row.ukStockLotsNew : row.ukStockLotsUsed),
+      header: ({ column }) => <SortableHeader column={column} label={'UK lots'} />,
+      cell: ({ row }) =>
+        (condition === 'new' ? row.original.ukStockLotsNew : row.original.ukStockLotsUsed) ?? '-',
+    },
+    {
       id: 'worldSupply',
       accessorFn: (row) => (condition === 'new' ? row.worldSupplyLotsNew : row.worldSupplyLotsUsed),
       header: ({ column }) => <SortableHeader column={column} label={'World lots'} />,
@@ -253,6 +260,7 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         strQty: 'STR (qty)',
         stockAvailable: 'Stock qty',
         timesSold: 'Sold qty',
+        ukStockLots: 'UK lots',
         worldSupply: 'World lots',
         overlap: 'Overlap',
         cache: 'Cache',

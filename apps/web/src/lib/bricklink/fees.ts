@@ -42,8 +42,43 @@ export const DEFAULT_INBOUND_POSTAGE_GBP = 3.0;
 /**
  * Magnet definition (Chris): worldwide supply ≤ maxSupplyLots seller-lots AND
  * STR ≥ minStr (decent sell-through) AND eligible (min ask, no damage note).
+ *
+ * NOTE this WORLDWIDE gate is still what bl-store-assessment uses. The set-lookup
+ * part-out moved to UK_MAGNET below — see the warning there.
  */
 export const MAGNET = { maxSupplyLots: 3, minStr: 0.5 } as const;
+
+/**
+ * UK magnet definition — scarcity measured against UK seller lots, cut separately for
+ * parts and minifigs (Chris, 2026-07-25: "we should have a different measure for minifigs
+ * and parts, and yes put both to UK").
+ *
+ * WHY UK, not worldwide. We list to UK buyers and compete with UK sellers; every other
+ * figure on the part-out screen (price, STR, the ladder) is already UK. Mixing worldwide
+ * scarcity with UK sell-through was incoherent — a part with 29 lots worldwide but ONE in
+ * the UK is scarce in the market we actually sell into, and the old test could not see it.
+ *
+ * It also sidesteps a live data defect: `bricklink_pg_summary_cache.stock_*` changed scope
+ * mid-July 2026. Rows fetched before ~2026-07-12 hold UK-scoped stock; rows after hold
+ * worldwide. 45% of the table is pre-cutover, so the "world lots" column silently means
+ * two different things per row, and ~10.5k of the rows that pass a scarcity gate come from
+ * the suspect half. UK lots come from `bricklink_price_guide_cache`, which is consistently
+ * UK-scoped.
+ *
+ * WHY DIFFERENT CUTS. UK supply distributions are not comparable between the two:
+ *
+ *              p25   median   p75    <=3 UK lots
+ *   PART        2      9       54      32.9%
+ *   MINIFIG     2      4        9      47.2%
+ *
+ * One gate across both would be far stricter for minifigs in practice. These cuts are
+ * deliberately loose on their own — the STR leg does the other half of the work, and a lot
+ * only qualifies if it is BOTH thinly supplied and actually selling.
+ */
+export const UK_MAGNET = {
+  part: { maxUkStockLots: 3, minStr: 0.5 },
+  minifig: { maxUkStockLots: 5, minStr: 0.5 },
+} as const;
 
 /** Ask-vs-market price bands — shared by assessment + store-quality position bucketing. */
 export const PRICE_BANDS = { under: 0.7, keen: 0.95, atMarket: 1.15, premium: 1.5 } as const;

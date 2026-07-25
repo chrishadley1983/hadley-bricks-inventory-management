@@ -443,6 +443,9 @@ export class PartoutService {
       // lookup consumes. Deliberately NOT the ×100 lots-basis fields above.
       strQtyNew: hasData ? view.new.strQty : null,
       strQtyUsed: hasData ? view.used.strQty : null,
+      // UK seller lots drive the magnet test; worldwide is kept as context only.
+      ukStockLotsNew: hasData ? view.new.stockLots : null,
+      ukStockLotsUsed: hasData ? view.used.stockLots : null,
       worldSupplyLotsNew: supply?.stockLotsNew ?? null,
       worldSupplyLotsUsed: supply?.stockLotsUsed ?? null,
       overlapNew: overlapN.tag,

@@ -384,7 +384,10 @@ function MagnetRow({ magnet }: { magnet: PartoutMagnet }) {
         </div>
       </td>
       <td className="py-2 pr-3 text-right tabular-nums">{magnet.quantity}</td>
-      <td className="py-2 pr-3 text-right tabular-nums">{magnet.worldSupplyLots}</td>
+      <td className="py-2 pr-3 text-right font-medium tabular-nums">{magnet.ukStockLots}</td>
+      <td className="py-2 pr-3 text-right tabular-nums text-muted-foreground">
+        {magnet.worldSupplyLots ?? '—'}
+      </td>
       <td className="py-2 pr-3 text-right tabular-nums">
         {magnet.str == null ? '—' : magnet.str.toFixed(2)}
       </td>
@@ -450,7 +453,7 @@ function MagnetsCard({ assessment }: { assessment: PartoutAssessment }) {
         ) : (
           <>
             <p className="pb-3 text-xs text-muted-foreground">
-              Very low worldwide supply with decent sell-through — these draw buyers to the store
+              Few UK sellers and decent sell-through — these draw buyers to the store
               {verdict !== 'PART-OUT' && ', and stand independently of the verdict above'}.
             </p>
             <div className="overflow-x-auto">
@@ -459,7 +462,8 @@ function MagnetsCard({ assessment }: { assessment: PartoutAssessment }) {
                   <tr className="border-b text-left text-xs text-muted-foreground">
                     <th className="pb-2 pr-3 font-medium">Part</th>
                     <th className="pb-2 pr-3 text-right font-medium">Qty</th>
-                    <th className="pb-2 pr-3 text-right font-medium">World lots</th>
+                    <th className="pb-2 pr-3 text-right font-medium">UK lots</th>
+                    <th className="pb-2 pr-3 text-right font-medium">World</th>
                     <th className="pb-2 pr-3 text-right font-medium">STR</th>
                     <th className="pb-2 pr-3 text-right font-medium">Value</th>
                     <th className="pb-2 text-right font-medium">Overlap</th>
