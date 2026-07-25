@@ -284,9 +284,13 @@ export function assessPartout(
   }));
   const { gross, realisable, captureRate } = liquidityAdjustedPov(lots);
 
-  // The honesty ladder: gross flatters, realisable discounts for liquidity, net
-  // takes the 9.4% off. Only net is money we'd see.
-  const netPov = realisable * (1 - VAR_FEE_PCT);
+  // Net is taken off the FULL part-out value, not the liquidity-adjusted one (Chris,
+  // 2026-07-25: "I want the decision based on the full part out value and this calc just
+  // an FYI"). Rationale: the capture curve is still uncalibrated, so letting an unfitted
+  // model move the money figures imports its error into every decision — and the gate
+  // already runs on gross, so this makes the two consistent. The liquidity view stays on
+  // the assessment as `realisablePov` / `captureRate`, surfaced as an explained FYI.
+  const netPov = gross * (1 - VAR_FEE_PCT);
 
   const povMultiple = setPrice && setPrice > 0 ? gross / setPrice : null;
   const gapGbp = setPrice != null ? gross - setPrice : null;
@@ -302,14 +306,14 @@ export function assessPartout(
 
   // Max buy, in the same reverse-calc form as purchase-evaluator:
   //   revenue − fees − target profit, where target profit = revenue × margin.
-  // Revenue is the REALISABLE POV, not gross — paying against a figure we can't
-  // actually clear is how you overpay. Inbound postage then comes off as a flat cash
-  // cost, because you pay it on top of the purchase price.
+  // Revenue is the FULL part-out value. The target margin is what absorbs the risk that
+  // not every lot clears — see the note on netPov above.
   //
   // Teardown labour is NOT deducted here. It is already expressed in the 2× POV gate and
   // the target margin (Chris, 2026-07-25: "labour is baked into the POV ×, that is the
   // margin where the time input makes sense"), so a separate line would double-count it.
-  const beforePostage = realisable > 0 ? realisable * (1 - VAR_FEE_PCT - targetMargin) : null;
+  // Inbound postage then comes off as a flat cash cost, paid on top of the purchase price.
+  const beforePostage = gross > 0 ? gross * (1 - VAR_FEE_PCT - targetMargin) : null;
   const maxBuyPrice = beforePostage == null ? null : beforePostage - postageGbp;
   // Not clamped at zero: a negative ceiling IS the answer for a thin set.
   const viable = maxBuyPrice != null && maxBuyPrice > 0;

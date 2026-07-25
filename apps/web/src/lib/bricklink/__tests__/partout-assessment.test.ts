@@ -46,24 +46,38 @@ function part(overrides: Partial<PartValue> = {}): PartValue {
 }
 
 describe('assessPartout — honesty ladder', () => {
-  it('discounts gross by the capture curve, then by the fee stack', () => {
+  it('takes fees off the FULL POV, not the liquidity-adjusted one', () => {
     // One lot: 10 × £2 at STR 1.0 → capture 0.85 per CAPTURE_CURVE.
     const parts = [part({ quantity: 10, priceNew: 2, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 5, 'new');
 
     expect(a.grossPov).toBe(20);
+    expect(a.netPov).toBeCloseTo(20 * (1 - VAR_FEE_PCT), 2);
+    // The liquidity view is still computed — it just doesn't drive the money.
     expect(a.realisablePov).toBeCloseTo(20 * captureFraction(1.0), 2);
-    expect(a.netPov).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT), 2);
     expect(a.captureRate).toBeCloseTo(captureFraction(1.0), 4);
   });
 
-  it('is monotonic — net never exceeds realisable, which never exceeds gross', () => {
+  it('leaves the liquidity view out of the decision path entirely', () => {
+    // Same gross, wildly different sell-through: net and max buy must not move.
+    const fast = assessPartout([part({ quantity: 10, priceNew: 2, strQtyNew: 1.6 })], 5, 'new');
+    const slow = assessPartout([part({ quantity: 10, priceNew: 2, strQtyNew: 0.01 })], 5, 'new');
+
+    expect(fast.grossPov).toBe(slow.grossPov);
+    expect(slow.netPov).toBeCloseTo(fast.netPov, 2);
+    expect(slow.maxBuy.price).toBeCloseTo(fast.maxBuy.price!, 2);
+    // ...but the FYI figure still reflects the difference.
+    expect(slow.realisablePov).toBeLessThan(fast.realisablePov);
+    expect(slow.captureRate).toBeLessThan(fast.captureRate);
+  });
+
+  it('is monotonic — net never exceeds gross, and the liquidity view never does either', () => {
     const parts = [
       part({ quantity: 4, priceNew: 3, strQtyNew: 0.3 }),
       part({ partNumber: '3002', quantity: 2, priceNew: 10, strQtyNew: 1.6 }),
     ];
     const a = assessPartout(parts, 12, 'new');
-    expect(a.netPov).toBeLessThanOrEqual(a.realisablePov);
+    expect(a.netPov).toBeLessThanOrEqual(a.grossPov);
     expect(a.realisablePov).toBeLessThanOrEqual(a.grossPov);
   });
 
@@ -135,10 +149,10 @@ describe('assessPartout — the canonical part-out gate', () => {
 });
 
 describe('assessPartout — max buy', () => {
-  it('back-solves from realisable POV net of fees, target margin and postage', () => {
+  it('back-solves from the full POV net of fees, target margin and postage', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new');
-    const beforePostage = a.realisablePov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
+    const beforePostage = a.grossPov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
     expect(a.maxBuy.beforePostage).toBeCloseTo(beforePostage, 2);
     expect(a.maxBuy.postageGbp).toBe(DEFAULT_INBOUND_POSTAGE_GBP);
     expect(a.maxBuy.price).toBeCloseTo(beforePostage - DEFAULT_INBOUND_POSTAGE_GBP, 2);
@@ -156,18 +170,18 @@ describe('assessPartout — max buy', () => {
     expect(collected.maxBuy.beforePostage).toBeCloseTo(paid.maxBuy.beforePostage!, 2);
   });
 
-  it('prices off realisable, not gross — so it cannot exceed the gross-based figure', () => {
+  it('differs from the raw gross-based ceiling by exactly the postage', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 0.1 })];
     const a = assessPartout(parts, 20, 'new');
     const grossBased = a.grossPov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
-    expect(a.maxBuy.price!).toBeLessThan(grossBased);
+    expect(a.maxBuy.price!).toBeCloseTo(grossBased - DEFAULT_INBOUND_POSTAGE_GBP, 2);
   });
 
   it('honours an explicit target margin', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new', { targetMargin: 0.5 });
     expect(a.maxBuy.targetMargin).toBe(0.5);
-    expect(a.maxBuy.beforePostage).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT - 0.5), 2);
+    expect(a.maxBuy.beforePostage).toBeCloseTo(a.grossPov * (1 - VAR_FEE_PCT - 0.5), 2);
   });
 
   // Deliberately NOT clamped at zero any more: a negative ceiling is the finding, and

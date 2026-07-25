@@ -118,11 +118,16 @@ export interface PartoutAssessment {
   condition: PartoutCondition;
   /** Σ qty × price. Assumes every lot clears at guide price. */
   grossPov: number;
-  /** Gross discounted by the STR capture curve — what we'd actually realise. */
+  /**
+   * Gross discounted by the STR capture curve. INFORMATIONAL ONLY — it does not move
+   * netPov or maxBuy. The capture curve is still uncalibrated (`TODO(calibration)` in
+   * liquidity-pov.ts), so it is shown as a liquidity sense-check rather than allowed to
+   * set the money figures.
+   */
   realisablePov: number;
   /** realisablePov ÷ grossPov (0 when gross is 0). */
   captureRate: number;
-  /** realisablePov after the 9.4% variable fee stack. */
+  /** grossPov after the 9.4% variable fee stack — the decision figure. */
   netPov: number;
   /** The fee stack applied (VAR_FEE_PCT), echoed so the card is self-describing. */
   feePct: number;

@@ -12,21 +12,27 @@ Calculate the total value of a LEGO set's individual parts if sold separately on
 
 ## Key Concepts
 
-### The honesty ladder
+### The value ladder
 
-A single "POV" number flatters, because it assumes every lot clears at guide price. The
-tab therefore shows three rungs, and only the last one is money we would actually see:
+| Rung | Definition | Role |
+|------|-----------|------|
+| **Full POV** | `Σ (part_price × quantity)` | **The decision basis** — also what reconciles with BrickLink's published POV |
+| **Net** | Full POV less the 9.4% variable fee stack | What we'd see if it all sells |
+| *Liquidity view* | Full POV discounted lot-by-lot by the STR capture curve | **FYI only** — hover on the panel for the explanation |
 
-| Rung | Definition | What it is for |
-|------|-----------|----------------|
-| **Gross POV** | `Σ (part_price × quantity)` | Comparison with BrickLink's published POV. Never a decision. |
-| **Realisable** | Gross discounted by the STR capture curve | What the lots plausibly sell for |
-| **Net** | Realisable less the 9.4% variable fee stack | **The decision figure** |
+Calculated separately for New and Used.
 
-Calculated separately for New and Used. The capture curve lives in
-`liquidity-pov.ts` and carries an explicit `TODO(calibration)` — its brackets are the
-spec's starting guess, not yet fitted to our own sales, so everything from the
-realisable rung down inherits that uncertainty.
+**The liquidity view does not move Net or Max buy** (Chris, 2026-07-25: *"I want the
+decision based on the full part out value and this calc just an FYI"*). The reasoning:
+the capture curve in `liquidity-pov.ts` carries an explicit `TODO(calibration)` — its
+brackets are the spec's starting guess, never fitted to our own sales — so letting an
+unfitted model set the money figures imports its error into every decision. The part-out
+gate already runs on full POV, so this also makes the two consistent.
+
+What absorbs the risk that not every lot clears is the **target margin** and the 2× gate,
+not a modelled haircut. The liquidity figure remains on screen as a sense-check on how
+*quickly* the value would convert: a low capture % means the money sits in slow or
+unmeasured lots, which is a reason to look harder, not a reason to pay less by formula.
 
 ### The gate and the verdict
 
@@ -67,7 +73,7 @@ the UI declares a cutoff of its own.
 The most we should pay for the set and still hit the target margin:
 
 ```
-Before postage = Realisable × (1 − fee stack − target margin)
+Before postage = Full POV × (1 − fee stack − target margin)
 Max buy        = Before postage − inbound postage
 ```
 
@@ -133,8 +139,8 @@ at the top of the tab:
 | Assessment | Verdict, plain-English reason, POV multiple and gap against their gates |
 | Part-Out Value | The three-rung ladder (gross → realisable → net) |
 | Max buy | Ceiling at the target margin, compared with the current set price |
-| Sell-through depth | Lots / pieces / gross / realisable at each STR gate |
-| Where the value sits | Top-10 share, lots to half the POV, split by item type, top lots |
+| Where the value sits | Full width: top-10 share, lots to half the POV, split by item type, top lots |
+| Sell-through depth | Below it: lots / pieces / gross / realisable at each STR gate |
 | Magnets | Scarce, fast-moving lots — independent of the verdict |
 | Store overlap | NEW / RESTOCK / DUPLICATE counts and value, with the snapshot date |
 

@@ -9,9 +9,11 @@ import {
   Store,
   AlertTriangle,
   Wallet,
+  Info,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import type { PartoutAssessment, PartoutMagnet } from '@/types/partout';
@@ -98,29 +100,28 @@ function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
 }
 
 /**
- * The honesty ladder. Gross flatters — it assumes every lot clears at guide price —
- * so it never leads alone; net is the only figure that is money we'd actually see.
+ * The value ladder.
+ *
+ * Gross → Net is the DECISION path: net is gross less the fee stack, and max buy is
+ * back-solved from gross too. The liquidity-adjusted figure is deliberately NOT in that
+ * path (Chris, 2026-07-25: "I want the decision based on the full part out value and this
+ * calc just an FYI") — the capture curve is still uncalibrated, so it sits underneath as
+ * an explained sense-check rather than silently moving the money.
  */
 function LadderCard({ assessment }: { assessment: PartoutAssessment }) {
   const { grossPov, realisablePov, netPov, captureRate, feePct } = assessment;
 
   const rungs = [
     {
-      label: 'Gross POV',
+      label: 'Full POV',
       value: grossPov,
-      note: 'Σ qty × price — assumes everything sells',
-      emphasis: false,
-    },
-    {
-      label: 'Realisable',
-      value: realisablePov,
-      note: `after liquidity haircut · ${pct(captureRate)} capture`,
+      note: 'Σ qty × price — the decision basis',
       emphasis: false,
     },
     {
       label: 'Net',
       value: netPov,
-      note: `after ${pct(feePct, 1)} fees — what we'd actually see`,
+      note: `after ${pct(feePct, 1)} fees — what we'd see if it all sells`,
       emphasis: true,
     },
   ];
@@ -151,6 +152,44 @@ function LadderCard({ assessment }: { assessment: PartoutAssessment }) {
             </div>
           </div>
         ))}
+
+        {/*
+          FYI only. Hover explains what it is and why it does not drive the decision —
+          without that, a figure this much lower than Net reads as a contradiction.
+        */}
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex cursor-help items-baseline justify-between gap-3 border-t pt-2 text-muted-foreground">
+                <div className="flex min-w-0 items-center gap-1">
+                  <Info className="h-3 w-3 shrink-0" />
+                  <span className="text-xs">
+                    FYI · liquidity view · {pct(captureRate)} capture
+                  </span>
+                </div>
+                <span className="shrink-0 text-sm font-medium" data-testid="pov-ladder-realisable">
+                  {formatCurrency(realisablePov)}
+                </span>
+              </div>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-sm space-y-2 text-xs">
+              <p>
+                Every lot is discounted by its quantity-basis sell-through, then summed:
+                STR ≥1.5 keeps 95%, ≥1.0 keeps 85%, ≥0.5 keeps 65%, ≥0.25 keeps 45%,
+                ≥0.1 keeps 25%, and anything slower — or with no STR data at all — keeps 10%.
+              </p>
+              <p>
+                {pct(captureRate)} is the value-weighted average of those fractions, so a low
+                number means the money sits in slow or unmeasured lots.
+              </p>
+              <p className="font-medium">
+                It does not move Net or Max buy. The curve is an uncalibrated starting
+                estimate, so it is shown as a sense-check on how quickly the value would
+                actually convert — not as the basis for what to pay.
+              </p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </CardContent>
     </Card>
   );
@@ -182,8 +221,8 @@ function MaxBuyCard({ assessment }: { assessment: PartoutAssessment }) {
             */}
             <div className="text-xs text-muted-foreground">
               {maxBuy.beforePostage == null
-                ? 'From realisable POV, net of fees.'
-                : `${formatCurrency(maxBuy.beforePostage)} from realisable POV net of fees, less ${formatCurrency(maxBuy.postageGbp)} inbound postage.`}
+                ? 'From full POV, net of fees.'
+                : `${formatCurrency(maxBuy.beforePostage)} from full POV net of fees, less ${formatCurrency(maxBuy.postageGbp)} inbound postage.`}
             </div>
             {maxBuy.price != null && maxBuy.price <= 0 && (
               <div className="pt-1 text-xs font-medium text-red-700">
@@ -405,30 +444,33 @@ function ConcentrationCard({ assessment }: { assessment: PartoutAssessment }) {
         <CardTitle className="text-base">Where the value sits</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-sm text-muted-foreground">Top 10 lots</div>
-            <div className="text-xl font-bold" data-testid="top10-share">
-              {pct(top10Share)}
+        {/* Full-width card, so the headline stats and the type split share one row. */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex gap-8">
+            <div>
+              <div className="text-sm text-muted-foreground">Top 10 lots</div>
+              <div className="text-xl font-bold" data-testid="top10-share">
+                {pct(top10Share)}
+              </div>
+              <div className="text-xs text-muted-foreground">of gross POV</div>
             </div>
-            <div className="text-xs text-muted-foreground">of gross POV</div>
+            <div>
+              <div className="text-sm text-muted-foreground">Half the value in</div>
+              <div className="text-xl font-bold">{lotsToHalfPov}</div>
+              <div className="text-xs text-muted-foreground">lots</div>
+            </div>
           </div>
-          <div>
-            <div className="text-sm text-muted-foreground">Half the value in</div>
-            <div className="text-xl font-bold">{lotsToHalfPov}</div>
-            <div className="text-xs text-muted-foreground">lots</div>
-          </div>
-        </div>
 
-        {types.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {types.map((t) => (
-              <Badge key={t.label} variant="outline">
-                {t.label} {formatCurrency(t.value)} ({pct(grossPov > 0 ? t.value / grossPov : 0)})
-              </Badge>
-            ))}
-          </div>
-        )}
+          {types.length > 0 && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {types.map((t) => (
+                <Badge key={t.label} variant="outline">
+                  {t.label} {formatCurrency(t.value)} ({pct(grossPov > 0 ? t.value / grossPov : 0)})
+                </Badge>
+              ))}
+            </div>
+          )}
+        </div>
 
         {topLots.length > 0 && (
           <div className="overflow-x-auto">
@@ -569,10 +611,9 @@ export function PartoutAssessmentPanel({ assessment }: PartoutAssessmentPanelPro
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <StrBandsCard assessment={assessment} />
-        <ConcentrationCard assessment={assessment} />
-      </div>
+      {/* Where the value sits leads at full width; sell-through depth sits beneath it. */}
+      <ConcentrationCard assessment={assessment} />
+      <StrBandsCard assessment={assessment} />
 
       <MagnetsCard assessment={assessment} />
       <OverlapCard assessment={assessment} />
