@@ -6,6 +6,8 @@ function baseState(overrides: Partial<PlannerState> = {}): PlannerState {
   return {
     requestsThisSession: 0,
     consecutiveFails: 0,
+    consecutiveSoldUnavailable: 0,
+    soldUnavailableBrake: 5,
     sessionsCompleted: 0,
     blockedSessions: 0,
     sessionSize: 350,
@@ -87,6 +89,37 @@ describe('nextAction', () => {
   it('block signal takes precedence over an exact session-boundary hit', () => {
     const state = baseState({ requestsThisSession: 350, consecutiveFails: 1 });
     expect(nextAction(state)).toBe('backoff');
+  });
+
+  // 2026-07-25 regression: PgSoldUnavailableError used to feed `consecutiveFails`, so a
+  // single item whose sold quadrants both read "(Unavailable)" ended the whole session —
+  // and two such sessions killed the run (three runs lost: 1,098 / 2,352 / 16 tuples,
+  // against ZERO 403s in 12,376 requests). One is indistinguishable from an item that
+  // simply never sold in either condition; only a BROAD run of them is an outage.
+  it('a single sold-unavailable does NOT end the session', () => {
+    const state = baseState({ requestsThisSession: 12, consecutiveSoldUnavailable: 1 });
+    expect(nextAction(state)).toBe('fetch');
+  });
+
+  it('sold-unavailable just short of the brake keeps fetching', () => {
+    const state = baseState({ consecutiveSoldUnavailable: 4, soldUnavailableBrake: 5 });
+    expect(nextAction(state)).toBe('fetch');
+  });
+
+  it('a BROAD sold-data outage (brake reached) -> backoff', () => {
+    const state = baseState({ consecutiveSoldUnavailable: 5, soldUnavailableBrake: 5 });
+    expect(nextAction(state)).toBe('backoff');
+  });
+
+  it('sold-unavailable brake is independent of the block brake', () => {
+    // 4 sold-unavailable is fine on its own, but ONE real block still backs off.
+    expect(nextAction(baseState({ consecutiveSoldUnavailable: 4 }))).toBe('fetch');
+    expect(nextAction(baseState({ consecutiveFails: 1 }))).toBe('backoff');
+  });
+
+  it('sold-unavailable at the brake still yields to a hard stop condition', () => {
+    const state = baseState({ consecutiveSoldUnavailable: 9, blockedSessions: 2 });
+    expect(nextAction(state)).toBe('stop');
   });
 
   it('two consecutive blocked sessions -> stop', () => {

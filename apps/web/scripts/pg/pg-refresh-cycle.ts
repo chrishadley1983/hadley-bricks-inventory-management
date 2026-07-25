@@ -30,9 +30,19 @@
  *   --max-sessions=<n>      Hard cap on sessions this run (default 6)
  *   --window-hours=<n>      Run-window budget in hours, from job start (default 7.5 — matches
  *                           the .ps1's ExecutionTimeLimit of 7h30m)
- *   --nav-delay-ms=<n>      Base delay between PG navigations (default 4000, floor 4000)
+ *   --nav-delay-ms=<n>      Base delay between PG navigations (default 4000, floor 2000);
+ *                           a +0..2s jitter is always added on top
  *   --limit-tuples=<n>      Cap total requests this run (0 = no cap; for testing)
  *   --claim-chunk=<n>       Tuples claimed per DB round-trip (default 50)
+ *   --sold-unavailable-brake=<n>  Consecutive FIRST-time sold-unavailable hits treated as
+ *                           a BROAD BL sold-data outage worth winding the session down for
+ *                           (default 25). One isolated hit never ends a session.
+ *
+ * Sold-unavailable escalation ladder (Chris 2026-07-25):
+ *   1st hit on a tuple  -> requeue +1d, last_error='sold_unavailable ...' (could be an outage)
+ *   2nd hit in a row    -> a day+ has passed and BL still withholds both sold quadrants, so
+ *                          accept it: zero L1 row + the 90d NO_DATA cycle, counted as ok.
+ *   any success between -> clears last_error, so the ladder restarts from the 1st rung.
  */
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
@@ -64,6 +74,8 @@ import {
   NEW_RELEASE_CYCLE_DAYS,
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
+  SOLD_UNAVAILABLE_MARKER,
+  isRepeatSoldUnavailable,
 } from '../../src/lib/bricklink/pg-cycle-policy';
 import { EMPTY_PG_SUMMARY_QUAD, toSummaryCacheRow as toPgSummaryRow } from '../../src/lib/bricklink/pg-summary';
 
@@ -84,7 +96,22 @@ const SESSION_SIZE = parseInt(argv['session-size'] ?? '350', 10);
 const BREATHER_MINS = parseFloat(argv['breather-mins'] ?? '20');
 const MAX_SESSIONS = parseInt(argv['max-sessions'] ?? '6', 10);
 const WINDOW_HOURS = parseFloat(argv['window-hours'] ?? '7.5');
-const NAV_DELAY_MS = Math.max(4000, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
+// Floor lowered 4000 -> 2000 (2026-07-25, evidence-led): bl_pg_lane_telemetry recorded
+// ZERO block signals across the last 40 sessions / 12,376 requests at a 4s base delay —
+// BL has never throttled this lane. The default stays 4000 so the nightly .ps1 run is
+// unchanged; the floor only lets an operator opt into a faster daytime backlog burn via
+// --nav-delay-ms. The +0..2s jitter below is always applied on top, so 2500 still means
+// a 2.5-4.5s spread, never a fixed drumbeat. Revert the floor if blocks reappear —
+// first_block_at_request in the telemetry is the signal to watch.
+const NAV_DELAY_MS = Math.max(2000, parseInt(argv['nav-delay-ms'] ?? '4000', 10));
+/** Consecutive PgSoldUnavailableError hits that constitute a BROAD sold-data outage.
+ *  Below this, an isolated one is just an item that never sold in either condition
+ *  (indistinguishable on the page) and must not end the session — see the planner's
+ *  nextAction note and the 2026-07-25 incident. Override with --sold-unavailable-brake. */
+const SOLD_UNAVAILABLE_BRAKE = Math.max(
+  1,
+  parseInt(argv['sold-unavailable-brake'] ?? '25', 10),
+);
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
 
@@ -170,6 +197,10 @@ interface QueueRow {
   grace_until: string | null;
   next_due_at: string;
   attempts: number;
+  /** Previous attempt's failure marker. Drives the sold-unavailable escalation
+   *  ladder: a tuple that was sold-unavailable LAST time (necessarily >=1 day ago,
+   *  since that path requeues +1d) and is sold-unavailable AGAIN is not an outage. */
+  last_error: string | null;
 }
 
 function tupleLabel(item: PgItemRef): string {
@@ -286,7 +317,7 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
   const nowIso = new Date().toISOString();
   const { data, error } = await sb
     .from('bl_pg_refresh_queue')
-    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts')
+    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error')
     .is('locked_by', null)
     // Same due-ness semantics as countDue. Active tier drains before tail: a due
     // active tuple always outranks a due tail tuple (tail is the 90d background fill).
@@ -299,7 +330,7 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
   if (rows.length < limit) {
     const { data: tailData, error: tailErr } = await sb
       .from('bl_pg_refresh_queue')
-      .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts')
+      .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error')
       .is('locked_by', null)
       .lte('next_due_at', nowIso)
       .eq('tier', 'tail')
@@ -319,7 +350,7 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
     .update({ locked_by: runId, locked_at: nowIso })
     .is('locked_by', null)
     .or(filter)
-    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts');
+    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error');
   if (lockErr) throw new Error(`claimBatch lock failed: ${lockErr.message}`);
   const lockedRows = (locked ?? []) as QueueRow[];
   if (lockedRows.length < rows.length) {
@@ -508,7 +539,7 @@ function toSoldUnavailableQueueUpdate(t: QueueRow): Record<string, unknown> {
     item_type: t.item_type,
     item_no: t.item_no,
     colour_id: t.colour_id,
-    last_error: 'sold_unavailable (BL site outage)',
+    last_error: `${SOLD_UNAVAILABLE_MARKER} (both sold quadrants unavailable)`,
     next_due_at: addDaysIso(1),
     locked_by: null,
     locked_at: null,
@@ -732,6 +763,8 @@ async function main(): Promise<void> {
   const state: PlannerState = {
     requestsThisSession: 0,
     consecutiveFails: 0,
+    consecutiveSoldUnavailable: 0,
+    soldUnavailableBrake: SOLD_UNAVAILABLE_BRAKE,
     sessionsCompleted: 0,
     blockedSessions: 0,
     sessionSize: SESSION_SIZE,
@@ -788,6 +821,7 @@ async function main(): Promise<void> {
         state.blockedSessions = action === 'backoff' ? state.blockedSessions + 1 : 0;
         state.requestsThisSession = 0;
         state.consecutiveFails = 0;
+        state.consecutiveSoldUnavailable = 0;
         sessionCounts = { requests: 0, ok: 0, failed: 0, noData: 0, notFound: 0, soldUnavailable: 0 };
         firstBlockAtRequest = null;
         sessionStartedAt = new Date().toISOString();
@@ -861,6 +895,7 @@ async function main(): Promise<void> {
         batches.queueUpdates.push(toOkQueueUpdate(tuple));
         sessionCounts.ok += 1;
         state.consecutiveFails = 0;
+        state.consecutiveSoldUnavailable = 0;
       } catch (err) {
         if (err instanceof PgBlockError || err instanceof PgCaptchaError) {
           sessionCounts.failed += 1;
@@ -876,21 +911,57 @@ async function main(): Promise<void> {
           batches.summaryRows.push(toNoDataSummaryRow(tuple));
           batches.queueUpdates.push(toNoDataQueueUpdate(tuple));
           state.consecutiveFails = 0;
+          state.consecutiveSoldUnavailable = 0;
         } else if (err instanceof PgNotFoundError) {
           sessionCounts.ok += 1;
           sessionCounts.notFound += 1;
           batches.queueUpdates.push(toNotFoundQueueUpdate(tuple, err));
           state.consecutiveFails = 0;
+          state.consecutiveSoldUnavailable = 0;
+        } else if (
+          err instanceof PgSoldUnavailableError &&
+          isRepeatSoldUnavailable(tuple.last_error)
+        ) {
+          // SECOND consecutive sold-unavailable on this tuple (Chris 2026-07-25).
+          // The first hit requeued it +1d, so this attempt is necessarily a day or
+          // more later — and BL is STILL withholding both sold quadrants. A site
+          // outage does not persist across days at the same tuple; an item that
+          // never sold in either condition renders exactly this way forever. So
+          // accept the empty answer: write the zero L1 row and move it onto the
+          // 90d NO_DATA cycle, the same as any confirmed no-data page.
+          //
+          // This is what stops the churn: without it, every dead tail item comes
+          // back +1d, every day, for ever. Tail measured ~17% sold-unavailable on
+          // 2026-07-25 (33/197 in one session) against 0.17% on active — that is a
+          // dead-item population, not an outage.
+          sessionCounts.ok += 1;
+          sessionCounts.noData += 1;
+          batches.summaryRows.push(toNoDataSummaryRow(tuple));
+          batches.queueUpdates.push(toNoDataQueueUpdate(tuple));
+          state.consecutiveFails = 0;
+          state.consecutiveSoldUnavailable = 0;
+          console.log(
+            `[pg-refresh-cycle] SOLD-UNAVAILABLE again on ${tupleLabel(item)} — ` +
+              `2nd consecutive, accepting as no-data (+${NO_DATA_REQUEUE_DAYS}d)`,
+          );
         } else if (err instanceof PgSoldUnavailableError) {
-          // BL sold-data outage: a failure (never a zero row), and it feeds the
-          // consecutive-fail brake so a night where BL withholds sold data broadly
-          // winds the session down instead of burning the whole request budget.
+          // BL sold-data outage: a failure (never a zero row). It feeds its OWN brake —
+          // not consecutiveFails, which the planner documents as block/captcha-only —
+          // so a night where BL withholds sold data BROADLY still winds the session
+          // down, but a lone item does not. Both sold quadrants rendering
+          // "(Unavailable)" is also exactly how an item that never sold in either
+          // condition renders, and the tail is full of those; treating one as a
+          // site-wide outage killed three runs on 2026-07-25 (1,098 / 2,352 / 16
+          // tuples) with zero 403s in 12,376 requests of telemetry.
           sessionCounts.failed += 1;
           sessionCounts.soldUnavailable += 1;
           runSoldUnavailable += 1;
-          state.consecutiveFails += 1;
+          state.consecutiveSoldUnavailable += 1;
           batches.queueUpdates.push(toSoldUnavailableQueueUpdate(tuple));
-          console.warn(`[pg-refresh-cycle] SOLD-UNAVAILABLE on ${tupleLabel(item)} — BL outage, requeued +1d`);
+          console.warn(
+            `[pg-refresh-cycle] SOLD-UNAVAILABLE on ${tupleLabel(item)} — requeued +1d ` +
+              `(${state.consecutiveSoldUnavailable}/${SOLD_UNAVAILABLE_BRAKE} consecutive)`,
+          );
         } else if (err instanceof PgLoginError || err instanceof PgCurrencyError) {
           console.error(
             `[pg-refresh-cycle] FATAL on ${tupleLabel(item)}: ${err.message} — the CDP session is unusable ` +
