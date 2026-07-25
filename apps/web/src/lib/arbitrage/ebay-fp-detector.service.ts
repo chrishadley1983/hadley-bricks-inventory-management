@@ -679,7 +679,7 @@ export class EbayFpDetectorService {
         // query on the database (60,595 calls / 11,368s / 8.98M block reads), ~3x the
         // next worst. get_latest_ebay_pricing() does a lateral LIMIT 1 per set so the
         // planner stops after one row each: 12 rows scanned instead of 184, buffers
-        // 190 -> 57. See migration 20260725080000.
+        // 190 -> 57. See migration 20260725062134.
         const { data: pricingRows, error: fetchError } = await this.supabase.rpc(
           'get_latest_ebay_pricing',
           { p_set_numbers: batch, p_condition: 'NEW', p_country_code: 'GB' }
