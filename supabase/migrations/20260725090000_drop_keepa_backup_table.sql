@@ -1,0 +1,31 @@
+-- Drop the abandoned Keepa snapshot backup table (2026-07-25).
+--
+-- price_snapshots_keepa_backup_20260702 was taken during the investment ML v2 work
+-- (PR #500) before the corrupt Keepa triple-parse snapshots were deleted from
+-- price_snapshots. It has served its purpose and is pure dead weight: 309MB /
+-- 1,252,729 rows, ~8% of a 3.9GB database that runs on a 1GB-RAM instance, where
+-- cache residency is the binding constraint (see 20260725080000 for the outage
+-- post-mortem this came out of).
+--
+-- Verified unused before dropping:
+--   * no code references anywhere in the repo (.ts/.tsx/.sql/.ps1/.md)
+--   * no dependent views, rules, foreign keys, functions or RLS policies
+--   * last read 2026-07-03 (6 sequential scans lifetime, no indexes ever built)
+--   * write-once: 1,252,729 inserts, 0 updates, 0 deletes
+--
+-- Content audit (what is being given up, eyes open):
+--   1,183,632 rows (94.5%) are exact duplicates of live price_snapshots -> no loss.
+--   69,097 rows exist only here:
+--     - 47,762 (69%) are the corrupt cohort PR #500 deliberately removed: 2010-11
+--       dates, median price GBP 76,928, 21,193 rows at <= GBP 0, 100% null sales_rank.
+--     - 21,335 are sane rows across 225 sets. 208 of those sets retain dense history
+--       in price_snapshots (avg 445 rows each), so for them these are gaps only.
+--       17 sets lose their history entirely -- all real catalogued sets, none in
+--       current inventory. Largest by far is 75109-1 (Obi-Wan Kenobi), 452 rows
+--       spanning 2022-05-26 to 2026-02-09; the rest are 1-140 rows each.
+--
+-- Chris was shown the above (including the restore-the-sane-rows-first option) and
+-- chose to drop as-is on 2026-07-25. This is irreversible -- the 21,335 sane orphan
+-- rows are not recoverable after this migration.
+
+DROP TABLE IF EXISTS price_snapshots_keepa_backup_20260702;
