@@ -324,3 +324,43 @@ which never received the round 1–3 fixes:
 
 FY25/26 cash profit moves £22,434.22 → £22,425.76 (the £8.46 of eBay postage and
 standalone fees now claimed).
+
+## Monzo categories: what the P&L reads, and what Chris has ruled out
+
+The P&L reads exactly **eight** Monzo `local_category` values — `Lego Stock`,
+`Lego Parts`, `Postage`, `Packing Materials`, `Selling Fees`, `Office Space`,
+`Services`, `Software`. Everything else is ignored, and three validation rounds
+kept re-raising the same handful because nothing recorded the decisions. They are
+recorded here. **Do not re-raise these.**
+
+### Correctly excluded, permanently
+
+| Category | Q1 26/27 | FY25/26 | All-time | Why |
+|---|---|---|---|---|
+| `Salary` | −£6,000.00 | −£25,000.00 | −£53,000.00 | **DRAWINGS, not wages.** £500/wk to "Chris Hadley". A sole trader cannot deduct their own pay — the profit *is* the income. SA103F box 19 is for STAFF. Putting Q1's £6,000 in box 19 would have filed a £525.53 LOSS instead of a £5,474.47 profit. (Would differ for a limited company: a director's salary IS deductible.) |
+| `Income` | +£15,576.95 | +£62,572.92 | +£150,564.63 | Bank money-in. Income comes from the platform sources; reading both would double-count everything. |
+| `Transfers` | −£63.66 | — | −£108.43 | `PAY*THRONE` — **confirmed PERSONAL by Chris, 2026-07-25.** |
+| `General` | −£20.00 | — | −£112.00 | `PAYPAL *alayacontreras` — **confirmed PERSONAL by Chris, 2026-07-25.** |
+| `Personal` | £0.00 | −£201.58 | −£201.58 | Booking.com, resolved as personal 2026-07-03. |
+| `Entertainment` | £0.00 | £0.00 | −£114.39 | Business entertainment is disallowable regardless. |
+
+### Retired categories — no longer in use
+
+**Chris confirmed 2026-07-25: "don't use these any more".** All four are £0.00 in
+both Q1 2026/27 and FY2025/26, so neither return is affected. They are historical
+only and must not be wired into the P&L.
+
+| Category | All-time |
+|---|---|
+| `Clothing Stock Purchase` | −£2,092.01 |
+| `Bills` | −£167.98 |
+| `Insurance` | −£69.96 (note: the P&L's Insurance row comes from `home_costs`, a different source entirely) |
+| `Travel` | −£6.80 |
+
+### The remaining gap
+
+Monzo is now the only money source with **no fail-loud registry** — a brand-new
+category would be silently ignored, which is the exact class of defect that hid
+the Amazon `Adjustment` costs and the non-T0006 PayPal receipts. Every other
+source (Amazon types + Adjustment descriptions, PayPal event codes, eBay types +
+OTHER_FEES memos) now throws on anything unclassified. Worth closing before Q2.
