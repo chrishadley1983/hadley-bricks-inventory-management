@@ -325,13 +325,15 @@ where a member does not use PayPal. Both are configuration, not constants.
 
 ## 7. Recommended sequence
 
-1. Land the in-flight polish work (open item 4).
+1. Land the in-flight polish work (open item 5).
 2. **Item 6** — member store snapshot, BSX route first. Everything depends on it.
 3. **Item 9** — pricing-strategy inference, fit quality and recommendations.
    Earliest demonstrable value; it is the feature that sells the first four seats,
    the core of the seller lens, and the configuration mechanism for item 12 (§4a).
-4. **Item 8** — "My Store" review. The retention feature, and it needs **no**
-   pricing model — deliverable to Bricqer and non-Bricqer members alike.
+4. **Item 8** — "My Store" review. The retention feature. Needs no price
+   *projection* (their real prices come from the snapshot), and consumes item 9's
+   inference for its recommendations — deliverable to Bricqer and non-Bricqer
+   members alike.
 5. **Item 7** — overlap vs member store. Makes items 1–3 honest for a member.
 6. **Item 12** — pricing model + fee resolver. Gates the buy lens for non-Bricqer
    members; seed it from item 9's inferred output rather than a config form.
@@ -343,3 +345,76 @@ Items 2 and 4–5 need only polish and can fill gaps whenever a larger item bloc
 
 **A non-Bricqer member is fully served by steps 2–5.** The buy lens is the only
 thing waiting on step 6, which is why the mixed first cohort is safe to run.
+
+---
+
+## 8. Handoff — picking this up on another machine
+
+Written 2026-07-25 on the laptop; work continues on the desktop. Everything needed
+to resume is in this file and the branch — nothing important lives only in a
+session.
+
+### State
+
+| | |
+|---|---|
+| Branch | `chore/bl-member-product-strategy` (pushed to origin) |
+| Contains | This document only. **No code has been written** |
+| Decided | Positioning, capped-seat model, tenancy, member area, ingestion routes, functionality tiers, build sequence |
+| Not decided | Open items 2–5 in §6 |
+| Next action | Task A below, then `/feature-spec` for item 6 |
+
+### Facts established this session that are not obvious from the code
+
+Recorded here because they were each got wrong once, and because per-machine agent
+memory does not travel between the laptop and the desktop.
+
+1. **`bricklink_price_guide_cache.uk_detail` holds monthly sold history.** Each
+   quadrant carries a `byMonth` map of `{lots, qty, avg}` keyed by calendar month,
+   built from `price_detail[].date_ordered` on every capture
+   (`price-guide/capture.ts:60`), plus a `hist` price→quantity map. **A single
+   fetch yields up to six monthly observations** — price shape over time is
+   available now. Do not conclude from `bricklink_pg_snapshots`' short span that
+   there is no time series; the series is *inside each row*, not across rows.
+   Coverage in §4.
+2. **`bricqerListPrice` is Bricqer-*named*, not Bricqer-*shaped*.** The formula
+   `max(floor, ukSoldAvg × multiplier(condition, STR))` generalises by parameter
+   extraction. §4a.
+3. **The seller lens needs no price projection but does need pricing inference.**
+   §4a — this distinction was over-simplified once and it materially changes scope.
+4. **Always `git fetch` before reading this repo.** On 2026-07-25 the local
+   checkout was 866 commits stale while `git status` reported clean; an entire
+   analysis was produced against a six-month-old tree and was wrong on nearly every
+   substantive point. Cleanliness says nothing about staleness.
+
+### Task A — Bricqer pricing-rule discovery (do this first)
+
+Resolves open item 4 and decides whether §4a route 1 exists. Small, self-contained,
+and it gates the onboarding design for Bricqer members.
+
+**Question:** does the Bricqer API expose a store's auto-pricing configuration — the
+multiplier bands, floor and exclusion rules — or must a Bricqer member read their
+own formula out of the UI and declare it?
+
+**Where to look:**
+- Bricqer API docs: https://www.bricqer.com/guides/using-the-api
+- Our client: `apps/web/src/lib/bricqer/client.ts` — currently uses only
+  `/api/v1/inventory/*` and `/api/v1/orders/*`. No pricing endpoint is referenced
+  anywhere in the repo, which is suggestive but not conclusive
+- Credentials: API key + tenant URL, per `CLAUDE.md`
+
+**Outcomes:**
+- *Exposed* → build route 1. Bricqer members onboard with an exact model, zero
+  manual entry. Update §4a and the item 12 spec
+- *Not exposed* → route 2 (self-declaration) becomes the Bricqer path. The member
+  reads their auto-pricing settings out of the Bricqer UI and enters the bands,
+  exactly as was done for `bricqer-pricing.ts`. Design a small band-entry form
+- *Either way* → route 3 (inference) always runs, and the declared-vs-observed gap
+  is reported as a finding
+
+### Then
+
+1. Confirm open item 5 (in-flight work on `fees.ts`, `partout.service.ts`,
+   `bl-store-assessment/engine.ts`, set-lookup partout components) has landed.
+2. `/define-done` then `/feature-spec` for **item 6 — member store snapshot**,
+   BSX route first. Everything else depends on that object existing.
