@@ -228,9 +228,23 @@ export class MinifigReconcilerService {
     }
     if (syncItems.length === 0) return;
 
-    // minifig -> inventory item (minifigs are keyed by bricklink_id as set_number)
+    // Without Bricqer we cannot prove ANYTHING is unbacked. Record one error and
+    // stop — never emit 28 "archive this" flags off the back of a credentials
+    // outage. (Mirrors the per-item read-failure rule below.)
+    if (!bricqer) {
+      result.errors.push({
+        item: 'shopify-pass',
+        error: 'Bricqer client unavailable — Shopify stock backing not checked',
+      });
+      return;
+    }
+
+    // minifig -> inventory item(s). Keyed by set_number, and a LIST: one
+    // set_number can legitimately have several inventory items (duplicates),
+    // each with its own Shopify product. Collapsing to one would silently drop
+    // products from the check.
     const blIds = [...new Set(syncItems.map((s) => s.bricklink_id).filter(Boolean))] as string[];
-    const invBySet = new Map<string, string>();
+    const invBySet = new Map<string, string[]>();
     for (let i = 0; i < blIds.length; i += 300) {
       const { data, error } = await this.supabase
         .from('inventory_items')
@@ -241,11 +255,16 @@ export class MinifigReconcilerService {
         result.errors.push({ item: 'shopify-inventory', error: error.message });
         return;
       }
-      for (const r of data ?? []) if (r.set_number) invBySet.set(r.set_number, r.id);
+      for (const r of data ?? []) {
+        if (!r.set_number) continue;
+        const list = invBySet.get(r.set_number);
+        if (list) list.push(r.id);
+        else invBySet.set(r.set_number, [r.id]);
+      }
     }
 
     // inventory item -> live (non-archived) Shopify product
-    const invIds = [...new Set(invBySet.values())];
+    const invIds = [...new Set([...invBySet.values()].flat())];
     const productByInv = new Map<string, string>();
     for (let i = 0; i < invIds.length; i += 300) {
       const { data, error } = await this.supabase
@@ -272,21 +291,27 @@ export class MinifigReconcilerService {
     // still backed by the second Dementor and must not be flagged.
     const groups = new Map<string, { units: typeof syncItems; sample: (typeof syncItems)[number] }>();
     for (const s of syncItems) {
-      const invId = s.bricklink_id ? invBySet.get(s.bricklink_id) : undefined;
-      const productId = invId ? productByInv.get(invId) : undefined;
-      if (!productId) continue;
-      const g = groups.get(productId);
-      if (g) g.units.push(s);
-      else groups.set(productId, { units: [s], sample: s });
+      const invIdsForSet = s.bricklink_id ? (invBySet.get(s.bricklink_id) ?? []) : [];
+      for (const invId of invIdsForSet) {
+        const productId = productByInv.get(invId);
+        if (!productId) continue;
+        const g = groups.get(productId);
+        if (g) {
+          if (!g.units.includes(s)) g.units.push(s);
+        } else {
+          groups.set(productId, { units: [s], sample: s });
+        }
+      }
     }
 
     for (const [productId, { units, sample }] of groups) {
       result.shopifyChecked++;
 
-      const unlinked = units.filter((u) => !u.bricqer_item_id);
-      if (!bricqer || unlinked.length === units.length) {
+      // No Bricqer link at all — we cannot confirm backing. Worth surfacing, but
+      // it is NOT proof of exposure, so it is reported as unverified.
+      if (units.every((u) => !u.bricqer_item_id)) {
         result.unbackedOnShopify.push(
-          this.flag(sample, null, null, 'live on Shopify; Bricqer stock UNVERIFIED', productId)
+          this.flag(sample, null, null, 'live on Shopify; no Bricqer link — stock UNVERIFIED', productId)
         );
         continue;
       }
@@ -394,16 +419,28 @@ export class MinifigReconcilerService {
       );
     }
     if (result.unbackedOnShopify.length > 0) {
-      const lines = result.unbackedOnShopify.map(
-        (f) =>
-          `- 🚨 **${f.name || f.bricklinkId || f.syncId}** (${f.bricklinkId}) — ${f.detail}. ` +
-          `Shopify product ${f.shopifyProductId ?? '?'}`
-      );
-      parts.push(
-        `**${result.unbackedOnShopify.length} UNBACKED ON SHOPIFY** ` +
-          `— buyable on Shopify with no Bricqer stock. Archive the product:\n` +
-          lines.join('\n')
-      );
+      // Proven-zero and merely-unverified must not be presented identically:
+      // only the former justifies "archive it".
+      const proven = result.unbackedOnShopify.filter((f) => f.bricqerQty !== null);
+      const unverified = result.unbackedOnShopify.filter((f) => f.bricqerQty === null);
+      const line = (f: ReconcileFlag, icon: string) =>
+        `- ${icon} **${f.name || f.bricklinkId || f.syncId}** (${f.bricklinkId}) — ${f.detail}. ` +
+        `Shopify product ${f.shopifyProductId ?? '?'}`;
+
+      if (proven.length > 0) {
+        parts.push(
+          `**${proven.length} UNBACKED ON SHOPIFY** — buyable on Shopify with zero Bricqer ` +
+            `stock. Archive the product:\n` +
+            proven.map((f) => line(f, '🚨')).join('\n')
+        );
+      }
+      if (unverified.length > 0) {
+        parts.push(
+          `**${unverified.length} live on Shopify with stock UNVERIFIED** (no Bricqer link — ` +
+            `check before acting, this is not proof of exposure):\n` +
+            unverified.map((f) => line(f, '❓')).join('\n')
+        );
+      }
     }
     if (result.staleListed.length > 0) {
       const lines = result.staleListed
@@ -421,7 +458,8 @@ export class MinifigReconcilerService {
         title: '🔁 Minifig Reconciler',
         description: parts.join('\n\n'),
         color:
-          result.doubleSellRisks.length > 0 || result.unbackedOnShopify.length > 0
+          result.doubleSellRisks.length > 0 ||
+          result.unbackedOnShopify.some((f) => f.bricqerQty !== null)
             ? DiscordColors.RED
             : DiscordColors.ORANGE,
         fields: [

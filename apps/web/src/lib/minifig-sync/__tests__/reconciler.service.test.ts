@@ -6,13 +6,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const { getOffer, getInventoryItem, send, fetchAllRecords, getAccessToken } = vi.hoisted(() => ({
-  getOffer: vi.fn(),
-  getInventoryItem: vi.fn(),
-  send: vi.fn(),
-  fetchAllRecords: vi.fn(),
-  getAccessToken: vi.fn(),
-}));
+const { getOffer, getInventoryItem, send, fetchAllRecords, getAccessToken, getCredentials } =
+  vi.hoisted(() => ({
+    getOffer: vi.fn(),
+    getInventoryItem: vi.fn(),
+    send: vi.fn(),
+    fetchAllRecords: vi.fn(),
+    getAccessToken: vi.fn(),
+    getCredentials: vi.fn(),
+  }));
 
 vi.mock('../../ebay/ebay-auth.service', () => ({
   EbayAuthService: class {
@@ -31,7 +33,7 @@ vi.mock('../../bricqer/client', () => ({
 }));
 vi.mock('../../repositories/credentials.repository', () => ({
   CredentialsRepository: class {
-    getCredentials = vi.fn().mockResolvedValue({ apiKey: 'k', tenantUrl: 'https://t' });
+    getCredentials = getCredentials;
   },
 }));
 vi.mock('../../notifications', () => ({
@@ -91,6 +93,7 @@ describe('MinifigReconcilerService', () => {
     vi.clearAllMocks();
     send.mockResolvedValue({ success: true });
     getAccessToken.mockResolvedValue('test-token');
+    getCredentials.mockResolvedValue({ apiKey: 'k', tenantUrl: 'https://t' });
     service = new MinifigReconcilerService(supabaseStub(), 'user-1');
   });
 
@@ -294,6 +297,32 @@ describe('MinifigReconcilerService', () => {
 
       expect(r.unbackedOnShopify).toHaveLength(0);
       expect(r.errors.length).toBeGreaterThan(0);
+    });
+
+    it('claims nothing unbacked when Bricqer credentials are unavailable', async () => {
+      // A credentials outage must not emit "archive this" for every live product.
+      getCredentials.mockResolvedValue(null);
+      fetchAllRecords.mockResolvedValue([item({ listing_status: 'SOLD_BRICQER' })]);
+      getOffer.mockResolvedValue({ status: 'UNPUBLISHED', listing: { listingId: '1' } });
+
+      const r = await withShopify().reconcile();
+
+      expect(r.unbackedOnShopify).toHaveLength(0);
+      expect(r.errors.some((e) => e.item === 'shopify-pass')).toBe(true);
+    });
+
+    it('reports a product with no Bricqer link as UNVERIFIED, not as proven unbacked', async () => {
+      fetchAllRecords.mockResolvedValue([
+        item({ bricqer_item_id: null, listing_status: 'SOLD_BRICQER' }),
+      ]);
+      getOffer.mockResolvedValue({ status: 'UNPUBLISHED', listing: { listingId: '1' } });
+
+      const r = await withShopify().reconcile();
+
+      expect(r.unbackedOnShopify).toHaveLength(1);
+      expect(r.unbackedOnShopify[0].bricqerQty).toBeNull();
+      expect(r.unbackedOnShopify[0].detail).toMatch(/UNVERIFIED/);
+      expect(getInventoryItem).not.toHaveBeenCalled();
     });
 
     it('reads each Bricqer item once across both passes', async () => {
