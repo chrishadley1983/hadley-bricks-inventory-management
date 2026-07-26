@@ -300,8 +300,9 @@ async function fetchEbayPricing(
     const ebayClient = getEbayBrowseClient();
     const results =
       condition === 'used'
-        ? await ebayClient.searchLegoSetUsed(setNumber, 50)
-        : await ebayClient.searchLegoSet(setNumber, 50);
+        // sortByPrice=false: an average must not be taken from the 50 cheapest.
+        ? await ebayClient.searchLegoSetUsed(setNumber, 50, false)
+        : await ebayClient.searchLegoSet(setNumber, 50, false);
 
     if (!results.itemSummaries || results.itemSummaries.length === 0) return empty;
 
