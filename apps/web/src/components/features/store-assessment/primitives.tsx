@@ -8,7 +8,11 @@
  * All server components; zero client JS.
  */
 import type { Verdict, ScoredLot } from '@/lib/bl-store-assessment/types';
-import { PRICE_BANDS } from '@/lib/bl-store-assessment/engine';
+// Straight from the canonical constants file, not via the engine's re-export: these
+// primitives are shared with the client-side LotTable, and importing them through
+// engine.ts would drag the whole scoring module (and its Supabase deps) into the
+// browser bundle for the sake of four numbers.
+import { PRICE_BANDS } from '@/lib/bricklink/fees';
 
 export const SA = {
   // mark colours (fills, dots, bars) — dataviz-validated on the light surface
@@ -26,15 +30,30 @@ export const SA = {
 const GBP_FMT: Record<number, Intl.NumberFormat> = {};
 export const fmtGbp = (n: number | null | undefined, dp = 2) => {
   if (n == null) return '—';
-  GBP_FMT[dp] ??= new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', minimumFractionDigits: dp, maximumFractionDigits: dp });
+  GBP_FMT[dp] ??= new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: dp,
+    maximumFractionDigits: dp,
+  });
   return GBP_FMT[dp].format(Number(n));
 };
 export const fmtPct = (n: number | null | undefined, dp = 0) =>
   n == null ? '—' : `${(Number(n) * 100).toFixed(dp)}%`;
 
 /** Mono data figure — every number in a table wears this. */
-export function Fig({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <span className={`font-[family-name:var(--font-sa-mono)] tabular-nums ${className}`}>{children}</span>;
+export function Fig({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span className={`font-[family-name:var(--font-sa-mono)] tabular-nums ${className}`}>
+      {children}
+    </span>
+  );
 }
 
 /** Condensed uppercase section kicker: "03 · THE MONEY". */
@@ -47,7 +66,13 @@ export function Kicker({ n, children }: { n?: string; children: React.ReactNode 
   );
 }
 
-export function VerdictChip({ label, size = 'md' }: { label: Verdict['label'] | string; size?: 'md' | 'lg' }) {
+export function VerdictChip({
+  label,
+  size = 'md',
+}: {
+  label: Verdict['label'] | string;
+  size?: 'md' | 'lg';
+}) {
   const tone =
     label === 'BUY'
       ? 'bg-[#047857] text-white'
@@ -56,7 +81,9 @@ export function VerdictChip({ label, size = 'md' }: { label: Verdict['label'] | 
         : 'bg-muted text-muted-foreground border border-border';
   const pad = size === 'lg' ? 'px-3 py-1 text-sm' : 'px-2 py-0.5 text-[11px]';
   return (
-    <span className={`inline-flex items-center font-[family-name:var(--font-sa-display)] font-semibold uppercase tracking-[0.12em] ${pad} ${tone}`}>
+    <span
+      className={`inline-flex items-center font-[family-name:var(--font-sa-display)] font-semibold uppercase tracking-[0.12em] ${pad} ${tone}`}
+    >
       {label}
     </span>
   );
@@ -73,7 +100,10 @@ export function GradeMeter({ grade }: { grade: number | null }) {
     <span className="inline-flex items-center gap-2">
       <Fig className="w-9 text-right text-sm font-medium">{grade.toFixed(0)}</Fig>
       <span className="relative inline-block h-[6px] w-14 overflow-hidden rounded-sm bg-muted">
-        <span className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${Math.min(100, grade)}%`, background: colour }} />
+        <span
+          className="absolute inset-y-0 left-0 rounded-sm"
+          style={{ width: `${Math.min(100, grade)}%`, background: colour }}
+        />
         {/* threshold ticks at REVIEW 35 / BUY 60 */}
         <span className="absolute inset-y-0 w-px bg-foreground/40" style={{ left: '35%' }} />
         <span className="absolute inset-y-0 w-px bg-foreground/40" style={{ left: '60%' }} />
@@ -83,12 +113,25 @@ export function GradeMeter({ grade }: { grade: number | null }) {
 }
 
 /** Share meter 0..1 — thin fill + % figure. */
-export function ShareMeter({ share, colour = SA.good, width = 'w-24' }: { share: number | null; colour?: string; width?: string }) {
+export function ShareMeter({
+  share,
+  colour = SA.good,
+  width = 'w-24',
+}: {
+  share: number | null;
+  colour?: string;
+  width?: string;
+}) {
   if (share == null) return <span className="text-muted-foreground">—</span>;
   return (
     <span className="inline-flex items-center gap-2">
-      <span className={`relative inline-block h-[6px] ${width} overflow-hidden rounded-sm bg-muted`}>
-        <span className="absolute inset-y-0 left-0 rounded-sm" style={{ width: `${Math.min(100, Math.round(share * 100))}%`, background: colour }} />
+      <span
+        className={`relative inline-block h-[6px] ${width} overflow-hidden rounded-sm bg-muted`}
+      >
+        <span
+          className="absolute inset-y-0 left-0 rounded-sm"
+          style={{ width: `${Math.min(100, Math.round(share * 100))}%`, background: colour }}
+        />
       </span>
       <Fig className="text-xs text-muted-foreground">{fmtPct(share)}</Fig>
     </span>
@@ -103,7 +146,7 @@ export function DeltaChip({ value, kind = 'gbp' }: { value: number | null; kind?
   const up = value > 0;
   const text = kind === 'gbp' ? fmtGbp(Math.abs(value), 0) : `${Math.abs(value).toFixed(0)}`;
   return (
-    <Fig className="text-xs font-medium" >
+    <Fig className="text-xs font-medium">
       <span style={{ color: up ? SA.goodText : SA.badText }}>
         {up ? '▲' : '▼'} {text}
       </span>
@@ -132,7 +175,10 @@ export function SignalBars({ signals }: { signals: Verdict['signals'] }) {
             {r.label} <span className="text-[10px]">{r.weight}</span>
           </span>
           <span className="relative inline-block h-[5px] overflow-hidden rounded-sm bg-muted">
-            <span className="absolute inset-y-0 left-0 rounded-sm bg-foreground/70" style={{ width: `${Math.round((r.v ?? 0) * 100)}%` }} />
+            <span
+              className="absolute inset-y-0 left-0 rounded-sm bg-foreground/70"
+              style={{ width: `${Math.round((r.v ?? 0) * 100)}%` }}
+            />
           </span>
           <Fig className="text-right text-muted-foreground">{((r.v ?? 0) * 100).toFixed(0)}</Fig>
         </div>
@@ -142,11 +188,28 @@ export function SignalBars({ signals }: { signals: Verdict['signals'] }) {
 }
 
 /** Stat tile — hero number, condensed display numerals, optional footer line. */
-export function Tile({ label, value, sub, accent }: { label: string; value: React.ReactNode; sub?: React.ReactNode; accent?: string }) {
+export function Tile({
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  accent?: string;
+}) {
   return (
-    <div className="min-w-0 border-l-2 py-1 pl-3" style={{ borderColor: accent ?? 'hsl(var(--border))' }}>
-      <div className="truncate text-[11px] uppercase tracking-[0.12em] text-muted-foreground">{label}</div>
-      <div className="font-[family-name:var(--font-sa-display)] text-2xl font-semibold leading-tight tabular-nums">{value}</div>
+    <div
+      className="min-w-0 border-l-2 py-1 pl-3"
+      style={{ borderColor: accent ?? 'hsl(var(--border))' }}
+    >
+      <div className="truncate text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+        {label}
+      </div>
+      <div className="font-[family-name:var(--font-sa-display)] text-2xl font-semibold leading-tight tabular-nums">
+        {value}
+      </div>
       {sub && <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>}
     </div>
   );
@@ -157,26 +220,63 @@ export function MarketPosition({ ratio }: { ratio: number | null }) {
   if (ratio == null) return <span className="text-muted-foreground">—</span>;
   const pct = Math.round(ratio * 100);
   const colour =
-    ratio < PRICE_BANDS.keen ? SA.goodText
-    : ratio < PRICE_BANDS.atMarket ? undefined
-    : ratio < PRICE_BANDS.premium ? SA.warnText
-    : SA.badText;
-  return <Fig className="text-sm" ><span style={colour ? { color: colour } : undefined}>{pct}%</span></Fig>;
+    ratio < PRICE_BANDS.keen
+      ? SA.goodText
+      : ratio < PRICE_BANDS.atMarket
+        ? undefined
+        : ratio < PRICE_BANDS.premium
+          ? SA.warnText
+          : SA.badText;
+  return (
+    <Fig className="text-sm">
+      <span style={colour ? { color: colour } : undefined}>{pct}%</span>
+    </Fig>
+  );
 }
 
-export const OVERLAP_META: Record<string, { label: string; mark: string; text: string; title: string }> = {
-  NEW: { label: 'NEW', mark: SA.good, text: SA.goodText, title: 'Not stocked, never sold by us — a new unique lot' },
-  RESTOCK_OUT: { label: 'R-OUT', mark: SA.info, text: SA.infoText, title: 'We sold out of this — proven demand restock' },
-  RESTOCK_THIN: { label: 'R-THIN', mark: SA.warn, text: SA.warnText, title: 'Stocked, but thin vs our own sell rate' },
-  DUPLICATE: { label: 'DUP', mark: 'hsl(var(--muted-foreground))', text: 'hsl(var(--muted-foreground))', title: 'Already stocked with adequate depth' },
+export const OVERLAP_META: Record<
+  string,
+  { label: string; mark: string; text: string; title: string }
+> = {
+  NEW: {
+    label: 'NEW',
+    mark: SA.good,
+    text: SA.goodText,
+    title: 'Not stocked, never sold by us — a new unique lot',
+  },
+  RESTOCK_OUT: {
+    label: 'R-OUT',
+    mark: SA.info,
+    text: SA.infoText,
+    title: 'We sold out of this — proven demand restock',
+  },
+  RESTOCK_THIN: {
+    label: 'R-THIN',
+    mark: SA.warn,
+    text: SA.warnText,
+    title: 'Stocked, but thin vs our own sell rate',
+  },
+  DUPLICATE: {
+    label: 'DUP',
+    mark: 'hsl(var(--muted-foreground))',
+    text: 'hsl(var(--muted-foreground))',
+    title: 'Already stocked with adequate depth',
+  },
 };
 
 export function OverlapTag({ s }: { s: ScoredLot }) {
   if (!s.overlap) {
-    return <span className="text-muted-foreground" title="No overlap data — sets live outside Bricqer">—</span>;
+    return (
+      <span className="text-muted-foreground" title="No overlap data — sets live outside Bricqer">
+        —
+      </span>
+    );
   }
   const m = OVERLAP_META[s.overlap];
-  const qty = (s.overlap === 'DUPLICATE' || s.overlap === 'RESTOCK_THIN') && s.ourQty != null ? ` ×${s.ourQty}` : '';
+  const qty =
+    (s.overlap === 'DUPLICATE' || s.overlap === 'RESTOCK_THIN') && s.ourQty != null
+      ? ` ×${s.ourQty}`
+      : '';
   return (
     <span
       title={`${m.title}${s.ourQty != null ? ` (our qty ${s.ourQty})` : ''}`}
@@ -184,7 +284,8 @@ export function OverlapTag({ s }: { s: ScoredLot }) {
       style={{ color: m.text }}
     >
       <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: m.mark }} />
-      {m.label}{qty}
+      {m.label}
+      {qty}
     </span>
   );
 }

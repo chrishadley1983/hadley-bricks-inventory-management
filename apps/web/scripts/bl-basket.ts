@@ -846,155 +846,32 @@ function renderReport(enriched: EnrichedItem[], meta: { storeName: string; count
 // Phase 7: Cart build (XML upload → select store → confirm → create)
 // ---------------------------------------------------------------------------
 
-function ceilP(n: number) { return Math.ceil(n * 100) / 100; }
-function floorP(n: number) { return Math.floor(n * 100) / 100; }
-function escXml(s: string) { return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-
 /**
- * BL's wanted-list format treats (itemType, itemNo, colourId) as a unique key —
- * CONDITION does NOT discriminate: an upload with the same part/colour as both
- * N and U fails with "duplicate item/color combinations" (proven live 2026-07-13,
- * P 12885 c86 on the Air list). A single seller can also list the same
- * part/colour/condition as multiple inventory rows (different storage, remarks,
- * prices), each scraped as its own EnrichedItem. Before XML generation we group
- * ALL rows sharing (type, no, colour) so BL accepts the upload.
+ * Wanted-list XML now lives in src/lib/bricklink/wanted-list — the store assessment
+ * emits the same file, and the BL uploader's rules (one entry per item+colour, concrete
+ * CONDITION, no angle brackets in REMARKS, no bare colNN ids) were all learned from live
+ * rejections. One copy, or the second one relearns them.
  *
- * Merge semantics:
- *   - MINQTY = sum of invQty (we still want every piece across the dupes)
- *   - MAXPRICE = max of the per-row gated ceiling (so the more expensive row
- *     stays eligible — BL fulfils greedily from cheapest, so the lower-priced
- *     row gets pulled first naturally)
- *   - CONDITION: kept when every merged row agrees; null (tag omitted = any
- *     condition acceptable) when N and U rows merged
- *   - listPrice/lotProfit on the report row are the same across same-condition
- *     dupes (same UK 6MA × multiplier); across conditions we keep the
- *     higher-profit row's pricing context for the remarks.
+ * EnrichedItem satisfies WantedSourceLot structurally, so nothing adapts here.
+ * dedupeWantedEntries is re-exported because test-bl-basket-dedupe.ts imports it from
+ * this module.
  */
-export interface WantedEntry {
-  itemType: StoreItemCode;
-  itemNo: string;
-  colourId: number;
-  /** Always concrete — BL's uploader rejects entries without CONDITION ("null" error, live-proven 2026-07-13). */
-  condition: ItemCondition;
-  totalQty: number;
-  maxPrice: number;
-  listPrice: number;
-  totalLotProfit: number;
-  mergedFrom: number;
-  highestAsk: number;
-  /** Lots of the OTHER condition dropped from this entry (BL allows one entry per item/colour). */
-  droppedOtherCondLots: number;
-  // Decision context for the wanted-list REMARKS (same tuple ⇒ same values across merged rows).
-  sellThru: number;
-  marginPct: number | null;
-  ukSoldAvg: number | null;
-  mos: number | null;
-}
-
-export function dedupeWantedEntries(passed: EnrichedItem[]): WantedEntry[] {
-  // Two levels: same-condition rows merge fully; across conditions BL still only
-  // allows ONE entry per (item, colour) AND the uploader requires a concrete
-  // CONDITION (omitting it draws a "null" error — live-proven 2026-07-13). So per
-  // tuple we keep the higher-profit condition's entry and surface the dropped
-  // side's lot count in the remarks for the human reviewing on BL.
-  const byCond = new Map<string, WantedEntry>();
-  // Highest-profit row first, so each group's pricing/remarks context comes from it.
-  const sorted = [...passed].sort((a, b) => (b.lotProfit ?? 0) - (a.lotProfit ?? 0));
-  for (const l of sorted) {
-    const listPrice = l.listPrice ?? l.unitPriceGBP;
-    const breakEven = floorP(listPrice * (1 - VAR_FEE_PCT));
-    const maxPrice = Math.max(Math.min(ceilP(l.unitPriceGBP * 1.05), breakEven), ceilP(l.unitPriceGBP));
-    const key = `${l.itemType}|${l.itemNo}|${l.colourId}|${l.condition}`;
-    const existing = byCond.get(key);
-    if (existing) {
-      existing.totalQty += l.invQty;
-      existing.maxPrice = Math.max(existing.maxPrice, maxPrice);
-      existing.totalLotProfit += l.lotProfit ?? 0;
-      existing.highestAsk = Math.max(existing.highestAsk, l.unitPriceGBP);
-      existing.mergedFrom += 1;
-    } else {
-      byCond.set(key, {
-        itemType: l.itemType,
-        itemNo: l.itemNo,
-        colourId: l.colourId,
-        condition: l.condition,
-        totalQty: l.invQty,
-        maxPrice,
-        listPrice,
-        totalLotProfit: l.lotProfit ?? 0,
-        mergedFrom: 1,
-        highestAsk: l.unitPriceGBP,
-        droppedOtherCondLots: 0,
-        sellThru: l.sellThru,
-        marginPct: l.marginPct,
-        ukSoldAvg: l.ukSoldAvg,
-        mos: l.mos,
-      });
-    }
-  }
-  // Collapse to one entry per (item, colour): keep the higher-profit condition.
-  const byTuple = new Map<string, WantedEntry>();
-  for (const e of byCond.values()) {
-    const key = `${e.itemType}|${e.itemNo}|${e.colourId}`;
-    const existing = byTuple.get(key);
-    if (!existing) {
-      byTuple.set(key, e);
-    } else if (e.totalLotProfit > existing.totalLotProfit) {
-      e.droppedOtherCondLots = existing.mergedFrom + existing.droppedOtherCondLots;
-      byTuple.set(key, e);
-    } else {
-      existing.droppedOtherCondLots += e.mergedFrom;
-    }
-  }
-  return Array.from(byTuple.values());
-}
+export { dedupeWantedEntries } from '../src/lib/bricklink/wanted-list';
+import { buildWantedXml, dedupeWantedEntries } from '../src/lib/bricklink/wanted-list';
 
 function generateWantedXml(passed: EnrichedItem[]): string {
-  const entries = dedupeWantedEntries(passed);
-  const merged = entries.filter((e) => e.mergedFrom > 1);
-  if (merged.length > 0) {
-    const collapsed = merged.reduce((s, e) => s + (e.mergedFrom - 1), 0);
-    console.log(`  deduped ${merged.length} (item, colour, condition) tuple(s) — collapsed ${collapsed} extra row(s) into the parent entry`);
+  const result = buildWantedXml(dedupeWantedEntries(passed));
+  if (result.mergedTuples > 0) {
+    console.log(
+      `  deduped ${result.mergedTuples} (item, colour, condition) tuple(s) — collapsed ${result.collapsedRows} extra row(s) into the parent entry`
+    );
   }
-  const xml = ['<INVENTORY>'];
-  for (const e of entries) {
-    // Bare colNN "set" ids (ambiguous CMF identity from the scrape) don't exist in the
-    // BL catalog — the upload rejects the whole file. Live-proven 2026-07-13 (col25).
-    if (e.itemType === 'S' && /^col\d+$/i.test(e.itemNo)) {
-      console.warn(`  skipping ${e.itemNo}: not a valid BL catalog id (ambiguous CMF identity)`);
-      continue;
-    }
-    xml.push('  <ITEM>');
-    xml.push(`    <ITEMTYPE>${e.itemType}</ITEMTYPE>`);
-    xml.push(`    <ITEMID>${escXml(e.itemNo)}</ITEMID>`);
-    if (e.itemType === 'P') xml.push(`    <COLOR>${e.colourId}</COLOR>`);
-    xml.push(`    <MAXPRICE>${e.maxPrice.toFixed(2)}</MAXPRICE>`);
-    xml.push(`    <MINQTY>${e.totalQty}</MINQTY>`);
-    xml.push(`    <CONDITION>${e.condition}</CONDITION>`); // always concrete — BL uploader "null"s without it
-    xml.push('    <NOTIFY>N</NOTIFY>');
-    // Decision context inline: reviewing the wanted list on BL is the last point where
-    // each item is click-through-able to its catalog page / price guide — the cart isn't.
-    const netPerUnit = e.listPrice > 0 ? e.totalLotProfit / e.totalQty : null;
-    const parts = [
-      // marginPct here is already a percentage (bl-basket convention, e.g. 37.87 — unlike
-      // the assessment engine's 0..1 fraction).
-      netPerUnit != null ? `net ${netPerUnit.toFixed(2)}/u ${e.marginPct != null ? Math.round(e.marginPct) + '%' : ''}`.trim() : null,
-      `STR ${e.sellThru.toFixed(2)}`,
-      e.ukSoldAvg != null ? `6MA ${e.ukSoldAvg.toFixed(2)}` : null,
-      e.mos != null ? `~${Math.round(e.mos)}mo` : null,
-      `lot ${e.totalLotProfit.toFixed(2)}`,
-      // "ask max" not "ask<=": BL's uploadXML.ajax hard-rejects (returnCode -1, no
-      // message) any REMARKS containing a &lt; entity — bisected live 2026-07-14.
-      e.mergedFrom > 1 ? `ask max ${e.highestAsk.toFixed(2)} merged ${e.mergedFrom}` : `ask ${e.highestAsk.toFixed(2)}`,
-      e.droppedOtherCondLots > 0 ? `+${e.droppedOtherCondLots} ${e.condition === 'N' ? 'U' : 'N'} lot(s) in store (BL: 1 entry/item+colour)` : null,
-    ].filter(Boolean);
-    // Angle brackets stripped outright: even correctly-escaped &lt;/&gt; kill the upload.
-    xml.push(`    <REMARKS>${escXml(parts.join(' | ').replace(/[<>]/g, ''))}</REMARKS>`);
-    xml.push('  </ITEM>');
+  for (const id of result.skipped) {
+    console.warn(`  skipping ${id}: not a valid BL catalog id (ambiguous CMF identity)`);
   }
-  xml.push('</INVENTORY>');
-  return xml.join('\n');
+  return result.xml;
 }
+
 
 /** Dump current page state to a tmp file and reference it in stderr — for phase 7/8 failure forensics. */
 async function dumpPageStateOnFailure(cdp: CDPClient, phaseLabel: string, reason: string): Promise<string> {
