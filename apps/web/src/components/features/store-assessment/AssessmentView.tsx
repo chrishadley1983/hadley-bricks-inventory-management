@@ -10,14 +10,12 @@
 import type {
   StoreAssessment,
   Bucket,
-  SetDecisionRow,
   SetsSection,
   StrGateColumn,
 } from '@/lib/bl-store-assessment/types';
 import { UK_MAGNET } from '@/lib/bricklink/fees';
-import { bricklinkImageUrlByCode, bricklinkItemUrlByCode } from '@/lib/bricklink/catalogue-url';
-import Image from 'next/image';
 import { LotTable } from './LotTable';
+import { SetsTable } from './SetsTable';
 import {
   SA,
   Fig,
@@ -274,13 +272,6 @@ function GateLadder({ gates }: { gates: StrGateColumn[] }) {
   );
 }
 
-const SET_VERDICT_COLOUR: Record<SetDecisionRow['verdict'], string | undefined> = {
-  'FLIP-AMAZON': SA.goodText,
-  'SELL-BL': SA.infoText,
-  'PART-OUT': SA.warnText,
-  SKIP: undefined,
-};
-
 /**
  * Sets are a separate buying decision — different capital and velocity profile from the
  * parts arbitrage, and deliberately never mixed into the parts grade. Persisted since
@@ -290,9 +281,6 @@ const SET_VERDICT_COLOUR: Record<SetDecisionRow['verdict'], string | undefined> 
  * each channel, what parting it out is worth, and which of those wins.
  */
 function SetsPanel({ sets }: { sets: SetsSection }) {
-  const th = (align: 'l' | 'r' = 'r') =>
-    `py-1.5 ${align === 'r' ? 'text-right' : 'text-left'} text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground`;
-
   const methods = [
     { key: 'flipAmazon', label: 'Flip on Amazon', row: sets.methods.flipAmazon },
     { key: 'sellBl', label: 'Sell complete on BL', row: sets.methods.sellBl },
@@ -348,116 +336,7 @@ function SetsPanel({ sets }: { sets: SetsSection }) {
         </div>
       )}
 
-      {sets.decided.length > 0 && (
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className={`${th('l')} sticky left-0 z-10 bg-background`}>Set</th>
-                <th className={`${th()} pl-3`}>Qty</th>
-                <th className={`${th()} pl-3`}>Ask</th>
-                <th
-                  className={`${th()} hidden pl-3 md:table-cell`}
-                  title="Net selling complete at the BL 6-mo sold average"
-                >
-                  BL net
-                </th>
-                <th
-                  className={`${th()} hidden pl-3 md:table-cell`}
-                  title="Amazon Buy Box (only shown when the ASIN mapping is trusted)"
-                >
-                  Amz BB
-                </th>
-                <th className={`${th()} pl-3`} title="Net flipping FBM at the Buy Box — new only">
-                  Amz net
-                </th>
-                <th className={`${th()} pl-3`} title="Part-out value and its multiple of the ask">
-                  POV
-                </th>
-                <th className={`${th()} pl-3`}>Best net</th>
-                <th className={`${th('l')} pl-4`}>Route</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sets.decided.map((r) => (
-                <tr
-                  key={`${r.itemNo}:${r.condition}`}
-                  className="border-b border-border/50 hover:bg-muted/40"
-                >
-                  <td className="sticky left-0 z-10 max-w-[13rem] border-r border-border/50 bg-background py-1.5 md:max-w-[20rem]">
-                    <div className="flex items-center gap-2">
-                      <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded bg-muted">
-                        <Image
-                          src={bricklinkImageUrlByCode('S', r.itemNo)}
-                          alt=""
-                          fill
-                          sizes="36px"
-                          className="object-contain"
-                          unoptimized
-                        />
-                      </span>
-                      <span className="min-w-0">
-                        <a
-                          href={bricklinkItemUrlByCode('S', r.itemNo)}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block truncate font-medium underline-offset-4 hover:underline"
-                        >
-                          {r.itemNo}
-                        </a>
-                        <span className="block truncate text-[11px] text-muted-foreground">
-                          {r.condition === 'N' ? 'New' : 'Used'}
-                          {r.setName ? ` · ${r.setName}` : ''}
-                        </span>
-                      </span>
-                    </div>
-                  </td>
-                  <td className="py-1.5 pl-3 text-right">
-                    <Fig>{r.invQty}</Fig>
-                  </td>
-                  <td className="py-1.5 pl-3 text-right">
-                    <Fig>{fmtGbp(r.ask)}</Fig>
-                  </td>
-                  <td className="hidden py-1.5 pl-3 text-right md:table-cell">
-                    <Fig>{fmtGbp(r.blNet)}</Fig>
-                  </td>
-                  <td className="hidden py-1.5 pl-3 text-right md:table-cell">
-                    <Fig>{r.asinTrusted ? fmtGbp(r.amazonBuyBox) : '—'}</Fig>
-                  </td>
-                  <td className="py-1.5 pl-3 text-right">
-                    <Fig>{fmtGbp(r.amazonNet)}</Fig>
-                  </td>
-                  <td className="py-1.5 pl-3 text-right">
-                    <Fig>{fmtGbp(r.povGbp)}</Fig>
-                    {r.povMultiple != null && (
-                      <span className="text-[11px] text-muted-foreground">
-                        {' '}
-                        {r.povMultiple.toFixed(1)}×
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-1.5 pl-3 text-right">
-                    <Fig className="font-medium">{fmtGbp(r.bestNet)}</Fig>
-                  </td>
-                  <td className="py-1.5 pl-4">
-                    <span
-                      className="whitespace-nowrap text-[11px] font-semibold"
-                      style={{ color: SET_VERDICT_COLOUR[r.verdict] }}
-                    >
-                      {r.verdict}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {sets.lots > sets.decided.length && (
-            <p className="mt-1.5 text-[11px] text-muted-foreground">
-              Top {sets.decided.length} of {sets.lots.toLocaleString()} set lots by net.
-            </p>
-          )}
-        </div>
-      )}
+      {sets.decided.length > 0 && <SetsTable rows={sets.decided} totalLots={sets.lots} />}
     </div>
   );
 }

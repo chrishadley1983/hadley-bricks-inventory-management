@@ -19,16 +19,22 @@
  *     how many of the store's lots those are, so a re-sorted table is never mistaken
  *     for the whole store.
  *
+ * Every table also carries the ARITHMETIC BEHIND ITS FLAG (Chris, 2026-07-26: "What
+ * decides if it is buyable? Margin at my Bricqer calculated price?"). List, Net/u and
+ * Margin appear wherever a BUY appears, because a verdict you cannot check is the same
+ * problem as a column that disagrees with its sort.
+ *
  * Every threshold shown is echoed from the assessment's own `inputs` or from
  * lib/bricklink/fees. This component must never introduce a cutoff of its own.
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Image from 'next/image';
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import type { ScoredLot } from '@/lib/bl-store-assessment/types';
 import { bricklinkImageUrlByCode, bricklinkItemUrlByCode } from '@/lib/bricklink/catalogue-url';
 import { SA, Fig, OverlapTag, fmtGbp, fmtPct } from './primitives';
+import { SortableHead, useTableSort, type SortCol } from './sortable';
 
 export type LotTableKind = 'margin' | 'str' | 'magnet';
 
@@ -61,7 +67,6 @@ function Bench({ s }: { s: ScoredLot }) {
  * in next.config either way.
  */
 function ItemCell({ s }: { s: ScoredLot }) {
-  const href = bricklinkItemUrlByCode(s.itemType, s.itemNo, s.colourId);
   return (
     <div className="flex items-center gap-2">
       <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded bg-muted">
@@ -76,7 +81,7 @@ function ItemCell({ s }: { s: ScoredLot }) {
       </span>
       <span className="min-w-0">
         <a
-          href={href}
+          href={bricklinkItemUrlByCode(s.itemType, s.itemNo, s.colourId)}
           target="_blank"
           rel="noreferrer"
           className="flex items-center gap-1 truncate font-medium underline-offset-4 hover:underline"
@@ -96,26 +101,13 @@ function ItemCell({ s }: { s: ScoredLot }) {
   );
 }
 
-/** One column: how it sorts, how it renders, and whether it survives a narrow screen. */
-interface Col {
-  key: string;
-  label: string;
-  title?: string;
-  align: 'l' | 'r';
-  /** Sort value; omitted for non-sortable columns (the item cell, the BUY flag). */
-  sort?: (s: ScoredLot) => number | null;
-  /** Default direction when the column is first clicked. */
-  desc?: boolean;
-  cell: (s: ScoredLot) => React.ReactNode;
-  hideOnMobile?: boolean;
-}
-
-const COL: Record<string, Col> = {
+const COL: Record<string, SortCol<ScoredLot>> = {
   ask: {
     key: 'ask',
     label: 'Ask',
     align: 'r',
     desc: true,
+    title: 'Their unit price — what we pay',
     sort: (s) => s.ask,
     cell: (s) => <Fig>{fmtGbp(s.ask)}</Fig>,
   },
@@ -148,7 +140,8 @@ const COL: Record<string, Col> = {
     align: 'r',
     desc: true,
     hideOnMobile: true,
-    title: 'What WE would list it at (Bricqer model for parts/minifigs, sold avg for sets)',
+    title:
+      'What WE would list it at — Bricqer formula on the 6MA for parts/minifigs, the 6MA itself for sets',
     sort: (s) => s.ourList,
     cell: (s) => <Fig>{fmtGbp(s.ourList)}</Fig>,
   },
@@ -157,7 +150,7 @@ const COL: Record<string, Col> = {
     label: 'Net/u',
     align: 'r',
     desc: true,
-    title: 'Net per unit after the 9.4% fee stack, ex-postage',
+    title: 'List × (1 − 9.4% fees) − ask − inbound, per unit',
     sort: (s) => s.netPerUnit,
     cell: (s) => <Fig className="font-medium">{fmtGbp(s.netPerUnit)}</Fig>,
   },
@@ -166,6 +159,8 @@ const COL: Record<string, Col> = {
     label: 'Margin',
     align: 'r',
     desc: true,
+    title:
+      'Net ÷ our list price — net as a share of the SALE, not of the cost. This is the number the buy gate tests.',
     sort: (s) => s.marginPct,
     cell: (s) => <Fig>{fmtPct(s.marginPct)}</Fig>,
   },
@@ -253,7 +248,9 @@ const COL: Record<string, Col> = {
     key: 'buy',
     label: 'Buy?',
     align: 'l',
-    title: 'Clears the net-margin threshold for this run',
+    title: 'Net > 0 and margin ≥ the run’s threshold, on an eligible lot (min ask, no damage note)',
+    sort: (s) => (s.withinMargin ? 1 : 0),
+    desc: true,
     cell: (s) =>
       s.withinMargin ? (
         <span className="text-xs font-semibold" style={{ color: SA.goodText }}>
@@ -263,24 +260,39 @@ const COL: Record<string, Col> = {
   },
 };
 
-const LAYOUT: Record<LotTableKind, { cols: string[]; sort: string }> = {
+const LAYOUT: Record<LotTableKind, string[]> = {
   // Buy list. STR joins it because the honesty ladder's liquid cut is an STR gate — a
   // buyable lot with no sell-through is exactly the money that headline strips out, and
   // the old table gave no way to see which rows those were.
-  margin: {
-    cols: ['ask', 'bench', 'list', 'net', 'margin', 'qty', 'str', 'overlap'],
-    sort: 'lotProfit',
-  },
-  // Fast movers: the reconciling trio, in the order sold ÷ stock = STR reads.
-  str: {
-    cols: ['ask', 'qty', 'soldQty', 'stockQty', 'str', 'bench', 'overlap', 'buy'],
-    sort: 'str',
-  },
+  margin: ['ask', 'bench', 'list', 'net', 'margin', 'qty', 'str', 'overlap'],
+  // Fast movers: the reconciling trio (sold ÷ stock = STR), then the buy arithmetic.
+  str: [
+    'ask',
+    'qty',
+    'soldQty',
+    'stockQty',
+    'str',
+    'bench',
+    'list',
+    'net',
+    'margin',
+    'overlap',
+    'buy',
+  ],
   // Magnets lead with the scarcity the gate actually uses; world lots trail as context.
-  magnet: {
-    cols: ['ask', 'qty', 'stockQty', 'str', 'world', 'lotProfit', 'overlap', 'buy'],
-    sort: 'stockQty',
-  },
+  magnet: [
+    'ask',
+    'qty',
+    'stockQty',
+    'str',
+    'world',
+    'list',
+    'net',
+    'margin',
+    'lotProfit',
+    'overlap',
+    'buy',
+  ],
 };
 
 /**
@@ -293,8 +305,19 @@ const LAYOUT: Record<LotTableKind, { cols: string[]; sort: string }> = {
  * what it was rather than for what the current engine would have done.
  */
 const NO_UK_STOCK_LAYOUT: Partial<Record<LotTableKind, string[]>> = {
-  str: ['ask', 'qty', 'soldQty', 'str', 'bench', 'overlap', 'buy'],
-  magnet: ['ask', 'qty', 'worldGate', 'str', 'lotProfit', 'overlap', 'buy'],
+  str: ['ask', 'qty', 'soldQty', 'str', 'bench', 'list', 'net', 'margin', 'overlap', 'buy'],
+  magnet: [
+    'ask',
+    'qty',
+    'worldGate',
+    'str',
+    'list',
+    'net',
+    'margin',
+    'lotProfit',
+    'overlap',
+    'buy',
+  ],
 };
 
 /** Magnets rank scarcest-first; everything else ranks biggest-first. */
@@ -304,43 +327,6 @@ const DEFAULT_SORT_KEY: Record<LotTableKind, string> = {
   str: 'str',
   magnet: 'stockQty',
 };
-
-function thClass(align: 'l' | 'r', hideOnMobile?: boolean) {
-  return [
-    'py-1.5 text-[11px] font-medium uppercase tracking-[0.1em] text-muted-foreground',
-    align === 'r' ? 'text-right' : 'text-left',
-    hideOnMobile ? 'hidden md:table-cell' : '',
-  ].join(' ');
-}
-
-/**
- * Sortable header. The active column shows a solid arrow and is emphasised, everything
- * else stays muted — the same affordance the part-out table uses, and the same reason:
- * a table that always renders one neutral glyph never says what it is ordered by.
- */
-function SortHeader({
-  col,
-  active,
-  desc,
-  onClick,
-}: {
-  col: Col;
-  active: boolean;
-  desc: boolean;
-  onClick: () => void;
-}) {
-  const Icon = !active ? ArrowUpDown : desc ? ArrowDown : ArrowUp;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-1 uppercase tracking-[0.1em] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active ? 'font-semibold text-foreground' : ''}`}
-    >
-      {col.label}
-      <Icon className={`h-3 w-3 ${active ? 'text-foreground' : 'text-muted-foreground/50'}`} />
-    </button>
-  );
-}
 
 export interface LotTableProps {
   rows: ScoredLot[];
@@ -352,38 +338,18 @@ export interface LotTableProps {
 }
 
 export function LotTable({ rows, kind, totalLots, ukStock = true }: LotTableProps) {
-  const layout = (!ukStock && NO_UK_STOCK_LAYOUT[kind]) || LAYOUT[kind].cols;
+  const layout = (!ukStock && NO_UK_STOCK_LAYOUT[kind]) || LAYOUT[kind];
   const worldMagnets = kind === 'magnet' && !ukStock;
-  const [sortKey, setSortKey] = useState(worldMagnets ? 'worldGate' : DEFAULT_SORT_KEY[kind]);
-  const [desc, setDesc] = useState(DEFAULT_DESC[kind]);
-
   const cols = useMemo(() => layout.map((k) => COL[k]), [layout]);
 
-  const sorted = useMemo(() => {
-    const col = COL[sortKey];
-    if (!col?.sort) return rows;
-    // Nulls always sink, in both directions — a lot with no STR is not the best-selling
-    // lot in the store, and it is not the worst either. It is unmeasured.
-    return [...rows].sort((a, b) => {
-      const av = col.sort!(a);
-      const bv = col.sort!(b);
-      if (av == null && bv == null) return 0;
-      if (av == null) return 1;
-      if (bv == null) return -1;
-      return desc ? bv - av : av - bv;
-    });
-  }, [rows, sortKey, desc]);
+  const { sorted, sortKey, desc, toggle } = useTableSort(
+    rows,
+    COL,
+    worldMagnets ? 'worldGate' : DEFAULT_SORT_KEY[kind],
+    DEFAULT_DESC[kind]
+  );
 
   if (!rows.length) return <p className="text-sm text-muted-foreground">None.</p>;
-
-  const toggle = (col: Col) => {
-    if (!col.sort) return;
-    if (col.key === sortKey) setDesc((d) => !d);
-    else {
-      setSortKey(col.key);
-      setDesc(col.desc ?? true);
-    }
-  };
 
   const truncated = totalLots != null && totalLots > rows.length;
 
@@ -391,34 +357,13 @@ export function LotTable({ rows, kind, totalLots, ukStock = true }: LotTableProp
     <div className="space-y-1.5">
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className={`${thClass('l')} sticky left-0 z-10 bg-background`}>Item</th>
-              {cols.map((c) => (
-                <th
-                  key={c.key}
-                  className={`${thClass(c.align, c.hideOnMobile)} pl-3`}
-                  title={c.title}
-                  // aria-sort belongs on the column header, not the button inside it —
-                  // screen readers announce it as a property of the column.
-                  aria-sort={
-                    c.sort && sortKey === c.key ? (desc ? 'descending' : 'ascending') : undefined
-                  }
-                >
-                  {c.sort ? (
-                    <SortHeader
-                      col={c}
-                      active={sortKey === c.key}
-                      desc={desc}
-                      onClick={() => toggle(c)}
-                    />
-                  ) : (
-                    c.label
-                  )}
-                </th>
-              ))}
-            </tr>
-          </thead>
+          <SortableHead
+            cols={cols}
+            firstLabel="Item"
+            sortKey={sortKey}
+            desc={desc}
+            toggle={toggle}
+          />
           <tbody>
             {sorted.map((s) => (
               <tr key={s.invID} className="border-b border-border/50 hover:bg-muted/40">
@@ -439,11 +384,17 @@ export function LotTable({ rows, kind, totalLots, ukStock = true }: LotTableProp
         </table>
       </div>
       <div className="space-y-0.5 text-[11px] text-muted-foreground">
-        {/* No silent caps: sorting reorders what is here, and what is here is a slice. */}
+        {/*
+          No silent caps. The engine scores every lot in the store but persists only a
+          top-N slice per section, so sorting reorders what was saved — it cannot reach a
+          lot the run discarded. Without this line, sorting by Ask ascending reads as
+          "the cheapest buyable lot in this store" when it is "the cheapest of the N the
+          engine ranked highest".
+        */}
         {truncated && (
           <p>
-            Showing the engine&apos;s top {rows.length} of {totalLots!.toLocaleString()} — sorting
-            reorders these rows, it does not reach the rest of the store.
+            Showing the engine&apos;s top {rows.length} of {totalLots!.toLocaleString()} — the rest
+            were scored but not saved, so sorting reorders these rows only.
           </p>
         )}
         {sorted.some((r) => r.priceSource === 'world') && (
