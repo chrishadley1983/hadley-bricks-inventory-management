@@ -253,6 +253,49 @@ describe('MinifigReconcilerService', () => {
       expect(send).toHaveBeenCalledTimes(1);
     });
 
+    it('does NOT flag a product still backed by a duplicate unit (hp155 [0,1])', async () => {
+      // Two sync items, two Bricqer inventory items, ONE Shopify product.
+      // The sold unit reads 0; the spare reads 1 — the product is still backed.
+      fetchAllRecords.mockResolvedValue([
+        item({ id: 'sync-sold', bricqer_item_id: '11227', listing_status: 'SOLD_BRICQER' }),
+        item({ id: 'sync-spare', bricqer_item_id: '29390', listing_status: 'NOT_LISTED' }),
+      ]);
+      getOffer.mockResolvedValue({ status: 'UNPUBLISHED', listing: { listingId: '1' } });
+      getInventoryItem.mockImplementation(async (id: number) =>
+        id === 11227 ? { remainingQuantity: 0 } : { remainingQuantity: 1 }
+      );
+
+      const r = await withShopify().reconcile();
+
+      expect(r.unbackedOnShopify).toHaveLength(0);
+      expect(r.shopifyChecked).toBe(1); // one PRODUCT, not two sync items
+    });
+
+    it('flags a duplicate-unit product only when every unit is out of stock', async () => {
+      fetchAllRecords.mockResolvedValue([
+        item({ id: 'sync-a', bricqer_item_id: '11227', listing_status: 'SOLD_BRICQER' }),
+        item({ id: 'sync-b', bricqer_item_id: '29390', listing_status: 'SOLD_BRICQER' }),
+      ]);
+      getOffer.mockResolvedValue({ status: 'UNPUBLISHED', listing: { listingId: '1' } });
+      getInventoryItem.mockResolvedValue({ remainingQuantity: 0 });
+
+      const r = await withShopify().reconcile();
+
+      expect(r.unbackedOnShopify).toHaveLength(1);
+      expect(r.unbackedOnShopify[0].detail).toMatch(/2 unit\(s\)/);
+    });
+
+    it('stays silent when a Bricqer read fails rather than claiming unbacked', async () => {
+      fetchAllRecords.mockResolvedValue([item({ listing_status: 'SOLD_BRICQER' })]);
+      getOffer.mockResolvedValue({ status: 'UNPUBLISHED', listing: { listingId: '1' } });
+      getInventoryItem.mockRejectedValue(new Error('500 server error'));
+
+      const r = await withShopify().reconcile();
+
+      expect(r.unbackedOnShopify).toHaveLength(0);
+      expect(r.errors.length).toBeGreaterThan(0);
+    });
+
     it('reads each Bricqer item once across both passes', async () => {
       fetchAllRecords.mockResolvedValue([item()]);
       getOffer.mockResolvedValue({ status: 'PUBLISHED', listing: { listingId: '1' } });

@@ -265,39 +265,62 @@ export class MinifigReconcilerService {
       }
     }
 
+    // Group by Shopify PRODUCT, not by sync item. We own duplicates of some
+    // figs — several sync items (each its own Bricqer inventory item) resolve to
+    // ONE product. Stock must be summed across every unit behind a product or a
+    // sold duplicate looks unbacked: hp155 has units [0, 1], so the product is
+    // still backed by the second Dementor and must not be flagged.
+    const groups = new Map<string, { units: typeof syncItems; sample: (typeof syncItems)[number] }>();
     for (const s of syncItems) {
       const invId = s.bricklink_id ? invBySet.get(s.bricklink_id) : undefined;
       const productId = invId ? productByInv.get(invId) : undefined;
       if (!productId) continue;
+      const g = groups.get(productId);
+      if (g) g.units.push(s);
+      else groups.set(productId, { units: [s], sample: s });
+    }
+
+    for (const [productId, { units, sample }] of groups) {
       result.shopifyChecked++;
 
-      if (!bricqer || !s.bricqer_item_id) {
+      const unlinked = units.filter((u) => !u.bricqer_item_id);
+      if (!bricqer || unlinked.length === units.length) {
         result.unbackedOnShopify.push(
-          this.flag(s, null, null, 'live on Shopify; Bricqer stock UNVERIFIED', productId)
+          this.flag(sample, null, null, 'live on Shopify; Bricqer stock UNVERIFIED', productId)
         );
         continue;
       }
 
-      let qty: number | null;
-      try {
-        qty = await this.bricqerQty(bricqer, s.bricqer_item_id, qtyCache);
-      } catch (err) {
-        result.errors.push({
-          item: s.bricklink_id || s.id,
-          error: `bricqer (shopify pass): ${err instanceof Error ? err.message : String(err)}`,
-        });
-        continue;
+      let total = 0;
+      let missing = 0;
+      let failed = false;
+      for (const u of units) {
+        if (!u.bricqer_item_id) continue;
+        let qty: number | null;
+        try {
+          qty = await this.bricqerQty(bricqer, u.bricqer_item_id, qtyCache);
+        } catch (err) {
+          result.errors.push({
+            item: u.bricklink_id || u.id,
+            error: `bricqer (shopify pass): ${err instanceof Error ? err.message : String(err)}`,
+          });
+          failed = true;
+          break;
+        }
+        if (qty === null) missing++;
+        else total += qty;
       }
+      // A read failure means we cannot prove the product is unbacked — say
+      // nothing rather than risk telling Chris to de-list stock he owns.
+      if (failed) continue;
 
-      if (qty === null) {
-        result.unbackedOnShopify.push(
-          this.flag(s, null, 0, 'live on Shopify; Bricqer item MISSING (sold/purged)', productId)
-        );
-      } else if (qty <= 0) {
-        result.unbackedOnShopify.push(
-          this.flag(s, null, qty, 'live on Shopify but Bricqer stock = 0', productId)
-        );
-      }
+      if (total > 0) continue;
+
+      const detail =
+        missing === units.length
+          ? 'live on Shopify; Bricqer item MISSING (sold/purged)'
+          : `live on Shopify but Bricqer stock = 0 across ${units.length} unit(s)`;
+      result.unbackedOnShopify.push(this.flag(sample, null, 0, detail, productId));
     }
   }
 
