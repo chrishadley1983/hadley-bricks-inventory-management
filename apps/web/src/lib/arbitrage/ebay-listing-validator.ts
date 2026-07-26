@@ -47,6 +47,22 @@ const EXCLUDE_PATTERNS: RegExp[] = [
   /\blight(ing)?\s+kit\b/i,
   /\bled\s+light/i,
 
+  // Fragments sold OUT of a set — the dominant residual leak in a 50-set survey.
+  // "Malfoy Manor (76453) - Pick Your Minifigure or Parts" £9.95 vs a £134 median;
+  // "76324 - Kraven the Hunter Minifigure" £22 vs £104; "Birds x5 from set 11372" £16.
+  // All carry the set number and pass every other gate.
+  /\bpick\s+(your|a)\b/i,
+  // SINGULAR only, and only at the end: "76324 - Kraven the Hunter Minifigure" is one
+  // fig; "Malfoy Manor Complete with all minifigures" is the set. The plural must survive.
+  /\bminifig(ure)?\s*$/i,
+  /\bfrom\s+set\b/i,
+  /\bsets?\s*:\s*\d/i, // "Sets: 42617 76324" — parts listed against several sets
+
+  // Documentation and merch that carries the set number
+  /\binstructions?\s+manual\b/i,
+  /\bvip\s+(frame|card)\b/i,
+  /\bblack\s+card\b/i,
+
   // Not the real thing
   /\bfor\s+lego\b/i,
   /\bcompatible\s+with\b/i,
