@@ -28,6 +28,7 @@ import {
   type PriceGuideView,
 } from './price-guide/read';
 import { loadColourMap, type ColourMap } from './colour-map';
+import { bricklinkImageUrl } from './catalogue-url';
 import { readWorldSupply, type WorldSupply } from './world-supply';
 import { assessPartoutBoth, type AmazonSetOffer } from './partout-assessment';
 import { ASIN_TRUST_MIN } from '@/lib/bl-store-assessment/sets-intel';
@@ -64,13 +65,6 @@ const BATCH_DELAY_MS = 2000;
 
 /** Cache freshness for POV reads (matches the legacy 6-month default) */
 const POV_TTL_DAYS = 180;
-
-/** Generate BrickLink image URL for a part */
-function getPartImageUrl(type: BrickLinkItemType, partNumber: string, colorId: number): string {
-  // BrickLink image URL pattern
-  const typeCode = type === 'MINIFIG' ? 'MN' : type === 'SET' ? 'SN' : 'PN';
-  return `https://img.bricklink.com/ItemImage/${typeCode}/${colorId}/${partNumber}.png`;
-}
 
 function toPgType(type: BrickLinkItemType): PgType {
   return type === 'MINIFIG' ? 'M' : type === 'SET' ? 'S' : 'P';
@@ -590,7 +584,7 @@ export class PartoutService {
       name: part.name,
       colourId: part.colourId,
       colourName: part.colourName ?? 'Unknown',
-      imageUrl: getPartImageUrl(part.partType, part.partNumber, part.colourId),
+      imageUrl: bricklinkImageUrl(part),
       quantity: part.quantity,
       priceNew,
       priceUsed,
