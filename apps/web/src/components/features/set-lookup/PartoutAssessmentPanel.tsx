@@ -7,7 +7,6 @@ import {
   Magnet,
   Layers,
   Store,
-  AlertTriangle,
   Wallet,
   Info,
   ExternalLink,
@@ -674,19 +673,6 @@ export function PartoutAssessmentPanel({ assessment }: PartoutAssessmentPanelPro
         <LadderCard assessment={assessment} />
         <MaxBuyCard assessment={assessment} />
       </div>
-
-      {assessment.unpricedLots > 0 && (
-        <Card className="border-amber-200 bg-amber-50">
-          <CardContent className="flex items-start gap-3 pt-4">
-            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600" />
-            <p className="text-sm text-amber-800">
-              <strong>{assessment.unpricedLots}</strong> of{' '}
-              {assessment.pricedLots + assessment.unpricedLots} lots have no UK price data. They
-              contribute £0, so every figure above understates this set.
-            </p>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Where the value sits leads at full width; sell-through depth sits beneath it. */}
       <ConcentrationCard assessment={assessment} />
