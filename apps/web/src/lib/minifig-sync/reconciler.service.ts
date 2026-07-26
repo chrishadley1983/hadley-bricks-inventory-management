@@ -12,10 +12,20 @@
  *     offer is not PUBLISHED (ended/unpublished). We think it's earning a listing
  *     and it isn't — lost sales visibility, not a double-sell. Lower priority.
  *
+ *   Class C — UNBACKED ON SHOPIFY: the Shopify product is live but Bricqer stock
+ *     is 0. Same buy-what-we-haven't-got exposure as Class A, on the other
+ *     channel. Nothing watched this: the full-sync alignment report and
+ *     reconcileArchiveDrift both decide "sold" from `inventory_items.status`,
+ *     which a minifig sale NEVER writes (only `minifig_sync_items.listing_status`
+ *     moves), so 12 sold-out minifigs stayed buyable on Shopify for ~3 months.
+ *
  * Authoritative signals (see minifig-delist-silent-failure memory):
  *   - "live on eBay"  == getOffer(offerId).status === 'PUBLISHED'
  *     (NOT the stored ebay_listing_id — GTC renews under new item ids).
  *   - "in stock"      == Bricqer getInventoryItem(id).remainingQuantity >= 1.
+ *   - Class C keys on live Bricqer stock, NOT on listing_status: that column is
+ *     partly fiction (an order-line/inventory-item id collision invented 5 of 18
+ *     "sales" — see minifig-phantom-bricqer-sales memory).
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -39,6 +49,8 @@ export interface ReconcileFlag {
   bricqerQty: number | null;
   dbStatus: string | null;
   detail: string;
+  /** Set only on Class C (unbacked-on-Shopify) flags. */
+  shopifyProductId?: string | null;
 }
 
 export interface ReconcileResult {
@@ -46,6 +58,10 @@ export interface ReconcileResult {
   liveOnEbay: number;
   doubleSellRisks: ReconcileFlag[];
   staleListed: ReconcileFlag[];
+  /** Class C — live on Shopify with zero Bricqer stock. */
+  unbackedOnShopify: ReconcileFlag[];
+  /** How many live Shopify products were checked (Class C denominator). */
+  shopifyChecked: number;
   errors: Array<{ item: string; error: string }>;
 }
 
@@ -71,6 +87,8 @@ export class MinifigReconcilerService {
       liveOnEbay: 0,
       doubleSellRisks: [],
       staleListed: [],
+      unbackedOnShopify: [],
+      shopifyChecked: 0,
       errors: [],
     };
 
@@ -87,12 +105,19 @@ export class MinifigReconcilerService {
       return result;
     }
 
+    const bricqer = await this.getBricqerClient();
+    // Bricqer stock is read by both passes — fetch each item at most once.
+    const qtyCache = new Map<string, number | null>();
+
     const ebay = await this.getEbayAdapter();
     if (!ebay) {
+      // Do NOT bail: an eBay token problem must not also blind the Shopify arm
+      // (that combination is exactly what let the 12 unbacked products sit).
       result.errors.push({ item: 'ebay', error: 'eBay adapter unavailable (no access token)' });
+      await this.reconcileShopify(result, bricqer, qtyCache);
+      await this.alert(result);
       return result;
     }
-    const bricqer = await this.getBricqerClient();
 
     for (const item of items) {
       if (!item.ebay_offer_id) continue;
@@ -137,39 +162,176 @@ export class MinifigReconcilerService {
         continue;
       }
 
-      let qty: number | null = null;
+      let qty: number | null;
       try {
-        const bq = await bricqer.getInventoryItem(Number(item.bricqer_item_id));
-        qty = bq?.remainingQuantity ?? bq?.quantity ?? 0;
+        qty = await this.bricqerQty(bricqer, item.bricqer_item_id, qtyCache);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        // Item gone from Bricqer while live on eBay is a strong risk signal.
-        if (/404|not[\s_]?found/i.test(msg)) {
-          result.doubleSellRisks.push(
-            this.flag(item, liveListingId, 0, 'live on eBay; Bricqer item MISSING (sold/purged)')
-          );
-          continue;
-        }
         result.errors.push({ item: item.bricklink_id || item.id, error: `bricqer: ${msg}` });
         continue;
       }
 
-      if ((qty ?? 0) <= 0) {
+      if (qty === null) {
+        // 404 — item gone from Bricqer while live on eBay is a strong risk signal.
+        result.doubleSellRisks.push(
+          this.flag(item, liveListingId, 0, 'live on eBay; Bricqer item MISSING (sold/purged)')
+        );
+        continue;
+      }
+
+      if (qty <= 0) {
         result.doubleSellRisks.push(
           this.flag(item, liveListingId, qty, 'live on eBay but Bricqer stock = 0')
         );
       }
     }
 
+    await this.reconcileShopify(result, bricqer, qtyCache);
     await this.alert(result);
     return result;
+  }
+
+  /**
+   * Class C — minifigs whose Shopify product is live while Bricqer holds none.
+   *
+   * Deliberately keyed on live Bricqer stock rather than `listing_status` or
+   * `inventory_items.status`: the former is partly fiction (phantom sales), and
+   * the latter is never written by a minifig sale, which is precisely why the
+   * existing Shopify watchers cannot see this class.
+   */
+  private async reconcileShopify(
+    result: ReconcileResult,
+    bricqer: BricqerClient | null,
+    qtyCache: Map<string, number | null>
+  ): Promise<void> {
+    let syncItems: Array<{
+      id: string;
+      bricklink_id: string | null;
+      name: string | null;
+      bricqer_item_id: string | null;
+      ebay_sku: string | null;
+      ebay_offer_id: string | null;
+      listing_status: string | null;
+    }>;
+    try {
+      syncItems = (await fetchAllRecords(this.supabase, 'minifig_sync_items', {
+        select: 'id, bricklink_id, name, bricqer_item_id, ebay_sku, ebay_offer_id, listing_status',
+        eq: { user_id: this.userId },
+        isNotNull: ['bricklink_id'],
+      })) as never;
+    } catch (err) {
+      result.errors.push({
+        item: 'shopify-fetch',
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return;
+    }
+    if (syncItems.length === 0) return;
+
+    // minifig -> inventory item (minifigs are keyed by bricklink_id as set_number)
+    const blIds = [...new Set(syncItems.map((s) => s.bricklink_id).filter(Boolean))] as string[];
+    const invBySet = new Map<string, string>();
+    for (let i = 0; i < blIds.length; i += 300) {
+      const { data, error } = await this.supabase
+        .from('inventory_items')
+        .select('id, set_number')
+        .eq('user_id', this.userId)
+        .in('set_number', blIds.slice(i, i + 300));
+      if (error) {
+        result.errors.push({ item: 'shopify-inventory', error: error.message });
+        return;
+      }
+      for (const r of data ?? []) if (r.set_number) invBySet.set(r.set_number, r.id);
+    }
+
+    // inventory item -> live (non-archived) Shopify product
+    const invIds = [...new Set(invBySet.values())];
+    const productByInv = new Map<string, string>();
+    for (let i = 0; i < invIds.length; i += 300) {
+      const { data, error } = await this.supabase
+        .from('shopify_products')
+        .select('inventory_item_id, shopify_product_id, shopify_status')
+        .eq('user_id', this.userId)
+        .neq('shopify_status', 'archived')
+        .in('inventory_item_id', invIds.slice(i, i + 300));
+      if (error) {
+        result.errors.push({ item: 'shopify-products', error: error.message });
+        return;
+      }
+      for (const r of data ?? []) {
+        if (r.inventory_item_id && r.shopify_product_id) {
+          productByInv.set(r.inventory_item_id, r.shopify_product_id);
+        }
+      }
+    }
+
+    for (const s of syncItems) {
+      const invId = s.bricklink_id ? invBySet.get(s.bricklink_id) : undefined;
+      const productId = invId ? productByInv.get(invId) : undefined;
+      if (!productId) continue;
+      result.shopifyChecked++;
+
+      if (!bricqer || !s.bricqer_item_id) {
+        result.unbackedOnShopify.push(
+          this.flag(s, null, null, 'live on Shopify; Bricqer stock UNVERIFIED', productId)
+        );
+        continue;
+      }
+
+      let qty: number | null;
+      try {
+        qty = await this.bricqerQty(bricqer, s.bricqer_item_id, qtyCache);
+      } catch (err) {
+        result.errors.push({
+          item: s.bricklink_id || s.id,
+          error: `bricqer (shopify pass): ${err instanceof Error ? err.message : String(err)}`,
+        });
+        continue;
+      }
+
+      if (qty === null) {
+        result.unbackedOnShopify.push(
+          this.flag(s, null, 0, 'live on Shopify; Bricqer item MISSING (sold/purged)', productId)
+        );
+      } else if (qty <= 0) {
+        result.unbackedOnShopify.push(
+          this.flag(s, null, qty, 'live on Shopify but Bricqer stock = 0', productId)
+        );
+      }
+    }
+  }
+
+  /**
+   * Bricqer stock for an item, memoised across both passes.
+   * Returns null when the item 404s (gone), throws on any other error.
+   */
+  private async bricqerQty(
+    bricqer: BricqerClient,
+    bricqerItemId: string,
+    cache: Map<string, number | null>
+  ): Promise<number | null> {
+    if (cache.has(bricqerItemId)) return cache.get(bricqerItemId)!;
+    try {
+      const bq = await bricqer.getInventoryItem(Number(bricqerItemId));
+      const qty = bq?.remainingQuantity ?? bq?.quantity ?? 0;
+      cache.set(bricqerItemId, qty);
+      return qty;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/404|not[\s_]?found/i.test(msg)) {
+        cache.set(bricqerItemId, null);
+        return null;
+      }
+      throw err;
+    }
   }
 
   private flag(
     item: OfferItem,
     liveListingId: string | null,
     bricqerQty: number | null,
-    detail: string
+    detail: string,
+    shopifyProductId?: string | null
   ): ReconcileFlag {
     return {
       syncId: item.id,
@@ -182,11 +344,18 @@ export class MinifigReconcilerService {
       bricqerQty,
       dbStatus: item.listing_status,
       detail,
+      ...(shopifyProductId !== undefined ? { shopifyProductId } : {}),
     };
   }
 
   private async alert(result: ReconcileResult): Promise<void> {
-    if (result.doubleSellRisks.length === 0 && result.staleListed.length === 0) return;
+    if (
+      result.doubleSellRisks.length === 0 &&
+      result.staleListed.length === 0 &&
+      result.unbackedOnShopify.length === 0
+    ) {
+      return;
+    }
 
     const parts: string[] = [];
     if (result.doubleSellRisks.length > 0) {
@@ -198,6 +367,18 @@ export class MinifigReconcilerService {
       parts.push(
         `**${result.doubleSellRisks.length} DOUBLE-SELL RISK${result.doubleSellRisks.length === 1 ? '' : 'S'}** ` +
           `— live on eBay but out of stock on Bricqer. End the eBay listing now:\n` +
+          lines.join('\n')
+      );
+    }
+    if (result.unbackedOnShopify.length > 0) {
+      const lines = result.unbackedOnShopify.map(
+        (f) =>
+          `- 🚨 **${f.name || f.bricklinkId || f.syncId}** (${f.bricklinkId}) — ${f.detail}. ` +
+          `Shopify product ${f.shopifyProductId ?? '?'}`
+      );
+      parts.push(
+        `**${result.unbackedOnShopify.length} UNBACKED ON SHOPIFY** ` +
+          `— buyable on Shopify with no Bricqer stock. Archive the product:\n` +
           lines.join('\n')
       );
     }
@@ -216,10 +397,14 @@ export class MinifigReconcilerService {
       .send('alerts', {
         title: '🔁 Minifig Reconciler',
         description: parts.join('\n\n'),
-        color: result.doubleSellRisks.length > 0 ? DiscordColors.RED : DiscordColors.ORANGE,
+        color:
+          result.doubleSellRisks.length > 0 || result.unbackedOnShopify.length > 0
+            ? DiscordColors.RED
+            : DiscordColors.ORANGE,
         fields: [
           { name: 'Checked', value: String(result.checked), inline: true },
           { name: 'Live on eBay', value: String(result.liveOnEbay), inline: true },
+          { name: 'Live on Shopify', value: String(result.shopifyChecked), inline: true },
           { name: 'Errors', value: String(result.errors.length), inline: true },
         ],
       })

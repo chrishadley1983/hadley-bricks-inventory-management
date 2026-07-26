@@ -321,17 +321,27 @@ export class OrderPollService {
         }
 
         for (const orderItem of orderItems) {
-          // Match by bricqer_item_id for accurate per-item matching (C3)
-          // Fall back to bricklink_id if bricqer_item_id not available on order item
-          const itemId =
-            (orderItem as unknown as Record<string, unknown>).inventory_item_id || orderItem.id;
-          let matchingItem = itemId ? publishedByBricqerId.get(String(itemId)) : undefined;
+          // IDENTITY COMES FROM bricklink_id, NEVER from a bare numeric id.
+          //
+          // Bricqer order lines carry no `inventory_item_id` — their `id` is the
+          // ORDER-LINE id, a different namespace from `bricqer_item_id`. Matching
+          // on it invented sales whenever the numbers happened to collide: a 6p
+          // "Plate, Round 2x2" (line id 8652 of order 1198) marked our Gollum
+          // (bricqer_item_id 8652) SOLD. 5 of 18 Bricqer removals were phantoms.
+          //
+          // So the bricklink_id must agree before we accept any match; the numeric
+          // id is only ever a tie-breaker between duplicates of the same fig.
+          if (!orderItem.bricklink_id) continue;
+          const candidates = publishedItems.filter(
+            (si) => si.bricklink_id === orderItem.bricklink_id
+          );
+          if (candidates.length === 0) continue;
 
-          // Fallback: try matching by bricklink_id (less accurate for duplicates)
-          if (!matchingItem && orderItem.bricklink_id) {
-            matchingItem = publishedItems.find((si) => si.bricklink_id === orderItem.bricklink_id);
-          }
-          if (!matchingItem) continue;
+          const rawId = (orderItem as unknown as Record<string, unknown>).inventory_item_id;
+          const byId = rawId ? publishedByBricqerId.get(String(rawId)) : undefined;
+          // Only honour the id when it agrees on what the item actually is.
+          const matchingItem =
+            byId && byId.bricklink_id === orderItem.bricklink_id ? byId : candidates[0];
 
           salesDetected++;
 
