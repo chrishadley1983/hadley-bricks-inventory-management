@@ -120,5 +120,6 @@ scripts/*-debug.png
 # Local analysis outputs and session artifacts (2026-07-10 repo sync)
 analysis/
 /.playwright/
+apps/web/.playwright/
 .claude/backup-stale-wip/
 memcheck*.ps1

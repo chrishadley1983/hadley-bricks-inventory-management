@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, Play, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { usePartout } from '@/hooks/usePartout';
+import { usePartoutEstimate, type PartoutEstimate } from '@/hooks/usePartoutEstimate';
 import { PartoutTable, type PartoutCondition } from './PartoutTable';
 import { PartoutProgress } from './PartoutProgress';
 import { PartoutAssessmentPanel } from './PartoutAssessmentPanel';
@@ -84,6 +85,69 @@ function NoPartsState() {
 }
 
 /**
+ * The run gate.
+ *
+ * Part-out used to live behind a tab, so opening it WAS the consent. On the single screen
+ * it would otherwise fire on every lookup, and an uncached set is four BrickLink calls per
+ * lot (1,141 lots on 71741). So the run is a button, and the button states the bill.
+ */
+function PartoutGate({
+  estimate,
+  isEstimating,
+  estimateError,
+  onRun,
+}: {
+  estimate: PartoutEstimate | undefined;
+  isEstimating: boolean;
+  estimateError: Error | null;
+  onRun: () => void;
+}) {
+  if (isEstimating) {
+    return (
+      <div className="rounded-lg border p-6 space-y-3">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-4 w-72" />
+      </div>
+    );
+  }
+
+  // If we can't cost it, still offer the run — just say the cost is unknown rather than
+  // blocking on a failed estimate.
+  const unknownCost = !!estimateError || !estimate;
+
+  return (
+    <div className="rounded-lg border p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">Part-out assessment</h3>
+        {unknownCost ? (
+          <p className="text-sm text-muted-foreground">
+            Couldn&apos;t check the cache first
+            {estimateError ? ` (${estimateError.message})` : ''} — the run may need live
+            BrickLink prices.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {estimate.totalLots.toLocaleString()} lots · {estimate.cachedLots.toLocaleString()}{' '}
+            already priced ·{' '}
+            <span className={estimate.uncachedLots > 0 ? 'text-amber-700 font-medium' : ''}>
+              {estimate.uncachedLots.toLocaleString()}{' '}
+              {estimate.uncachedLots === 1 ? 'needs' : 'need'} a live price
+            </span>
+            {' — about '}
+            {estimate.estimatedApiCalls.toLocaleString()} BrickLink API call
+            {estimate.estimatedApiCalls === 1 ? '' : 's'}
+          </p>
+        )}
+      </div>
+      <Button onClick={onRun} className="shrink-0">
+        <Play className="h-4 w-4 mr-1" />
+        Run part-out
+      </Button>
+    </div>
+  );
+}
+
+/**
  * PartoutTab Component
  *
  * Container for the partout value analysis. Handles loading, error states,
@@ -92,7 +156,7 @@ function NoPartsState() {
  */
 export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
   const [condition, setCondition] = useState<PartoutCondition>('new');
-  const [hasTriggeredInitialLoad, setHasTriggeredInitialLoad] = useState(false);
+  const [runRequested, setRunRequested] = useState(false);
   // NOTE: usePartout still exposes forceRefresh / isForceRefreshing and the API route
   // still honours forceRefresh — the UI control was removed, not the capability.
   const {
@@ -107,39 +171,36 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     fetchWithProgress,
   } = usePartout(setNumber, enabled);
 
-  // Trigger streaming fetch for initial load when no cached data
+  // Costing the run costs one BrickLink call (getSubsets), so it runs on lookup while the
+  // expensive part waits for a click.
+  const {
+    data: estimate,
+    isFetching: isEstimating,
+    error: estimateError,
+  } = usePartoutEstimate(setNumber, enabled);
+
+  // A fully-cached set costs one getSubsets and nothing else, so asking permission for it
+  // is pure friction — those run themselves. The set's own price row has to be fresh too,
+  // or the "free" run quietly spends four more quadrants on it.
   useEffect(() => {
-    if (
-      enabled &&
-      setNumber &&
-      !data &&
-      !isLoading &&
-      !isFetching &&
-      !isStreaming &&
-      !hasTriggeredInitialLoad &&
-      !error
-    ) {
-      setHasTriggeredInitialLoad(true);
+    if (!enabled || !setNumber || runRequested || data || isStreaming) return;
+    if (estimate && estimate.totalLots > 0 && estimate.uncachedLots === 0 && estimate.setPriceCached) {
+      setRunRequested(true);
       fetchWithProgress(false);
     }
-  }, [
-    enabled,
-    setNumber,
-    data,
-    isLoading,
-    isFetching,
-    isStreaming,
-    hasTriggeredInitialLoad,
-    error,
-    fetchWithProgress,
-  ]);
+  }, [enabled, setNumber, runRequested, data, isStreaming, estimate, fetchWithProgress]);
 
-  // Reset initial load flag when set number changes
+  // Reset the gate when the set changes
   useEffect(() => {
-    setHasTriggeredInitialLoad(false);
+    setRunRequested(false);
   }, [setNumber]);
 
   const handleRetry = () => {
+    fetchWithProgress(false);
+  };
+
+  const handleRun = () => {
+    setRunRequested(true);
     fetchWithProgress(false);
   };
 
@@ -184,6 +245,24 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
             </Button>
           </AlertDescription>
         </Alert>
+      );
+    }
+
+    // The estimate already established there is nothing to part out, so offering a Run
+    // button that can only produce "no parts data" is a wasted BrickLink call.
+    if (!data && !runRequested && estimate && estimate.totalLots === 0) {
+      return <NoPartsState />;
+    }
+
+    // Not run yet — show the cost and wait for the click
+    if (!data && !runRequested) {
+      return (
+        <PartoutGate
+          estimate={estimate}
+          isEstimating={isEstimating}
+          estimateError={estimateError as Error | null}
+          onRun={handleRun}
+        />
       );
     }
 

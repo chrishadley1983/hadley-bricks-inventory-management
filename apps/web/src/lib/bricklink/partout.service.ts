@@ -29,7 +29,8 @@ import {
 } from './price-guide/read';
 import { loadColourMap, type ColourMap } from './colour-map';
 import { readWorldSupply, type WorldSupply } from './world-supply';
-import { assessPartoutBoth } from './partout-assessment';
+import { assessPartoutBoth, type AmazonSetOffer } from './partout-assessment';
+import { ASIN_TRUST_MIN } from '@/lib/bl-store-assessment/sets-intel';
 import {
   loadOwnStockIndex,
   classifyOverlap,
@@ -44,6 +45,15 @@ import type {
 } from '@/types/partout';
 
 /** Batch size between progress events / batch delays */
+/**
+ * BrickLink calls one `ensurePriceGuide` fetch makes: sold/stock × new/used, in parallel.
+ * The standard pattern requires all four so the shared cache never gets a partial row.
+ */
+const QUADRANTS_PER_FETCH = 4;
+
+/** How stale an Amazon snapshot may be before it stops counting as a live offer. */
+const AMAZON_SNAPSHOT_MAX_AGE_DAYS = 7;
+
 const BATCH_SIZE = 10;
 
 /** Delay between per-part fetches in milliseconds (each fetch = 4 parallel BL calls) */
@@ -94,6 +104,87 @@ export class PartoutService {
     private brickLinkClient: BrickLinkClient,
     private supabase: SupabaseClient
   ) {}
+
+  /**
+   * What would a full part-out run COST, without running it?
+   *
+   * The single-screen layout removed the tab that used to gate this, so the run has to be
+   * explicit — and to be explicit it has to be quantified. This does steps 1-3 of
+   * getPartoutValue (colour map, subsets, cache read) and stops before fetching anything
+   * uncached.
+   *
+   * Cost: ONE BrickLink call (getSubsets). Each uncached lot then costs FOUR — the
+   * quadrants are fetched in parallel per part (sold/stock x new/used), and the standard
+   * pattern requires all four so the shared cache gets a complete row.
+   *
+   * The SET's own price-guide row is checked alongside the parts. It is easy to forget —
+   * it is not a lot, it does not appear in the parts table — but a stale one costs the
+   * same four quadrants as any other item, and leaving it out let a set with every part
+   * cached be reported as a 1-call run when it was really a 5-call one.
+   */
+  async estimatePartoutCost(rawSetNumber: string): Promise<{
+    setNumber: string;
+    totalLots: number;
+    cachedLots: number;
+    uncachedLots: number;
+    /** Whether the SET's own price-guide row is fresh — it is priced like any other item. */
+    setPriceCached: boolean;
+    /** BrickLink calls a full run would make from here. Never zero: getSubsets always runs. */
+    estimatedApiCalls: number;
+  }> {
+    const setNumber = normaliseSetNumber(rawSetNumber);
+
+    const [colourMap, subsets] = await Promise.all([
+      loadColourMap(this.supabase),
+      this.brickLinkClient.getSubsets('SET', setNumber, {
+        breakMinifigs: false,
+        breakSets: false,
+      }),
+    ]);
+
+    const parts = this.flattenSubsets(subsets, colourMap);
+    if (parts.length === 0) {
+      return {
+        setNumber,
+        totalLots: 0,
+        cachedLots: 0,
+        uncachedLots: 0,
+        setPriceCached: false,
+        // Nothing to price, so no run to cost.
+        estimatedApiCalls: 0,
+      };
+    }
+
+    const refs: ItemRef[] = [
+      ...parts.map((p) => ({
+        itemType: toPgType(p.partType),
+        itemNo: p.partNumber,
+        colourId: p.colourId,
+        scheme: 'bl' as const,
+      })),
+      { itemType: 'S' as const, itemNo: setNumber, colourId: 0, scheme: 'bl' as const },
+    ];
+    const views = await readPriceGuide(this.supabase, refs, {
+      ttlDays: POV_TTL_DAYS,
+      allowWorldFallback: false,
+    });
+
+    const keyOf = (p: PartIdentifier) =>
+      pgKey(toPgType(p.partType), p.partNumber, toPgType(p.partType) === 'P' ? p.colourId : 0);
+    const cachedLots = parts.filter((p) => views.get(keyOf(p))?.coverage === 'uk').length;
+    const uncachedLots = parts.length - cachedLots;
+    const setPriceCached = views.get(pgKey('S', setNumber, 0))?.coverage === 'uk';
+
+    return {
+      setNumber,
+      totalLots: parts.length,
+      cachedLots,
+      uncachedLots,
+      setPriceCached,
+      // The run's own getSubsets, plus four quadrants for every item it has to price.
+      estimatedApiCalls: 1 + uncachedLots * QUADRANTS_PER_FETCH + (setPriceCached ? 0 : QUADRANTS_PER_FETCH),
+    };
+  }
 
   /**
    * Get the complete partout value analysis for a set
@@ -178,10 +269,11 @@ export class PartoutService {
     //    plus the two decision inputs the assessment needs: worldwide supply for
     //    magnets and our own stock index for overlap. Neither is on the critical
     //    path for POV, so a failure degrades the assessment rather than the page.
-    const [setView, supply, ownStock] = await Promise.all([
+    const [setView, supply, ownStock, amazon] = await Promise.all([
       this.getSetView(setNumber, ttlDays),
       this.readSupplySafely(parts),
       this.readOwnStockSafely(userId),
+      this.readAmazonOfferSafely(setNumber),
     ]);
     const setPriceNew = setView ? (setView.new.stockAvg ?? setView.new.soldAvg) : null;
     const setPriceUsed = setView ? (setView.used.stockAvg ?? setView.used.soldAvg) : null;
@@ -213,6 +305,13 @@ export class PartoutService {
         overlapMeta: ownStock
           ? { snapshotAt: ownStock.snapshotAt, salesWindowDays: ownStock.salesWindowDays }
           : null,
+        // New lens only — assessPartoutBoth drops this for used rather than reusing it.
+        amazon,
+        // The complete set's own turnover, from the same PG row the ask came from.
+        setStrByCondition: {
+          new: setView?.new.strQty ?? null,
+          used: setView?.used.strQty ?? null,
+        },
       }
     );
 
@@ -255,6 +354,66 @@ export class PartoutService {
     } catch (error) {
       console.warn('[PartoutService] World supply read failed; magnets disabled:', error);
       return new Map();
+    }
+  }
+
+  /**
+   * Amazon's offer on the complete set — the other half of the sell-complete comparison.
+   *
+   * Reads the persisted snapshot rather than SP-API: the part-out path should not depend
+   * on a live Amazon call, and `spapi-buybox-refresh` keeps this table current every
+   * 30 minutes. The Set Lookup details card fetches live, so the two can differ by pennies
+   * within a refresh window — the snapshot date rides along on the assessment so the
+   * figure is never presented as live.
+   *
+   * Gated on `asin_confidence >= ASIN_TRUST_MIN` (95), the same bar sets-intel uses. Below
+   * that the mapping is a title guess: 75192's seeded ASIN at confidence 69 is a
+   * third-party display stand, and letting that price a sell-complete decision would be
+   * worse than having no Amazon side at all.
+   *
+   * Non-fatal — a failure means the comparison falls back to BrickLink alone.
+   */
+  private async readAmazonOfferSafely(setNumber: string): Promise<AmazonSetOffer | null> {
+    try {
+      // Both forms exist in brickset_sets depending on the seeding path.
+      const bare = setNumber.replace(/-\d+$/, '');
+      const { data: sets, error: setErr } = await this.supabase
+        .from('brickset_sets')
+        .select('set_number,amazon_asin,asin_confidence')
+        .in('set_number', [setNumber, bare]);
+      if (setErr) throw new Error(setErr.message);
+
+      const trusted = (sets ?? []).find(
+        (r) => r.amazon_asin && (r.asin_confidence ?? 0) >= ASIN_TRUST_MIN
+      );
+      if (!trusted) return null;
+      const asin = trusted.amazon_asin as string;
+
+      const since = new Date(Date.now() - AMAZON_SNAPSHOT_MAX_AGE_DAYS * 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const { data: rows, error: priceErr } = await this.supabase
+        .from('amazon_arbitrage_pricing')
+        .select('buy_box_price,sales_rank,snapshot_date')
+        .eq('asin', asin)
+        .gte('snapshot_date', since)
+        .order('snapshot_date', { ascending: false })
+        .limit(1);
+      if (priceErr) throw new Error(priceErr.message);
+
+      const row = rows?.[0];
+      if (!row || row.buy_box_price == null) return null;
+      return {
+        buyBox: Number(row.buy_box_price),
+        asin,
+        snapshotDate: row.snapshot_date as string,
+        // Frequently null — roughly a third of rows carry no rank. The warning layer
+        // treats null as "untested", never as "fine".
+        salesRank: row.sales_rank == null ? null : Number(row.sales_rank),
+      };
+    } catch (error) {
+      console.warn('[PartoutService] Amazon offer read failed; BL-only comparison:', error);
+      return null;
     }
   }
 
