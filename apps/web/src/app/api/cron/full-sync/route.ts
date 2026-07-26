@@ -347,20 +347,34 @@ async function getShopifyAlignment(
     .not('set_number', 'is', null)
     .neq('set_number', 'NA');
 
-  // LISTED items that ARE on Shopify (active)
+  // LISTED items that ARE on Shopify (active). Must join through the item —
+  // counting shopify_products alone answers a different question entirely and
+  // can report more products than there are eligible items.
   const { count: listedOnShopify } = await supabase
-    .from('shopify_products')
-    .select('id', { count: 'exact', head: true })
-    .neq('shopify_status', 'archived');
+    .from('inventory_items')
+    .select('id, shopify_products!inner(id)', { count: 'exact', head: true })
+    .eq('status', 'LISTED')
+    .not('set_number', 'is', null)
+    .neq('set_number', 'NA')
+    .neq('shopify_products.shopify_status', 'archived');
 
-  // LISTED items missing from Shopify
+  // LISTED items missing from Shopify.
+  //
+  // The anti-join filter must name the RELATION (`shopify_products=is.null`),
+  // not a column on it. `.is('shopify_products.id', null)` filters the embedded
+  // rows of a !left join, never the parents — PostgREST then returns every
+  // parent with its child nulled out, so this reported "all 749 missing" on a
+  // perfectly aligned store. `!inner` is not the fix either: it can only ever
+  // return 0. The child filter is applied first so an item whose only product
+  // is archived still counts as missing.
   const { data: missing } = await supabase
     .from('inventory_items')
     .select('id, shopify_products!left(id)')
     .eq('status', 'LISTED')
     .not('set_number', 'is', null)
     .neq('set_number', 'NA')
-    .is('shopify_products.id', null)
+    .neq('shopify_products.shopify_status', 'archived')
+    .is('shopify_products', null)
     .limit(1000);
 
   // Non-LISTED items still active on Shopify (should be archived)

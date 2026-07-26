@@ -14,7 +14,7 @@ import { verifyCronAuth } from '@/lib/api/cron-auth';
 import { createServiceRoleClient } from '@/lib/supabase/server';
 import { BricqerClient } from '@/lib/bricqer/client';
 import { EbayApiAdapter } from '@/lib/ebay/ebay-api.adapter';
-import { ebayAuthService } from '@/lib/ebay/ebay-auth.service';
+import { EbayAuthService } from '@/lib/ebay/ebay-auth.service';
 import type { BricqerCredentials } from '@/lib/bricqer/types';
 import { CredentialsRepository } from '@/lib/repositories/credentials.repository';
 import { archiveShopifyOnSold } from '@/lib/shopify/archive-on-sold';
@@ -109,7 +109,14 @@ export async function POST(request: NextRequest) {
     const needsBricqer = removals.some((r) => r.remove_from === 'BRICQER');
 
     if (needsEbay) {
-      const accessToken = await ebayAuthService.getAccessToken(userId);
+      // MUST inject the service-role client. The exported `ebayAuthService`
+      // singleton has none, so it falls back to the cookie-based SSR client —
+      // and a cron POST carries no auth cookie, so RLS on `ebay_credentials`
+      // (`auth.uid() = user_id`) returns nothing and the token silently reads
+      // as null. That made every eBay de-list here a no-op; pre-#532 the row
+      // was still marked EXECUTED, which is how pha005 double-sold.
+      const ebayAuth = new EbayAuthService(undefined, supabase);
+      const accessToken = await ebayAuth.getAccessToken(userId);
       if (accessToken) {
         ebayAdapter = new EbayApiAdapter({
           accessToken,
