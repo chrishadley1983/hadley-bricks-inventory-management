@@ -10,7 +10,7 @@ function scored(p: Partial<ScoredLot> & Pick<ScoredLot, 'invID' | 'itemNo'>): Sc
   return {
     itemType: 'P', colourId: 5, colourName: 'Red', itemName: `${p.itemNo} item`,
     condition: 'U', invQty: 1, ask: 0.5, lotAskValue: 0.5, damageNote: false,
-    benchmarkAvg: 1, strLots: 1, strQty: 1, worldSupplyLots: 10, demandRank: null,
+    benchmarkAvg: 1, strLots: 1, strQty: 1, ukStockQty: 5, worldSupplyLots: 10, demandRank: null,
     priceSource: 'uk', askVsMarket: 0.5, position: 'UNDER',
     ourList: 1.9, netPerUnit: 1.22, marginPct: 0.64, lotProfit: 1.22,
     withinMargin: true, highStr: true, magnet: false,
