@@ -49,8 +49,13 @@ export interface StoreProfile {
 export interface AssessmentInputs {
   minAsk: number; // ignore lots priced below this (default 0.10)
   minMargin: number; // net margin threshold for "within margin" (default 0.20)
-  minStr: number; // "decent" STR (lots basis) for high-STR + magnets (default 0.5)
-  magnetMaxSupplyLots: number; // "very low supply" ceiling — worldwide seller lots (default 3)
+  minStr: number; // "decent" STR (qty basis) for the HIGH-STR section (default 0.5)
+  /**
+   * @deprecated Magnets now gate on UK stock QUANTITY via UK_MAGNET (parts < 10,
+   * minifigs < 5, STR > 1), shared with the Set Lookup part-out so both surfaces agree.
+   * Retained so persisted assessment inputs keep deserialising; no longer read.
+   */
+  magnetMaxSupplyLots: number;
   inboundPerUnit: number; // inbound postage allocated per unit in margin calc (default 0 = ex-postage)
   cacheTtlDays: number | null; // UK price-guide freshness gate (null = accept any age)
   feeModel: { blFee: number; bricqerFee: number; paypalPct: number };
@@ -89,7 +94,9 @@ export interface ScoredLot {
   benchmarkAvg: number | null;
   strLots: number | null; // sold_lots / stock_lots (house STR)
   strQty: number | null; // sold_qty / stock_qty (Bricqer pricing input)
-  worldSupplyLots: number | null; // worldwide stock lots (seller count) for this condition
+  /** UK stock quantity (pieces) — the magnet's scarcity basis. */
+  ukStockQty: number | null;
+  worldSupplyLots: number | null; // worldwide stock lots (seller count) — context only now
   demandRank: number | null;
   priceSource: PriceSource;
   askVsMarket: number | null; // ask ÷ benchmarkAvg

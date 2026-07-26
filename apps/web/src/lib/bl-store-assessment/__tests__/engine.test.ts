@@ -54,7 +54,7 @@ describe('assembleAssessment', () => {
   ];
 
   const pgMap = new Map<string, PriceGuideView>([
-    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 8, soldQty: 16, stockLots: 4, stockQty: 8 }), EMPTY)],
     [pgKey('P', '3002', 1), view('P', '3002', 1, EMPTY, side({ soldAvg: 2.00, soldLots: 5, soldQty: 5, stockLots: 5, stockQty: 5 }))],
     [pgKey('S', '8043', 0), view('S', '8043', 0, EMPTY, EMPTY, 'none')],
   ]);
@@ -98,10 +98,12 @@ describe('assembleAssessment', () => {
   it('identifies high-STR and magnet lots', () => {
     expect(a.highStr.lots).toBeGreaterThanOrEqual(1);
     expect(a.highStr.top.some((s) => s.itemNo === '3001')).toBe(true);
-    // magnet = scarce (supply 2 <= 3) + decent STR
+    // magnet = thin UK supply (8 pieces < the parts bound of 10) + STR above 1.
+    // Gated on UK stock QUANTITY, not worldwide seller lots — same UK_MAGNET test the
+    // Set Lookup part-out uses, so the two surfaces agree.
     expect(a.magnets.lots).toBe(1);
     expect(a.magnets.top[0].itemNo).toBe('3001');
-    expect(a.magnets.top[0].worldSupplyLots).toBe(2);
+    expect(a.magnets.top[0].ukStockQty).toBe(8);
   });
 
   it('reports price coverage over parts+minifigs only (v6 — sets decided in [13])', () => {
@@ -137,7 +139,7 @@ describe('assembleAssessment', () => {
 describe('world-fallback benchmark calibration', () => {
   const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3005', colourId: 4, invNew: 'Used', unitPriceGBP: 1.00 })];
   const pgMap = new Map([
-    [pgKey('P', '3005', 4), view('P', '3005', 4, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY, 'world_fallback')],
+    [pgKey('P', '3005', 4), view('P', '3005', 4, side({ soldAvg: 1.00, soldLots: 8, soldQty: 16, stockLots: 4, stockQty: 8 }), EMPTY, 'world_fallback')],
   ]);
   const a = assemble(lots, pgMap);
   const s = a.size.biggestLots[0];
@@ -238,7 +240,7 @@ describe('pricing label aligns with position bands', () => {
 describe('scan truncation caveat', () => {
   const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 0.50 })];
   const pgMap = new Map([
-    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 8, soldQty: 16, stockLots: 4, stockQty: 8 }), EMPTY)],
   ]);
   const a = assemble(lots, pgMap, new Map(), { scanTruncated: true });
 
@@ -251,7 +253,7 @@ describe('scan truncation caveat', () => {
 describe('normalizeAssessment (v1 rows)', () => {
   const lots = [lot({ invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, unitPriceGBP: 0.50 })];
   const pgMap = new Map([
-    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 20, soldQty: 40, stockLots: 10, stockQty: 20 }), EMPTY)],
+    [pgKey('P', '3001', 5), view('P', '3001', 5, side({ soldAvg: 1.00, soldLots: 8, soldQty: 16, stockLots: 4, stockQty: 8 }), EMPTY)],
   ]);
 
   it('maps v1 field names onto the v2 shape', () => {

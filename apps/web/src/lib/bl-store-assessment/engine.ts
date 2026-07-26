@@ -145,7 +145,7 @@ function weightedMedian(pairs: { value: number; weight: number }[]): number | nu
 // One price scale everywhere: per-lot buckets, the store label, and the verdict's
 // price signal all break at the same points. Canonical home: ../bricklink/fees.
 export { PRICE_BANDS } from '../bricklink/fees';
-import { PRICE_BANDS, STR_GATES as CANONICAL_STR_GATES, POV_MULTIPLE_MIN, POV_MIN_GAP_GBP } from '../bricklink/fees';
+import { PRICE_BANDS, STR_GATES as CANONICAL_STR_GATES, POV_MULTIPLE_MIN, POV_MIN_GAP_GBP, UK_MAGNET } from '../bricklink/fees';
 import { readWorldSupply, type WorldSupply } from '../bricklink/world-supply';
 
 function classifyPosition(askVsMarket: number | null): PricePosition {
@@ -197,6 +197,9 @@ function scoreLot(
   const strLots = side?.strLots ?? null;
   const strQty = side?.strQty ?? null;
   const worldSupplyLots = supply ? (condition === 'N' ? supply.stockLotsNew : supply.stockLotsUsed) : null;
+  // UK stock QUANTITY is the magnet's scarcity basis (see below). It is already on the
+  // price-guide row this function reads for prices and STR — no extra query.
+  const ukStockQty = side?.stockQty ?? null;
 
   const ask = lot.unitPriceGBP;
   const damageNote = hasDamageNote(lot.description, boilerplate);
@@ -218,13 +221,34 @@ function scoreLot(
   const withinMargin = eligible && netPerUnit != null && netPerUnit > 0 && marginPct != null && marginPct >= inp.minMargin;
   // QUANTITY-basis STR (Chris 2026-07-14) — consistent with bl-basket.
   const highStr = eligible && strQty != null && strQty >= inp.minStr;
-  const magnet = eligible && highStr && worldSupplyLots != null && worldSupplyLots > 0 && worldSupplyLots <= inp.magnetMaxSupplyLots;
+  // Magnets gate on UK stock QUANTITY, cut separately for parts and minifigs — the same
+  // UK_MAGNET test the Set Lookup part-out uses, so a lot flagged on one screen is
+  // flagged on the other. Previously this used WORLDWIDE seller lots (<= 3) while the
+  // part-out had moved to UK, so the same lot could be a magnet in one place and not the
+  // other.
+  //
+  // Two reasons UK is the right basis: we sell to UK buyers and compete with UK sellers,
+  // and every other figure here (benchmark, STR, ourList) is already UK. It also avoids
+  // bricklink_pg_summary_cache.stock_*, which changed scope mid-July 2026 — rows fetched
+  // before ~2026-07-12 hold UK-scoped stock, later rows worldwide. Those drain on the
+  // 60-day refresh cycle, but the gate should not depend on when a row was last scraped.
+  //
+  // NOTE `highStr` deliberately still uses inp.minStr — it drives its own HIGH-STR
+  // section and is a different question from "is this a magnet".
+  const magnetGate = lot.itemType === 'M' ? UK_MAGNET.minifig : UK_MAGNET.part;
+  const magnet =
+    eligible &&
+    strQty != null &&
+    strQty > magnetGate.strAbove &&
+    ukStockQty != null &&
+    ukStockQty > 0 &&
+    ukStockQty < magnetGate.ukStockQtyUnder;
 
   return {
     invID: lot.invID, itemType: lot.itemType, itemNo: lot.itemNo, colourId: lot.colourId,
     colourName: lot.colourName, itemName: lot.itemName, condition, invQty: lot.invQty,
     ask, lotAskValue: round(ask * lot.invQty), damageNote,
-    benchmarkAvg, strLots, strQty, worldSupplyLots, demandRank: supply?.demandRank ?? null,
+    benchmarkAvg, strLots, strQty, ukStockQty, worldSupplyLots, demandRank: supply?.demandRank ?? null,
     priceSource, askVsMarket, position: classifyPosition(askVsMarket),
     ourList: ourList == null ? null : round(ourList, 4),
     netPerUnit: netPerUnit == null ? null : round(netPerUnit, 4),
@@ -337,7 +361,7 @@ function buildMagnets(scored: ScoredLot[]): MagnetSection {
   return {
     lots: mg.length, value: round(sum(mg.map((s) => s.lotAskValue))),
     alsoWithinMargin: mg.filter((s) => s.withinMargin).length,
-    top: [...mg].sort((a, b) => (a.worldSupplyLots ?? 99) - (b.worldSupplyLots ?? 99) || (b.strLots ?? 0) - (a.strLots ?? 0)).slice(0, 15),
+    top: [...mg].sort((a, b) => (a.ukStockQty ?? 9999) - (b.ukStockQty ?? 9999) || (b.strQty ?? 0) - (a.strQty ?? 0)).slice(0, 15),
   };
 }
 
