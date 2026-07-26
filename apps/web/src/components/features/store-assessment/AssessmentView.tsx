@@ -44,6 +44,24 @@ export interface RunHistoryEntry {
 const numf = (n: number | null | undefined, dp = 2) => (n == null ? '—' : Number(n).toFixed(dp));
 
 /**
+ * Does this run carry UK stock quantities — and therefore, was it scored on the UK magnet
+ * gate?
+ *
+ * Magnets moved from "≤3 sellers worldwide" to UK stock QUANTITY (UK_MAGNET) on
+ * 2026-07-26 10:01, and ENGINE_VERSION was not bumped — so the version cannot tell the two
+ * apart. `ukStockQty` was added to ScoredLot by that same change, so its presence on any
+ * persisted lot can: old rows have no such key, new rows have it (possibly null).
+ *
+ * It matters because the caption states a threshold and the table shows a Stock qty
+ * column. Naming the UK gate over a run scored on worldwide seller lots is the same defect
+ * as the caption this replaced — just pointing the other way.
+ */
+function hasUkStock(a: StoreAssessment): boolean {
+  const lots = [...a.magnets.top, ...a.highStr.top, ...a.withinMargin.top, ...a.size.biggestLots];
+  return lots.some((s) => 'ukStockQty' in s);
+}
+
+/**
  * Engine reasons carry raw precision (£79.39, 42.66%) that fights the tiles'
  * rounding 30px below. Tidy at render time — the engine text is shared with the
  * CLI report and stays untouched.
@@ -463,6 +481,7 @@ export function AssessmentDetail({
   const freshLots = fresh.reduce((n, t) => n + t.lots, 0);
   const newTag = a.overlap.buyableTags.find((t) => t.tag === 'NEW');
   const routTag = a.overlap.buyableTags.find((t) => t.tag === 'RESTOCK_OUT');
+  const ukStock = hasUkStock(a);
 
   return (
     <div className="space-y-8">
@@ -619,22 +638,37 @@ export function AssessmentDetail({
             STR ≥ {a.inputs.minStr} (quantity basis) · {a.highStr.lots} lots ·{' '}
             {fmtGbp(a.highStr.value)} · {a.highStr.alsoWithinMargin} also buyable
           </p>
-          <LotTable rows={a.highStr.top} kind="str" totalLots={a.highStr.lots} />
+          <LotTable rows={a.highStr.top} kind="str" totalLots={a.highStr.lots} ukStock={ukStock} />
         </div>
         <div className="space-y-3">
           <Kicker n="05">Magnets — scarce + selling</Kicker>
           {/*
-            The real gate, read from UK_MAGNET. The old caption quoted
-            inputs.magnetMaxSupplyLots ("≤3 sellers worldwide"), which types.ts marks
-            @deprecated and the engine stopped reading when magnets moved to UK stock
-            quantity — so it described a test that no longer runs.
+            The gate THIS run was scored on. The old caption quoted
+            inputs.magnetMaxSupplyLots unconditionally, which the engine stopped reading
+            when magnets moved to UK stock quantity — but for a run predating that move it
+            is exactly right, and UK_MAGNET would be exactly wrong. So it branches.
           */}
-          <p className="text-xs text-muted-foreground">
-            UK stock under {UK_MAGNET.part.ukStockQtyUnder} pieces (minifigs{' '}
-            {UK_MAGNET.minifig.ukStockQtyUnder}) + STR over {UK_MAGNET.part.strAbove}, both quantity
-            basis · {a.magnets.lots} lots · {fmtGbp(a.magnets.value)}
-          </p>
-          <LotTable rows={a.magnets.top} kind="magnet" totalLots={a.magnets.lots} />
+          {ukStock ? (
+            <p className="text-xs text-muted-foreground">
+              UK stock under {UK_MAGNET.part.ukStockQtyUnder} pieces (minifigs{' '}
+              {UK_MAGNET.minifig.ukStockQtyUnder}) + STR over {UK_MAGNET.part.strAbove}, both
+              quantity basis · {a.magnets.lots} lots · {fmtGbp(a.magnets.value)}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              ≤{a.inputs.magnetMaxSupplyLots} sellers worldwide + STR ≥ {a.inputs.minStr} (quantity
+              basis) · {a.magnets.lots} lots · {fmtGbp(a.magnets.value)}
+              <span className="block" style={{ color: SA.warnText }}>
+                Run predates the UK stock-quantity gate — re-run to score magnets on UK scarcity.
+              </span>
+            </p>
+          )}
+          <LotTable
+            rows={a.magnets.top}
+            kind="magnet"
+            totalLots={a.magnets.lots}
+            ukStock={ukStock}
+          />
         </div>
       </section>
 

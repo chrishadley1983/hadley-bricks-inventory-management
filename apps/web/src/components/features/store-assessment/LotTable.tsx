@@ -211,6 +211,17 @@ const COL: Record<string, Col> = {
     sort: (s) => s.worldSupplyLots,
     cell: (s) => <Fig className="text-muted-foreground">{int(s.worldSupplyLots)}</Fig>,
   },
+  // Same field, un-muted, for runs scored BEFORE the UK gate landed — on those it is not
+  // context, it is what decided the list, and muting it would misrepresent the run.
+  worldGate: {
+    key: 'worldGate',
+    label: 'World lots',
+    align: 'r',
+    desc: false,
+    title: 'Worldwide sellers holding this — the scarcity gate this run was scored on',
+    sort: (s) => s.worldSupplyLots,
+    cell: (s) => <Fig className="font-medium">{int(s.worldSupplyLots)}</Fig>,
+  },
   lotProfit: {
     key: 'lotProfit',
     label: 'Lot net',
@@ -272,6 +283,20 @@ const LAYOUT: Record<LotTableKind, { cols: string[]; sort: string }> = {
   },
 };
 
+/**
+ * Layouts for runs with no UK stock quantity on their lots.
+ *
+ * `ukStockQty` arrived with the UK magnet gate on 2026-07-26 10:01; every assessment
+ * persisted before that carries no such key. On those rows a Stock qty column is a column
+ * of em-dashes, and for magnets it also hides the number that actually selected the list
+ * — those were gated on worldwide seller lots, so that is what leads. Show each run for
+ * what it was rather than for what the current engine would have done.
+ */
+const NO_UK_STOCK_LAYOUT: Partial<Record<LotTableKind, string[]>> = {
+  str: ['ask', 'qty', 'soldQty', 'str', 'bench', 'overlap', 'buy'],
+  magnet: ['ask', 'qty', 'worldGate', 'str', 'lotProfit', 'overlap', 'buy'],
+};
+
 /** Magnets rank scarcest-first; everything else ranks biggest-first. */
 const DEFAULT_DESC: Record<LotTableKind, boolean> = { margin: true, str: true, magnet: false };
 const DEFAULT_SORT_KEY: Record<LotTableKind, string> = {
@@ -322,13 +347,17 @@ export interface LotTableProps {
   kind: LotTableKind;
   /** Total lots in this section, when more exist than were persisted. */
   totalLots?: number;
+  /** False when the run predates ukStockQty (see NO_UK_STOCK_LAYOUT). */
+  ukStock?: boolean;
 }
 
-export function LotTable({ rows, kind, totalLots }: LotTableProps) {
-  const [sortKey, setSortKey] = useState(DEFAULT_SORT_KEY[kind]);
+export function LotTable({ rows, kind, totalLots, ukStock = true }: LotTableProps) {
+  const layout = (!ukStock && NO_UK_STOCK_LAYOUT[kind]) || LAYOUT[kind].cols;
+  const worldMagnets = kind === 'magnet' && !ukStock;
+  const [sortKey, setSortKey] = useState(worldMagnets ? 'worldGate' : DEFAULT_SORT_KEY[kind]);
   const [desc, setDesc] = useState(DEFAULT_DESC[kind]);
 
-  const cols = useMemo(() => LAYOUT[kind].cols.map((k) => COL[k]), [kind]);
+  const cols = useMemo(() => layout.map((k) => COL[k]), [layout]);
 
   const sorted = useMemo(() => {
     const col = COL[sortKey];
