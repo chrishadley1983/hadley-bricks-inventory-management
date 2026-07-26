@@ -133,9 +133,9 @@ function PartoutGate({
               {estimate.uncachedLots.toLocaleString()}{' '}
               {estimate.uncachedLots === 1 ? 'needs' : 'need'} a live price
             </span>
-            {estimate.uncachedLots > 0 && (
-              <> — about {estimate.estimatedApiCalls.toLocaleString()} BrickLink API calls</>
-            )}
+            {' — about '}
+            {estimate.estimatedApiCalls.toLocaleString()} BrickLink API call
+            {estimate.estimatedApiCalls === 1 ? '' : 's'}
           </p>
         )}
       </div>
@@ -179,11 +179,12 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     error: estimateError,
   } = usePartoutEstimate(setNumber, enabled);
 
-  // A fully-cached set costs BrickLink nothing, so asking permission for it is pure
-  // friction — those run themselves. Only a set with uncached lots waits for the button.
+  // A fully-cached set costs one getSubsets and nothing else, so asking permission for it
+  // is pure friction — those run themselves. The set's own price row has to be fresh too,
+  // or the "free" run quietly spends four more quadrants on it.
   useEffect(() => {
     if (!enabled || !setNumber || runRequested || data || isStreaming) return;
-    if (estimate && estimate.totalLots > 0 && estimate.uncachedLots === 0) {
+    if (estimate && estimate.totalLots > 0 && estimate.uncachedLots === 0 && estimate.setPriceCached) {
       setRunRequested(true);
       fetchWithProgress(false);
     }
@@ -245,6 +246,12 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
           </AlertDescription>
         </Alert>
       );
+    }
+
+    // The estimate already established there is nothing to part out, so offering a Run
+    // button that can only produce "no parts data" is a wasted BrickLink call.
+    if (!data && !runRequested && estimate && estimate.totalLots === 0) {
+      return <NoPartsState />;
     }
 
     // Not run yet — show the cost and wait for the click

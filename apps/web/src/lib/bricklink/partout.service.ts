@@ -45,6 +45,12 @@ import type {
 } from '@/types/partout';
 
 /** Batch size between progress events / batch delays */
+/**
+ * BrickLink calls one `ensurePriceGuide` fetch makes: sold/stock × new/used, in parallel.
+ * The standard pattern requires all four so the shared cache never gets a partial row.
+ */
+const QUADRANTS_PER_FETCH = 4;
+
 /** How stale an Amazon snapshot may be before it stops counting as a live offer. */
 const AMAZON_SNAPSHOT_MAX_AGE_DAYS = 7;
 
@@ -110,13 +116,20 @@ export class PartoutService {
    * Cost: ONE BrickLink call (getSubsets). Each uncached lot then costs FOUR — the
    * quadrants are fetched in parallel per part (sold/stock x new/used), and the standard
    * pattern requires all four so the shared cache gets a complete row.
+   *
+   * The SET's own price-guide row is checked alongside the parts. It is easy to forget —
+   * it is not a lot, it does not appear in the parts table — but a stale one costs the
+   * same four quadrants as any other item, and leaving it out let a set with every part
+   * cached be reported as a 1-call run when it was really a 5-call one.
    */
   async estimatePartoutCost(rawSetNumber: string): Promise<{
     setNumber: string;
     totalLots: number;
     cachedLots: number;
     uncachedLots: number;
-    /** BrickLink calls a full run would make from here. */
+    /** Whether the SET's own price-guide row is fresh — it is priced like any other item. */
+    setPriceCached: boolean;
+    /** BrickLink calls a full run would make from here. Never zero: getSubsets always runs. */
     estimatedApiCalls: number;
   }> {
     const setNumber = normaliseSetNumber(rawSetNumber);
@@ -136,16 +149,21 @@ export class PartoutService {
         totalLots: 0,
         cachedLots: 0,
         uncachedLots: 0,
+        setPriceCached: false,
+        // Nothing to price, so no run to cost.
         estimatedApiCalls: 0,
       };
     }
 
-    const refs: ItemRef[] = parts.map((p) => ({
-      itemType: toPgType(p.partType),
-      itemNo: p.partNumber,
-      colourId: p.colourId,
-      scheme: 'bl' as const,
-    }));
+    const refs: ItemRef[] = [
+      ...parts.map((p) => ({
+        itemType: toPgType(p.partType),
+        itemNo: p.partNumber,
+        colourId: p.colourId,
+        scheme: 'bl' as const,
+      })),
+      { itemType: 'S' as const, itemNo: setNumber, colourId: 0, scheme: 'bl' as const },
+    ];
     const views = await readPriceGuide(this.supabase, refs, {
       ttlDays: POV_TTL_DAYS,
       allowWorldFallback: false,
@@ -155,14 +173,16 @@ export class PartoutService {
       pgKey(toPgType(p.partType), p.partNumber, toPgType(p.partType) === 'P' ? p.colourId : 0);
     const cachedLots = parts.filter((p) => views.get(keyOf(p))?.coverage === 'uk').length;
     const uncachedLots = parts.length - cachedLots;
+    const setPriceCached = views.get(pgKey('S', setNumber, 0))?.coverage === 'uk';
 
     return {
       setNumber,
       totalLots: parts.length,
       cachedLots,
       uncachedLots,
-      // 4 quadrants per uncached lot, plus one more getSubsets and the set-price lookup.
-      estimatedApiCalls: uncachedLots * 4 + (uncachedLots > 0 ? 5 : 1),
+      setPriceCached,
+      // The run's own getSubsets, plus four quadrants for every item it has to price.
+      estimatedApiCalls: 1 + uncachedLots * QUADRANTS_PER_FETCH + (setPriceCached ? 0 : QUADRANTS_PER_FETCH),
     };
   }
 

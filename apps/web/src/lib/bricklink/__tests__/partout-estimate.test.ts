@@ -93,23 +93,44 @@ describe('estimatePartoutCost', () => {
     expect(est.totalLots).toBe(4);
     expect(est.cachedLots).toBe(2);
     expect(est.uncachedLots).toBe(2);
-    // 2 lots x 4 quadrants, plus the run's own getSubsets and set-price lookups.
-    expect(est.estimatedApiCalls).toBe(2 * 4 + 5);
+    // 2 lots x 4 quadrants, plus 4 for the uncached set row, plus the run's own getSubsets.
+    expect(est.setPriceCached).toBe(false);
+    expect(est.estimatedApiCalls).toBe(2 * 4 + 4 + 1);
     // The estimate itself costs exactly one BrickLink call.
     expect(client.getSubsets).toHaveBeenCalledTimes(1);
   });
 
-  it('reports a fully-cached set as free, so the UI can skip the gate', async () => {
+  it('reports a fully-cached set as a single call, so the UI can skip the gate', async () => {
     const views = new Map<string, PriceGuideView>([
       [pgKey('P', '3001', 5), view('uk')],
       [pgKey('P', '3002', 5), view('uk')],
+      [pgKey('S', '10294-1', 0), view('uk')],
     ]);
     const { service } = makeService([subsetEntry('3001', 5), subsetEntry('3002', 5)], views);
 
     const est = await service.estimatePartoutCost('10294-1');
 
     expect(est.uncachedLots).toBe(0);
+    expect(est.setPriceCached).toBe(true);
+    // Only the run's own getSubsets remains.
     expect(est.estimatedApiCalls).toBe(1);
+  });
+
+  it('still bills for a stale SET row when every part is cached', async () => {
+    // The case that made "fully cached = free" wrong: no lot needs fetching, but the set's
+    // own price does, and that is four quadrants nobody was counting.
+    const views = new Map<string, PriceGuideView>([
+      [pgKey('P', '3001', 5), view('uk')],
+      [pgKey('P', '3002', 5), view('uk')],
+      // No 'S' row.
+    ]);
+    const { service } = makeService([subsetEntry('3001', 5), subsetEntry('3002', 5)], views);
+
+    const est = await service.estimatePartoutCost('10294-1');
+
+    expect(est.uncachedLots).toBe(0);
+    expect(est.setPriceCached).toBe(false);
+    expect(est.estimatedApiCalls).toBe(5);
   });
 
   it('does not read the price cache at all for a set with no parts', async () => {

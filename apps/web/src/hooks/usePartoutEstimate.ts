@@ -16,7 +16,9 @@ export interface PartoutEstimate {
   totalLots: number;
   cachedLots: number;
   uncachedLots: number;
-  /** BrickLink calls a full run would make from here (4 quadrants per uncached lot). */
+  /** The SET's own price row — priced like any other item, and easy to forget. */
+  setPriceCached: boolean;
+  /** BrickLink calls a full run would make from here (4 quadrants per uncached item). */
   estimatedApiCalls: number;
 }
 
