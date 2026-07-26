@@ -14,8 +14,8 @@
  *
  *   FLIP-AMAZON  amazonNet ÷ amazonBuyBox           — sale price is on the row
  *   SELL-BL      blNet ÷ blSale, where blSale is back-solved from the engine's own
- *                identity blNet = blSale × (1 − VAR_FEE_PCT) − ask. Exact, not an
- *                estimate — but it IS an inversion of engine arithmetic done in the view,
+ *                identity blNet = blSale × (1 − VAR_FEE_PCT) − ask − inbound. Exact, not
+ *                an estimate — but it IS an inversion of engine arithmetic done in the view,
  *                which is only acceptable because the fee constant comes from fees.ts.
  *                The durable fix is for the engine to persist the margin; that needs a
  *                re-scan before existing rows would show it.
@@ -38,21 +38,30 @@ const VERDICT_COLOUR: Record<SetDecisionRow['verdict'], string | undefined> = {
   SKIP: undefined,
 };
 
-/** Net as a share of the winning route's sale price. Null when no route booked a sale. */
-export function setMarginPct(r: SetDecisionRow): number | null {
+/**
+ * Net as a share of the winning route's sale price. Null when no route booked a sale.
+ *
+ * The BL branch inverts the engine's identity in full:
+ *   blNet = blSale × (1 − VAR_FEE_PCT) − ask − inboundPerUnit
+ * Dropping the inbound term would make blSale too small and therefore OVERSTATE the
+ * margin — the wrong direction to be wrong on a buy decision. It is zero by default,
+ * which is exactly why the omission would have gone unnoticed until the first run with
+ * --inbound-per-unit set.
+ */
+export function setMarginPct(r: SetDecisionRow, inboundPerUnit = 0): number | null {
   if (r.verdict === 'FLIP-AMAZON') {
     if (r.amazonNet == null || !r.amazonBuyBox) return null;
     return r.amazonNet / r.amazonBuyBox;
   }
   if (r.verdict === 'SELL-BL') {
     if (r.blNet == null) return null;
-    const blSale = (r.blNet + r.ask) / (1 - VAR_FEE_PCT);
+    const blSale = (r.blNet + r.ask + inboundPerUnit) / (1 - VAR_FEE_PCT);
     return blSale > 0 ? r.blNet / blSale : null;
   }
   return null;
 }
 
-const COL: Record<string, SortCol<SetDecisionRow>> = {
+const makeCols = (inboundPerUnit: number): Record<string, SortCol<SetDecisionRow>> => ({
   qty: {
     key: 'qty',
     label: 'Qty',
@@ -130,9 +139,9 @@ const COL: Record<string, SortCol<SetDecisionRow>> = {
     align: 'r',
     desc: true,
     title: 'Best net as a share of that route’s SALE price — the same basis as the parts table',
-    sort: setMarginPct,
+    sort: (r) => setMarginPct(r, inboundPerUnit),
     cell: (r) => {
-      const m = setMarginPct(r);
+      const m = setMarginPct(r, inboundPerUnit);
       return (
         <Fig className={m != null && m >= 0.2 ? 'font-medium' : undefined}>
           <span style={m != null && m >= 0.2 ? { color: SA.goodText } : undefined}>
@@ -165,7 +174,7 @@ const COL: Record<string, SortCol<SetDecisionRow>> = {
       </span>
     ),
   },
-};
+});
 
 const LAYOUT = [
   'qty',
@@ -180,11 +189,21 @@ const LAYOUT = [
   'route',
 ];
 
-export function SetsTable({ rows, totalLots }: { rows: SetDecisionRow[]; totalLots: number }) {
-  const cols = useMemo(() => LAYOUT.map((k) => COL[k]), []);
+export function SetsTable({
+  rows,
+  totalLots,
+  inboundPerUnit = 0,
+}: {
+  rows: SetDecisionRow[];
+  totalLots: number;
+  /** Echoed from the run's inputs so the derived BL margin matches the engine exactly. */
+  inboundPerUnit?: number;
+}) {
+  const cols = useMemo(() => makeCols(inboundPerUnit), [inboundPerUnit]);
+  const colList = useMemo(() => LAYOUT.map((k) => cols[k]), [cols]);
   // Persisted order is best-net desc; open on the same so the table doesn't silently
   // reorder itself relative to the summary strip above it.
-  const { sorted, sortKey, desc, toggle } = useTableSort(rows, COL, 'bestNet', true);
+  const { sorted, sortKey, desc, toggle } = useTableSort(rows, cols, 'bestNet', true);
 
   if (!rows.length) return null;
 
@@ -193,7 +212,7 @@ export function SetsTable({ rows, totalLots }: { rows: SetDecisionRow[]; totalLo
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <SortableHead
-            cols={cols}
+            cols={colList}
             firstLabel="Set"
             sortKey={sortKey}
             desc={desc}
@@ -233,7 +252,7 @@ export function SetsTable({ rows, totalLots }: { rows: SetDecisionRow[]; totalLo
                     </span>
                   </div>
                 </td>
-                {cols.map((c) => (
+                {colList.map((c) => (
                   <td
                     key={c.key}
                     className={`py-1.5 pl-3 ${c.align === 'r' ? 'text-right' : ''} ${c.hideOnMobile ? 'hidden md:table-cell' : ''}`}

@@ -11,6 +11,9 @@
  * unit difference, documented on the field).
  */
 
+/** Total variable fee stack — imported, never re-declared. */
+import { VAR_FEE_PCT } from './fees';
+
 export type WantedItemCode = 'P' | 'S' | 'M';
 export type WantedCondition = 'N' | 'U';
 
@@ -38,9 +41,6 @@ export interface WantedSourceLot {
 
 const ceilP = (n: number) => Math.ceil(n * 100) / 100;
 const floorP = (n: number) => Math.floor(n * 100) / 100;
-
-/** Total variable fee stack — imported rather than re-declared. */
-import { VAR_FEE_PCT } from './fees';
 
 function escXml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

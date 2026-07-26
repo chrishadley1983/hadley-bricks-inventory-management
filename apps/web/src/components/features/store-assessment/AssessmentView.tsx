@@ -348,7 +348,7 @@ function GateLadder({ gates }: { gates: StrGateColumn[] }) {
  * The per-set columns mirror the Set Lookup verdict: what the complete set sells for on
  * each channel, what parting it out is worth, and which of those wins.
  */
-function SetsPanel({ sets }: { sets: SetsSection }) {
+function SetsPanel({ sets, inboundPerUnit }: { sets: SetsSection; inboundPerUnit: number }) {
   const methods = [
     { key: 'flipAmazon', label: 'Flip on Amazon', row: sets.methods.flipAmazon },
     { key: 'sellBl', label: 'Sell complete on BL', row: sets.methods.sellBl },
@@ -404,7 +404,9 @@ function SetsPanel({ sets }: { sets: SetsSection }) {
         </div>
       )}
 
-      {sets.decided.length > 0 && <SetsTable rows={sets.decided} totalLots={sets.lots} />}
+      {sets.decided.length > 0 && (
+        <SetsTable rows={sets.decided} totalLots={sets.lots} inboundPerUnit={inboundPerUnit} />
+      )}
     </div>
   );
 }
@@ -639,7 +641,7 @@ export function AssessmentDetail({
               scored apart from the parts grade — different capital and velocity
             </span>
           </div>
-          <SetsPanel sets={a.sets} />
+          <SetsPanel sets={a.sets} inboundPerUnit={a.inputs.inboundPerUnit} />
         </section>
       )}
 
