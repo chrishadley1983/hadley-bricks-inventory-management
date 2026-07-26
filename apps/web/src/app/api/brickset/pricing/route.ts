@@ -11,12 +11,14 @@ import type { Database } from '@hadley-bricks/database';
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server';
 import { validateAuth } from '@/lib/api/validate-auth';
 import { getEbayBrowseClient } from '@/lib/ebay';
+import { isValidLegoListing } from '@/lib/arbitrage/ebay-listing-validator';
 import type { EbayItemSummary } from '@/lib/ebay';
 import { BrickLinkClient, BrickLinkApiError, RateLimitError } from '@/lib/bricklink';
 import type { BrickLinkCredentials } from '@/lib/bricklink';
 import { ensurePriceGuide } from '@/lib/bricklink/price-guide/capture';
 import type { MonthlySold } from '@/lib/bricklink/price-guide/read';
 import { createAmazonCatalogClient, createAmazonPricingClient } from '@/lib/amazon';
+import { pickBestAsin, type AsinCandidate } from '@/lib/amazon/asin-resolution';
 import type { AmazonCredentials } from '@/lib/amazon';
 import { CredentialsRepository } from '@/lib/repositories';
 import { BricksetCacheService } from '@/lib/brickset';
@@ -231,7 +233,7 @@ export async function GET(request: NextRequest) {
         // BrickLink pricing (Used)
         fetchBricklinkPricing(credentialsRepo, supabase, userId, setNumber, 'U'),
         // Amazon pricing (requires EAN/UPC to find ASIN)
-        fetchAmazonPricing(credentialsRepo, userId, ean || upc || null),
+        fetchAmazonPricing(credentialsRepo, supabase, userId, setNumber, ean, upc),
       ]);
 
     if (ebayResult.status === 'fulfilled') {
@@ -287,6 +289,13 @@ async function fetchEbayPricing(
 ): Promise<PricingStats | null> {
   console.log(`[fetchEbayPricing] Fetching ${condition} condition for set ${setNumber}`);
 
+  const empty: PricingStats = {
+    minPrice: null,
+    avgPrice: null,
+    maxPrice: null,
+    listingCount: 0,
+  };
+
   try {
     const ebayClient = getEbayBrowseClient();
     const results =
@@ -294,45 +303,46 @@ async function fetchEbayPricing(
         ? await ebayClient.searchLegoSetUsed(setNumber, 50)
         : await ebayClient.searchLegoSet(setNumber, 50);
 
-    console.log(
-      `[fetchEbayPricing] ${condition} - Got ${results.itemSummaries?.length ?? 0} results, total: ${results.total}`
-    );
+    if (!results.itemSummaries || results.itemSummaries.length === 0) return empty;
 
-    if (!results.itemSummaries || results.itemSummaries.length === 0) {
-      return {
-        minPrice: null,
-        avgPrice: null,
-        maxPrice: null,
-        listingCount: 0,
-      };
+    // Category 19006 is NOT sufficient on its own — sellers miscategorise, which is why
+    // a weekly audit job exists for our own listings. Title-filter what comes back.
+    const kept: EbayItemSummary[] = [];
+    const rejected: string[] = [];
+    for (const item of results.itemSummaries) {
+      // requireSetNumber: a price average needs precision over recall — see the option's note.
+      if (isValidLegoListing(item.title ?? '', setNumber, { requireSetNumber: true })) kept.push(item);
+      else rejected.push(item.title ?? '(untitled)');
     }
 
-    // Calculate min, avg, max from listings
-    const prices = results.itemSummaries
+    const prices = kept
       .map((item: EbayItemSummary) => {
         const price = parseFloat(item.price?.value || '0');
         const shipping = parseFloat(item.shippingOptions?.[0]?.shippingCost?.value || '0');
         return price + shipping;
       })
-      .filter((p: number) => p > 0);
+      .filter((p: number) => p > 0)
+      .sort((a, b) => a - b);
 
-    if (prices.length === 0) {
-      return {
-        minPrice: null,
-        avgPrice: null,
-        maxPrice: null,
-        listingCount: 0,
-      };
-    }
+    console.log(
+      `[fetchEbayPricing] ${condition} ${setNumber}: ${results.itemSummaries.length} returned, ` +
+        `${rejected.length} rejected by title, ${prices.length} priced` +
+        (rejected.length ? ` — e.g. "${rejected.slice(0, 3).join('" | "')}"` : '')
+    );
 
-    const minPrice = Math.min(...prices);
-    const maxPrice = Math.max(...prices);
-    const avgPrice = prices.reduce((a: number, b: number) => a + b, 0) / prices.length;
+    if (prices.length === 0) return empty;
+
+    // MEDIAN, not mean. Even after filtering, one survivor priced as a part or a
+    // mispriced listing drags a mean a long way; the median of the kept set is what a
+    // typical listing actually asks.
+    const mid = Math.floor(prices.length / 2);
+    const median =
+      prices.length % 2 === 0 ? (prices[mid - 1] + prices[mid]) / 2 : prices[mid];
 
     return {
-      minPrice,
-      avgPrice: Math.round(avgPrice * 100) / 100,
-      maxPrice,
+      minPrice: prices[0],
+      avgPrice: Math.round(median * 100) / 100,
+      maxPrice: prices[prices.length - 1],
       listingCount: prices.length,
     };
   } catch (error) {
@@ -455,58 +465,91 @@ function blClientMessage(error: unknown): string {
  */
 async function fetchAmazonPricing(
   credentialsRepo: CredentialsRepository,
+  supabase: SupabaseClient<Database>,
   userId: string,
-  identifier: string | null
+  setNumber: string,
+  ean: string | null | undefined,
+  upc: string | null | undefined
 ): Promise<PricingData['amazon']> {
-  if (!identifier) {
-    return null;
-  }
+  const empty = (asin: string | null = null): PricingData['amazon'] => ({
+    buyBoxPrice: null,
+    lowestPrice: null,
+    wasPrice: null,
+    offerCount: 0,
+    asin,
+    offers: [],
+  });
 
   try {
-    // Get Amazon credentials
     const credentials = await credentialsRepo.getCredentials<AmazonCredentials>(userId, 'amazon');
+    if (!credentials) return null;
 
-    if (!credentials) {
-      return null;
+    const candidates: AsinCandidate[] = [];
+
+    // 1. Curated seed. Keyed by brickset_sets.id, not the set number.
+    const { data: bricksetRow } = await supabase
+      .from('brickset_sets')
+      .select('id')
+      .eq('set_number', setNumber)
+      .maybeSingle();
+
+    if (bricksetRow?.id) {
+      const { data: seeded } = await supabase
+        .from('seeded_asins')
+        .select('asin, amazon_title')
+        .eq('brickset_set_id', bricksetRow.id)
+        .maybeSingle();
+      if (seeded?.asin) {
+        candidates.push({
+          asin: seeded.asin as string,
+          title: (seeded.amazon_title as string | null) ?? null,
+          source: 'seeded',
+        });
+      }
     }
 
-    // First, find the ASIN using the catalog API
+    // 2. Catalogue search by EAN then UPC. Both are tried because they surface
+    //    DIFFERENT ASINs for the same set.
     const catalogClient = createAmazonCatalogClient(credentials);
-    const identifierType = identifier.length === 13 ? 'EAN' : 'UPC';
-    const catalogResult = await catalogClient.searchCatalogByIdentifier(identifier, identifierType);
-
-    if (!catalogResult.items || catalogResult.items.length === 0) {
-      return {
-        buyBoxPrice: null,
-        lowestPrice: null,
-        wasPrice: null,
-        offerCount: 0,
-        asin: null,
-        offers: [],
-      };
+    for (const identifier of [ean, upc].filter((v): v is string => !!v)) {
+      try {
+        const result = await catalogClient.searchCatalogByIdentifier(
+          identifier,
+          identifier.length === 13 ? 'EAN' : 'UPC'
+        );
+        for (const item of result.items ?? []) {
+          if (item.asin && !candidates.some((c) => c.asin === item.asin)) {
+            candidates.push({ asin: item.asin, title: item.title ?? null, source: 'catalog' });
+          }
+        }
+      } catch (error) {
+        console.error(`[fetchAmazonPricing] Catalogue lookup failed for ${identifier}:`, error);
+      }
     }
 
-    const asin = catalogResult.items[0].asin;
+    const choice = pickBestAsin(candidates, setNumber);
+    console.log(
+      `[fetchAmazonPricing] ${setNumber}: ${candidates.length} candidate(s) -> ${choice.asin ?? 'none'} (${choice.reason})`
+    );
+    if (!choice.asin) return empty();
 
-    // Now get competitive pricing
+    // 3. Buy Box via the SAME call the buy-box cron uses. getCompetitiveSummary's
+    //    `competitivePrice` comes back null even when a Buy Box demonstrably exists;
+    //    getCompetitivePricing resolves it from CompetitivePriceId === '1'.
     const pricingClient = createAmazonPricingClient(credentials);
-    const pricingData = await pricingClient.getCompetitiveSummary([asin]);
+    const [competitive, summary] = await Promise.all([
+      pricingClient.getCompetitivePricing([choice.asin]).catch((e) => {
+        console.error('[fetchAmazonPricing] getCompetitivePricing failed:', e);
+        return [];
+      }),
+      pricingClient.getCompetitiveSummary([choice.asin]).catch((e) => {
+        console.error('[fetchAmazonPricing] getCompetitiveSummary failed:', e);
+        return [];
+      }),
+    ]);
 
-    if (!pricingData || pricingData.length === 0) {
-      return {
-        buyBoxPrice: null,
-        lowestPrice: null,
-        wasPrice: null,
-        offerCount: 0,
-        asin,
-        offers: [],
-      };
-    }
-
-    const pricing = pricingData[0];
-
-    // Transform offers to our interface
-    const offers: AmazonOffer[] = pricing.offers.map((offer) => ({
+    const pricing = summary[0];
+    const offers: AmazonOffer[] = (pricing?.offers ?? []).map((offer) => ({
       sellerId: offer.sellerId,
       condition: offer.condition,
       subCondition: offer.subCondition,
@@ -519,11 +562,11 @@ async function fetchAmazonPricing(
     }));
 
     return {
-      buyBoxPrice: pricing.competitivePrice || null,
-      lowestPrice: pricing.lowestOffer?.totalPrice || null,
-      wasPrice: pricing.wasPrice || null,
-      offerCount: pricing.totalOfferCount || 0,
-      asin,
+      buyBoxPrice: competitive[0]?.buyBoxPrice ?? null,
+      lowestPrice: pricing?.lowestOffer?.totalPrice ?? null,
+      wasPrice: pricing?.wasPrice ?? null,
+      offerCount: pricing?.totalOfferCount ?? 0,
+      asin: choice.asin,
       offers,
     };
   } catch (error) {

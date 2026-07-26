@@ -170,8 +170,13 @@ export class EbayBrowseClient {
 
   /**
    * Search for LEGO sets with default filters for arbitrage tracking.
-   * Searches category 19006 (LEGO Complete Sets & Packs), New condition,
-   * Buy It Now only, UK sellers, sorted by price ascending.
+   * Category 19006 (LEGO Complete Sets & Packs), New, Buy It Now, UK sellers.
+   *
+   * NO price sort. Sorting by price ascending and taking `limit` results returns the
+   * CHEAPEST n matches, which for a pricing average is the worst possible sample —
+   * 71741 came back with a £3.99 minimum and a £107 "average" on a set whose market is
+   * £250-400. eBay's default Best Match ranking is what we want; callers that need the
+   * cheapest can sort client-side.
    */
   async searchLegoSet(setNumber: string, limit: number = 50): Promise<EbaySearchResponse> {
     // Strip -1 suffix if present (e.g., 40585-1 -> 40585)
@@ -180,15 +185,14 @@ export class EbayBrowseClient {
     return this.searchItems(`LEGO ${cleanSetNumber}`, {
       categoryId: '19006',
       filter: 'conditions:{NEW},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB',
-      sort: 'price',
       limit,
     });
   }
 
   /**
    * Search for USED LEGO sets.
-   * Searches category 19006 (LEGO Complete Sets & Packs), Used condition,
-   * Buy It Now only, UK sellers, sorted by price ascending.
+   * Category 19006 (LEGO Complete Sets & Packs), Used, Buy It Now, UK sellers.
+   * No price sort — see searchLegoSet.
    */
   async searchLegoSetUsed(setNumber: string, limit: number = 50): Promise<EbaySearchResponse> {
     // Strip -1 suffix if present (e.g., 40585-1 -> 40585)
@@ -199,7 +203,6 @@ export class EbayBrowseClient {
     return this.searchItems(`LEGO ${cleanSetNumber}`, {
       categoryId: '19006',
       filter: 'conditions:{USED},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB',
-      sort: 'price',
       limit,
     });
   }

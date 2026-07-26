@@ -282,7 +282,9 @@ describe('EbayBrowseClient', () => {
       expect(apiCall[0]).toContain('conditions%3A%7BNEW%7D');
       expect(apiCall[0]).toContain('buyingOptions%3A%7BFIXED_PRICE%7D');
       expect(apiCall[0]).toContain('itemLocationCountry%3AGB');
-      expect(apiCall[0]).toContain('sort=price');
+      // Deliberately NO price sort: sorting ascending and taking `limit` returns the
+      // CHEAPEST n, which is the worst possible sample for a price average.
+      expect(apiCall[0]).not.toContain('sort=price');
     });
 
     it('should strip variant suffix from set number', async () => {
