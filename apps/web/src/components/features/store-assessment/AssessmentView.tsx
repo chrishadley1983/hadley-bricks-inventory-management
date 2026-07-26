@@ -28,6 +28,18 @@ import {
   fmtPct,
 } from './primitives';
 
+/** Provenance for the stored wanted list — see the wanted_list_meta column comment. */
+export interface WantedListMeta {
+  min_str?: number;
+  exclude_dups?: boolean;
+  magnets_only?: boolean;
+  entries?: number;
+  lots?: number;
+  outlay?: number;
+  net?: number;
+  skipped?: string[];
+}
+
 export interface RunHistoryEntry {
   scannedAt: string;
   mode: string;
@@ -183,6 +195,62 @@ function MoneyLadder({ a }: { a: StoreAssessment }) {
           Liquid <Fig className="text-foreground">{fmtGbp(d.liquidNet, 0)}</Fig>
         </span>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Download link for the run's BrickLink wanted list.
+ *
+ * The figures come from `wanted_list_meta`, so the link states what is IN the file before
+ * you open it — a download whose filter you can't see is a cart you can't trust. It also
+ * says the list spans the whole store, because everything else in this section is a
+ * top-N sample and the two are easily confused.
+ *
+ * Runs predating the export show the CLI command instead of a dead link.
+ */
+function WantedListLink({ slug, meta }: { slug: string; meta: WantedListMeta | null }) {
+  if (!meta?.entries) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        No wanted list on this run — it predates the export, or nothing cleared the filter. Re-run:{' '}
+        <Fig>npx tsx scripts/store-assessment.ts --store-slug={slug}</Fig>
+      </p>
+    );
+  }
+  const filters = [
+    meta.min_str != null ? `STR ≥ ${meta.min_str}` : null,
+    meta.exclude_dups ? 'no DUPs' : null,
+    meta.magnets_only ? 'magnets only' : null,
+  ].filter(Boolean);
+  return (
+    <div
+      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-l-2 py-1 pl-3 text-sm"
+      style={{ borderColor: SA.info }}
+    >
+      <a
+        href={`/api/arbitrage/store-assessment/${encodeURIComponent(slug)}/wanted-list`}
+        className="font-medium underline decoration-border underline-offset-4 hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        ↓ Wanted list XML
+      </a>
+      <span className="text-xs text-muted-foreground">
+        {meta.entries.toLocaleString()} entries from {(meta.lots ?? 0).toLocaleString()} lots
+        {filters.length > 0 && ` · ${filters.join(' · ')}`}
+        {meta.outlay != null && meta.net != null && (
+          <>
+            {' · '}
+            {fmtGbp(meta.outlay, 0)} <span className="text-foreground/30">→</span>{' '}
+            {fmtGbp(meta.net, 0)} net
+          </>
+        )}
+        {' · whole store, not just the rows below'}
+      </span>
+      {meta.skipped && meta.skipped.length > 0 && (
+        <span className="text-xs" style={{ color: SA.warnText }}>
+          {meta.skipped.length} id(s) skipped as un-uploadable
+        </span>
+      )}
     </div>
   );
 }
@@ -344,9 +412,13 @@ function SetsPanel({ sets }: { sets: SetsSection }) {
 export function AssessmentDetail({
   a,
   history = [],
+  slug,
+  wantedList,
 }: {
   a: StoreAssessment;
   history?: RunHistoryEntry[];
+  slug?: string;
+  wantedList?: WantedListMeta | null;
 }) {
   const verdictColour =
     a.verdict.label === 'BUY'
@@ -481,6 +553,13 @@ export function AssessmentDetail({
             {a.inputs.inboundPerUnit === 0 ? ' (ex-postage)' : ''}/unit
           </span>
         </div>
+        {/*
+          The wanted list covers the WHOLE store, not the 12 rows below it — it was
+          generated at scan time from the full scored set, which is why it is a stored
+          file rather than something this page assembles. Saying so is the point: the
+          table is a sample, the download is not.
+        */}
+        {slug && <WantedListLink slug={slug} meta={wantedList ?? null} />}
         <LotTable rows={a.withinMargin.top} kind="margin" totalLots={a.withinMargin.lots} />
         {a.withinMargin.lots > a.withinMargin.top.length && (
           <p className="text-xs text-muted-foreground">

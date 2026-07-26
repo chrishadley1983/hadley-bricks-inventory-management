@@ -18,6 +18,7 @@
  *     [--min-margin=0.20] [--min-str=0.5] [--magnet-max-supply=3] [--inbound-per-unit=0]
  *     [--cache-ttl-days=90] [--gapfill-budget=120] [--force-rescrape] [--no-persist]
  *     [--allow-non-uk] [--cdp-port=9225] [--user-id=<uuid>]
+ *     [--wanted-min-str=0.5] [--wanted-keep-dups] [--wanted-magnets-only]
  */
 import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
@@ -27,7 +28,8 @@ import { BrickLinkClient } from '../src/lib/bricklink/client';
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
 import { computeStoreAssessmentWithLots, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
-import type { StoreLot, AssessMode } from '../src/lib/bl-store-assessment/types';
+import type { StoreLot, AssessMode, ScoredLot } from '../src/lib/bl-store-assessment/types';
+import { generateWantedXml } from '../src/lib/bricklink/wanted-list';
 import { buildDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
 
@@ -70,6 +72,75 @@ const inputs = {
   inboundPerUnit: parseFloat(argv['inbound-per-unit'] ?? '0'),
   cacheTtlDays: parseInt(argv['cache-ttl-days'] ?? '90', 10),
 };
+
+/**
+ * Wanted-list export filter.
+ *
+ * Default STR ≥ 0.5 (Chris, 2026-07-26). A buyable lot with no sell-through is money that
+ * sits on the shelf — it clears the margin gate and then never converts, which is the
+ * whole reason the headline moved to the liquid figure. 0.5 is the same `minStr` the
+ * fast-movers section uses, so "worth buying" and "worth wanting" agree.
+ *
+ * NOT the same as the liquid gate (0.25): that one exists to keep a HEADLINE honest, this
+ * one decides what to actually put in a cart, and Chris set it higher on purpose.
+ */
+const WANTED_MIN_STR = parseFloat(argv['wanted-min-str'] ?? String(inputs.minStr));
+/** DUPs are lots we already hold at depth — buying more is capital in the wrong place. */
+const WANTED_EXCLUDE_DUPS = argv['wanted-keep-dups'] !== 'true';
+const WANTED_MAGNETS_ONLY = argv['wanted-magnets-only'] === 'true';
+
+/**
+ * Build the wanted list from the FULL scored set.
+ *
+ * Filters, in the order they narrow: buyable (the margin gate) → STR floor → no DUPs →
+ * optionally magnets only. Sets are excluded — an S lot is a separate buying decision
+ * (flip / sell complete / part out) and belongs in a cart only after that decision, never
+ * swept in with parts.
+ */
+function buildStoreWantedList(scored: ScoredLot[]) {
+  const selected = scored.filter(
+    (s) =>
+      s.itemType !== 'S' &&
+      s.withinMargin &&
+      (s.strQty ?? 0) >= WANTED_MIN_STR &&
+      (!WANTED_EXCLUDE_DUPS || s.overlap !== 'DUPLICATE') &&
+      (!WANTED_MAGNETS_ONLY || s.magnet)
+  );
+  const result = generateWantedXml(
+    selected.map((s) => ({
+      itemType: s.itemType,
+      itemNo: s.itemNo,
+      colourId: s.colourId,
+      condition: s.condition,
+      invQty: s.invQty,
+      unitPriceGBP: s.ask,
+      listPrice: s.ourList,
+      lotProfit: s.lotProfit,
+      sellThru: s.strQty ?? 0,
+      // The engine stores margin as a FRACTION; the wanted-list REMARKS convention is a
+      // percentage. Converting here rather than in the builder keeps bl-basket unchanged.
+      marginPct: s.marginPct == null ? null : s.marginPct * 100,
+      ukSoldAvg: s.benchmarkAvg,
+      // Months of market supply, the same 36-month cap the gate ladder applies.
+      mos: s.strQty && s.strQty > 0 ? Math.min(36, 6 / s.strQty) : null,
+    }))
+  );
+  return {
+    result,
+    meta: {
+      min_str: WANTED_MIN_STR,
+      exclude_dups: WANTED_EXCLUDE_DUPS,
+      magnets_only: WANTED_MAGNETS_ONLY,
+      entries: result.entries,
+      lots: selected.length,
+      outlay: selected.reduce((n, s) => n + s.lotAskValue, 0),
+      net: selected.reduce((n, s) => n + (s.lotProfit ?? 0), 0),
+      merged_tuples: result.mergedTuples,
+      collapsed_rows: result.collapsedRows,
+      skipped: result.skipped,
+    },
+  };
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -229,6 +300,26 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
   const decisionFile = path.join(OUT_DIR, `store-report-${new Date().toISOString().slice(0, 10)}.md`);
   fs.writeFileSync(decisionFile, renderDecisionMd(decision));
 
+  // ---- Wanted list -------------------------------------------------------
+  // Generated HERE, from `scoredLots`, because this is the last point at which the full
+  // scored set exists: `assessment` keeps only a top-N slice per section, so a list built
+  // downstream would be a partial cart that looks complete. Written to disk and persisted
+  // so the web page can offer it as a download without ever building one of its own.
+  const wanted = buildStoreWantedList(scoredLots);
+  const wantedFile = path.join(OUT_DIR, `wanted-list-${new Date().toISOString().slice(0, 10)}.xml`);
+  fs.writeFileSync(wantedFile, wanted.result.xml);
+  log(
+    `[wanted] ${wanted.result.entries} entries from ${wanted.meta.lots} lots ` +
+      `(STR >= ${WANTED_MIN_STR}${WANTED_EXCLUDE_DUPS ? ', DUPs excluded' : ''}) — ` +
+      `outlay ${wanted.meta.outlay.toFixed(2)}, net ${wanted.meta.net.toFixed(2)} -> ${wantedFile}`
+  );
+  if (wanted.result.mergedTuples > 0) {
+    log(`  deduped ${wanted.result.mergedTuples} tuple(s), collapsed ${wanted.result.collapsedRows} row(s)`);
+  }
+  if (wanted.result.skipped.length > 0) {
+    log(`  skipped ${wanted.result.skipped.length} un-uploadable id(s): ${wanted.result.skipped.join(', ')}`);
+  }
+
   if (!NO_PERSIST && userId) {
     const freshTags = assessment.overlap.buyableTags.filter((t) => t.tag === 'NEW' || t.tag === 'RESTOCK_OUT');
     const v = assessment.verdict;
@@ -262,6 +353,8 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
       price_coverage: assessment.confidence.ukValueShare,
       assessment,
       report_md: report,
+      wanted_list_xml: wanted.result.xml,
+      wanted_list_meta: wanted.meta,
     });
     if (error) console.error(`[persist] failed: ${error.message}`);
     else log(`[persist] saved to store_assessments`);

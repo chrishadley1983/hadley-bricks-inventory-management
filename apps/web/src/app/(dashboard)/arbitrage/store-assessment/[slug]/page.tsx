@@ -2,13 +2,22 @@ import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import { createClient } from '@/lib/supabase/server';
-import { AssessmentDetail, type RunHistoryEntry } from '@/components/features/store-assessment/AssessmentView';
+import {
+  AssessmentDetail,
+  type RunHistoryEntry,
+  type WantedListMeta,
+} from '@/components/features/store-assessment/AssessmentView';
 import { normalizeAssessment } from '@/lib/bl-store-assessment/normalize';
 import { saFonts } from '@/components/features/store-assessment/fonts';
 
 export const dynamic = 'force-dynamic';
 
-interface AssessmentRow { assessment: unknown; scanned_at: string; mode: string }
+interface AssessmentRow {
+  assessment: unknown;
+  scanned_at: string;
+  mode: string;
+  wanted_list_meta: WantedListMeta | null;
+}
 
 export default async function StoreAssessmentDetailPage({
   params,
@@ -25,7 +34,7 @@ export default async function StoreAssessmentDetailPage({
 
   let query = supabase
     .from('store_assessments')
-    .select('assessment,scanned_at,mode')
+    .select('assessment,scanned_at,mode,wanted_list_meta')
     .eq('store_slug', slug)
     .order('scanned_at', { ascending: false })
     .limit(1);
@@ -81,7 +90,12 @@ export default async function StoreAssessmentDetailPage({
           </Link>
         )}
       </div>
-      <AssessmentDetail a={assessment} history={history} />
+      <AssessmentDetail
+        a={assessment}
+        history={history}
+        slug={slug}
+        wantedList={data.wanted_list_meta}
+      />
     </div>
   );
 }

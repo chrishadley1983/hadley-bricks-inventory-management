@@ -11813,45 +11813,6 @@ export type Database = {
         }
         Relationships: []
       }
-      price_snapshots_keepa_backup_20260702: {
-        Row: {
-          buy_box_winner: string | null
-          created_at: string | null
-          date: string | null
-          id: string | null
-          price_gbp: number | null
-          raw_data: Json | null
-          sales_rank: number | null
-          seller_count: number | null
-          set_num: string | null
-          source: string | null
-        }
-        Insert: {
-          buy_box_winner?: string | null
-          created_at?: string | null
-          date?: string | null
-          id?: string | null
-          price_gbp?: number | null
-          raw_data?: Json | null
-          sales_rank?: number | null
-          seller_count?: number | null
-          set_num?: string | null
-          source?: string | null
-        }
-        Update: {
-          buy_box_winner?: string | null
-          created_at?: string | null
-          date?: string | null
-          id?: string | null
-          price_gbp?: number | null
-          raw_data?: Json | null
-          sales_rank?: number | null
-          seller_count?: number | null
-          set_num?: string | null
-          source?: string | null
-        }
-        Relationships: []
-      }
       processed_purchase_emails: {
         Row: {
           cost: number | null
@@ -14281,6 +14242,8 @@ export type Database = {
           total_value: number | null
           user_id: string
           verdict: string | null
+          wanted_list_meta: Json | null
+          wanted_list_xml: string | null
         }
         Insert: {
           assessment?: Json | null
@@ -14314,6 +14277,8 @@ export type Database = {
           total_value?: number | null
           user_id: string
           verdict?: string | null
+          wanted_list_meta?: Json | null
+          wanted_list_xml?: string | null
         }
         Update: {
           assessment?: Json | null
@@ -14347,6 +14312,8 @@ export type Database = {
           total_value?: number | null
           user_id?: string
           verdict?: string | null
+          wanted_list_meta?: Json | null
+          wanted_list_xml?: string | null
         }
         Relationships: [
           {
