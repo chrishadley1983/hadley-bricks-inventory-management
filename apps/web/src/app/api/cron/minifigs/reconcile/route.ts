@@ -38,14 +38,17 @@ async function handler(request: NextRequest) {
       {
         checked: result.checked,
         liveOnEbay: result.liveOnEbay,
+        shopifyChecked: result.shopifyChecked,
         doubleSellRisks: result.doubleSellRisks.length,
+        unbackedOnShopify: result.unbackedOnShopify.length,
         staleListed: result.staleListed.length,
         errors: result.errors.length,
         doubleSellRiskItems: result.doubleSellRisks.map((f) => f.bricklinkId ?? f.syncId),
+        unbackedOnShopifyItems: result.unbackedOnShopify.map((f) => f.bricklinkId ?? f.syncId),
       },
       200,
-      result.checked,
-      result.doubleSellRisks.length + result.errors.length
+      result.checked + result.shopifyChecked,
+      result.doubleSellRisks.length + result.unbackedOnShopify.length + result.errors.length
     );
 
     return NextResponse.json({ data: result });
