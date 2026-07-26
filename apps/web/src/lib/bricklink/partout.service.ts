@@ -96,6 +96,73 @@ export class PartoutService {
   ) {}
 
   /**
+   * What would a full part-out run COST, without running it?
+   *
+   * The single-screen layout removed the tab that used to gate this, so the run has to be
+   * explicit — and to be explicit it has to be quantified. This does steps 1-3 of
+   * getPartoutValue (colour map, subsets, cache read) and stops before fetching anything
+   * uncached.
+   *
+   * Cost: ONE BrickLink call (getSubsets). Each uncached lot then costs FOUR — the
+   * quadrants are fetched in parallel per part (sold/stock x new/used), and the standard
+   * pattern requires all four so the shared cache gets a complete row.
+   */
+  async estimatePartoutCost(rawSetNumber: string): Promise<{
+    setNumber: string;
+    totalLots: number;
+    cachedLots: number;
+    uncachedLots: number;
+    /** BrickLink calls a full run would make from here. */
+    estimatedApiCalls: number;
+  }> {
+    const setNumber = normaliseSetNumber(rawSetNumber);
+
+    const [colourMap, subsets] = await Promise.all([
+      loadColourMap(this.supabase),
+      this.brickLinkClient.getSubsets('SET', setNumber, {
+        breakMinifigs: false,
+        breakSets: false,
+      }),
+    ]);
+
+    const parts = this.flattenSubsets(subsets, colourMap);
+    if (parts.length === 0) {
+      return {
+        setNumber,
+        totalLots: 0,
+        cachedLots: 0,
+        uncachedLots: 0,
+        estimatedApiCalls: 0,
+      };
+    }
+
+    const refs: ItemRef[] = parts.map((p) => ({
+      itemType: toPgType(p.partType),
+      itemNo: p.partNumber,
+      colourId: p.colourId,
+      scheme: 'bl' as const,
+    }));
+    const views = await readPriceGuide(this.supabase, refs, {
+      ttlDays: POV_TTL_DAYS,
+      allowWorldFallback: false,
+    });
+
+    const keyOf = (p: PartIdentifier) =>
+      pgKey(toPgType(p.partType), p.partNumber, toPgType(p.partType) === 'P' ? p.colourId : 0);
+    const cachedLots = parts.filter((p) => views.get(keyOf(p))?.coverage === 'uk').length;
+    const uncachedLots = parts.length - cachedLots;
+
+    return {
+      setNumber,
+      totalLots: parts.length,
+      cachedLots,
+      uncachedLots,
+      // 4 quadrants per uncached lot, plus one more getSubsets and the set-price lookup.
+      estimatedApiCalls: uncachedLots * 4 + (uncachedLots > 0 ? 5 : 1),
+    };
+  }
+
+  /**
    * Get the complete partout value analysis for a set
    * @param setNumber Set number (e.g., "75192-1")
    * @param options Options for the partout calculation

@@ -11,7 +11,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   SetLookupForm,
   SetDetailsCard,
@@ -152,7 +151,6 @@ export default function SetLookupPage() {
   const [bricklinkModalCondition, setBricklinkModalCondition] = useState<'new' | 'used' | null>(
     null
   );
-  const [activeTab, setActiveTab] = useState<string>('details');
 
   // Check if Brickset is configured
   const { data: bricksetStatus, isLoading: statusLoading } = useQuery({
@@ -270,49 +268,38 @@ export default function SetLookupPage() {
           </Alert>
         )}
 
-        {/* Results with Tabs */}
+        {/* Results — one screen, no tabs */}
         {lookupMutation.isSuccess && lookupMutation.data && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span>
                 Source: {lookupMutation.data.source === 'api' ? 'Brickset API' : 'Local Cache'}
               </span>
             </div>
 
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="partout" data-testid="partout-tab">
-                  Partout
-                </TabsTrigger>
-              </TabsList>
+            <SetDetailsCard
+              set={lookupMutation.data.data}
+              pricing={pricingData}
+              pricingLoading={pricingLoading}
+              onEbayClick={() => setEbayModalOpen(true)}
+              onEbayUsedClick={() => setEbayUsedModalOpen(true)}
+              onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
+              onBricklinkClick={(condition) => setBricklinkModalCondition(condition)}
+            />
 
-              <TabsContent value="details" className="mt-4 space-y-4">
-                <SetDetailsCard
-                  set={lookupMutation.data.data}
-                  pricing={pricingData}
-                  pricingLoading={pricingLoading}
-                  onEbayClick={() => setEbayModalOpen(true)}
-                  onEbayUsedClick={() => setEbayUsedModalOpen(true)}
-                  onAmazonOffersClick={() => setAmazonOffersModalOpen(true)}
-                  onBricklinkClick={(condition) => setBricklinkModalCondition(condition)}
-                />
-                {/* Inventory Stock Card */}
-                <SetStockCard
-                  stock={stockData ?? null}
-                  loading={stockLoading}
-                  onCurrentStockClick={() => handleOpenStockModal('current')}
-                  onSoldStockClick={() => handleOpenStockModal('sold')}
-                />
-              </TabsContent>
+            <SetStockCard
+              stock={stockData ?? null}
+              loading={stockLoading}
+              onCurrentStockClick={() => handleOpenStockModal('current')}
+              onSoldStockClick={() => handleOpenStockModal('sold')}
+            />
 
-              <TabsContent value="partout" className="mt-4">
-                <PartoutTab
-                  setNumber={currentSet?.setNumber ?? null}
-                  enabled={activeTab === 'partout'}
-                />
-              </TabsContent>
-            </Tabs>
+            {/*
+              Part-out sits under the market prices rather than behind a tab. The verdict
+              is a comparison against selling whole, so hiding the complete-sale prices on
+              another tab hid half of what it is comparing.
+            */}
+            <PartoutTab setNumber={currentSet?.setNumber ?? null} enabled={true} />
           </div>
         )}
 
