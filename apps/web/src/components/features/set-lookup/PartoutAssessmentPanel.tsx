@@ -10,6 +10,7 @@ import {
   Wallet,
   Info,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +18,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { formatCurrency } from '@/lib/utils';
 import { bricklinkItemUrl } from '@/lib/bricklink/catalogue-url';
-import type { PartoutAssessment, PartoutMagnet } from '@/types/partout';
+import type { PartoutAssessment, PartoutMagnet, PartoutSetPriceBasis } from '@/types/partout';
 
 /**
  * PartoutAssessmentPanel
@@ -35,6 +36,75 @@ const pct = (v: number | null | undefined, dp = 0): string =>
   v == null ? '—' : `${(v * 100).toFixed(dp)}%`;
 
 const multiple = (v: number | null): string => (v == null ? '—' : `${v.toFixed(2)}×`);
+
+/**
+ * Which channel the sell-complete side of the gate used, and what the other one offered.
+ *
+ * Worth the line because "SELL-COMPLETE" is otherwise silent about WHERE, and because
+ * Amazon enters fee-normalised — a reader comparing the figure here against the Buy Box
+ * on the details card above needs to see why they differ.
+ */
+function SetPriceProvenance({ basis }: { basis: PartoutSetPriceBasis }) {
+  if (basis.channel == null) return null;
+
+  const winner =
+    basis.channel === 'amazon'
+      ? `Amazon Buy Box ${formatCurrency(basis.amazon!.buyBox)} → ${formatCurrency(basis.amazon!.blEquivalent)} after fees`
+      : `BrickLink ask ${formatCurrency(basis.bricklink!)}`;
+
+  // The loser is context, not clutter: it is what makes the winner a choice.
+  const alternative =
+    basis.channel === 'amazon' && basis.bricklink != null
+      ? `vs BrickLink ${formatCurrency(basis.bricklink)}`
+      : basis.channel === 'bricklink' && basis.amazon != null
+        ? `vs Amazon ${formatCurrency(basis.amazon.buyBox)} (${formatCurrency(basis.amazon.blEquivalent)} after fees)`
+        : null;
+
+  return (
+    <div className="pt-1 text-xs text-muted-foreground">
+      Compared against <strong>{winner}</strong>
+      {alternative && <span> · {alternative}</span>}
+      {basis.amazon && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Info className="ml-1 inline h-3 w-3 cursor-help" />
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs text-xs">
+              Amazon keeps ~17% against BrickLink&apos;s 9.4%, so its Buy Box is converted to
+              the BrickLink ask that leaves the same money in hand before the gate compares
+              them. Snapshot {basis.amazon.snapshotDate} · ASIN {basis.amazon.asin}.
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The caveats. Rendered above everything else because a warning that appears below the
+ * verdict is a warning that gets read after the decision.
+ */
+function WarningsCard({ assessment }: { assessment: PartoutAssessment }) {
+  if (assessment.warnings.length === 0) return null;
+  return (
+    <div className="space-y-2" data-testid="partout-warnings">
+      {assessment.warnings.map((w) => (
+        <div
+          key={w.code}
+          className="flex items-start gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" />
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-amber-900">{w.title}</div>
+            <p className="text-sm text-amber-900/80">{w.detail}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
   const { verdict, verdictReason, povMultiple, gapGbp, gate, maxBuy } = assessment;
@@ -81,17 +151,20 @@ function VerdictCard({ assessment }: { assessment: PartoutAssessment }) {
                 No sell-complete comparison available — this is the acquisition answer only.
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2 pt-1 text-xs text-muted-foreground">
-                <span>
-                  POV multiple <strong>{multiple(povMultiple)}</strong> (gate{' '}
-                  {gate.povMultipleMin.toFixed(1)}×)
-                </span>
-                <span aria-hidden>·</span>
-                <span>
-                  Gap <strong>{gapGbp == null ? '—' : formatCurrency(gapGbp)}</strong> (gate{' '}
-                  {formatCurrency(gate.minGapGbp)})
-                </span>
-              </div>
+              <>
+                <div className="flex flex-wrap gap-2 pt-1 text-xs text-muted-foreground">
+                  <span>
+                    POV multiple <strong>{multiple(povMultiple)}</strong> (gate{' '}
+                    {gate.povMultipleMin.toFixed(1)}×)
+                  </span>
+                  <span aria-hidden>·</span>
+                  <span>
+                    Gap <strong>{gapGbp == null ? '—' : formatCurrency(gapGbp)}</strong> (gate{' '}
+                    {formatCurrency(gate.minGapGbp)})
+                  </span>
+                </div>
+                <SetPriceProvenance basis={assessment.setPriceBasis} />
+              </>
             )}
           </div>
         </div>
@@ -668,6 +741,8 @@ interface PartoutAssessmentPanelProps {
 export function PartoutAssessmentPanel({ assessment }: PartoutAssessmentPanelProps) {
   return (
     <div className="space-y-4" data-testid="partout-assessment">
+      <WarningsCard assessment={assessment} />
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <VerdictCard assessment={assessment} />
         <LadderCard assessment={assessment} />

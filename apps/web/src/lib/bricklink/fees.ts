@@ -7,8 +7,11 @@
  * 2026-07-19 audit found the fee stack re-declared in four places (and hardcoded
  * as a bare 0.094 in one) and the STR gate ladder varying per report.
  *
- * The Bricqer multiplier stays in `./bricqer-pricing` (its own single source).
+ * The Bricqer multiplier stays in `./bricqer-pricing` (its own single source), and the
+ * Amazon fee share stays in `investment/max-buy` — aliased below, never re-declared.
  */
+
+import { MAX_BUY_FEE } from '@/lib/investment/max-buy';
 
 /** BrickLink platform fee. */
 export const BL_FEE = 0.03;
@@ -103,6 +106,56 @@ export const DEFAULT_MIN_MARGIN = 0.2;
  */
 export const POV_MULTIPLE_MIN = 2.0;
 export const POV_MIN_GAP_GBP = 10;
+
+/**
+ * Amazon's variable fee share. NOT re-declared here — the house constant lives in
+ * `investment/max-buy.ts` and is aliased, the same way intl-set-arb does it.
+ *
+ * It exists in this file because the sell-complete comparison now spans two channels
+ * with different fee stacks, and a gross-vs-gross comparison across them is a lie:
+ * a £19.75 Amazon Buy Box nets £16.39 while a £17.86 BrickLink ask nets £16.18 — 10.6%
+ * apart on paper, 1.3% apart in the bank.
+ */
+export const AMAZON_FEE_PCT = MAX_BUY_FEE;
+
+/**
+ * Convert an Amazon ask into the BrickLink ask that would leave the same money in hand.
+ *
+ * The part-out gate (POV_MULTIPLE_MIN, POV_MIN_GAP_GBP) was calibrated against BL asks,
+ * so Amazon has to enter the comparison on BL's terms rather than the gate being recut.
+ */
+export function amazonAskAsBlEquivalent(amazonPrice: number): number {
+  return (amazonPrice * (1 - AMAZON_FEE_PCT)) / (1 - VAR_FEE_PCT);
+}
+
+/**
+ * Part-out warning thresholds — the "yes, but" attached to a verdict.
+ *
+ * A verdict answers which route wins; it says nothing about how long that route takes.
+ * 40756 Lucky Knots (2026-07-26) is the case that prompted these: a confident PART-OUT at
+ * 2.96× the set price and a £34.32 max buy, on 29 lots whose MEDIAN sell-through is 0.083
+ * — one single lot clears the liquid gate, holding 7.5% of the value — while the complete
+ * set itself turns over at 0.52. Nothing on the screen said so.
+ *
+ * These do not move any verdict. They annotate one.
+ */
+export const PARTOUT_WARN = {
+  /**
+   * Share of gross POV that must sit in lots at LIQUID_STR_GATE or better before a
+   * part-out counts as liquid. Below this the headline multiple is mostly shelf-warmers.
+   */
+  minLiquidShareOfPov: 0.25,
+  /** Median qty-basis STR below this is a slow part-out however good the multiple looks. */
+  minMedianStr: 0.1,
+  /**
+   * Amazon BSR at or above this is a slow complete-set seller.
+   *
+   * Advisory only, and never the sole test: `amazon_arbitrage_pricing.sales_rank` was
+   * populated for 8,047 of 12,565 rows in the week to 2026-07-26, and is null for 40756's
+   * own ASIN — a BSR-only rule would be silent on exactly the sets that need it.
+   */
+  slowBsr: 150_000,
+} as const;
 
 /** Net proceeds per unit after variable fees, before postage allocation. */
 export function netAfterFees(listPrice: number, unitCost: number): number {

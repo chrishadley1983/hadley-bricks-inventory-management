@@ -24,6 +24,9 @@ import {
   POV_MIN_GAP_GBP,
   DEFAULT_MIN_MARGIN,
   DEFAULT_INBOUND_POSTAGE_GBP,
+  LIQUID_STR_GATE,
+  PARTOUT_WARN,
+  amazonAskAsBlEquivalent,
 } from './fees';
 import { liquidityAdjustedPov, captureFraction, type PovLot } from './liquidity-pov';
 import type {
@@ -34,6 +37,8 @@ import type {
   PartoutMagnet,
   PartoutConcentration,
   PartoutOverlapSummary,
+  PartoutSetPriceBasis,
+  PartoutWarning,
 } from '@/types/partout';
 import type { OverlapTag } from '@/lib/bl-store-assessment/overlap';
 
@@ -305,6 +310,149 @@ export interface AssessPartoutOptions {
   inboundPostageGbp?: number;
   /** Overlap index metadata; omit/null when no Bricqer snapshot was loaded. */
   overlapMeta?: { snapshotAt: string | null; salesWindowDays: number } | null;
+  /**
+   * Amazon's offer on the complete set. NEW lens only — a used set is a BrickLink
+   * question and Amazon's Buy Box is a new-condition price anyway.
+   */
+  amazon?: AmazonSetOffer | null;
+  /**
+   * Complete-set qty-basis STR from the same BL price-guide row the ask came from.
+   * The always-available demand signal behind SLOW-COMPLETE-SALE, since BSR is only
+   * ~64% populated.
+   */
+  setStr?: number | null;
+}
+
+/** Amazon's side of the sell-complete comparison. */
+export interface AmazonSetOffer {
+  buyBox: number;
+  asin: string;
+  snapshotDate: string;
+  /** Best-seller rank; null is common and simply means the BSR leg can't be tested. */
+  salesRank: number | null;
+}
+
+/**
+ * Pick the complete-sale channel, on a fee-equivalent basis.
+ *
+ * Exported because the same choice has to be reproducible outside the assessment (tests,
+ * and any future surface that wants to explain the number) — but it lives HERE, not in
+ * the service, because it is pure decision logic.
+ */
+export function buildSetPriceBasis(
+  bricklink: number | null,
+  amazon: AmazonSetOffer | null | undefined
+): PartoutSetPriceBasis {
+  const bl = bricklink != null && bricklink > 0 ? round(bricklink) : null;
+  const az =
+    amazon && amazon.buyBox > 0
+      ? {
+          buyBox: round(amazon.buyBox),
+          blEquivalent: round(amazonAskAsBlEquivalent(amazon.buyBox)),
+          asin: amazon.asin,
+          snapshotDate: amazon.snapshotDate,
+        }
+      : null;
+
+  if (bl == null && az == null) {
+    return { price: null, channel: null, bricklink: null, amazon: null };
+  }
+  // Ties go to BrickLink: it is the channel the gate was calibrated on, and the one whose
+  // price is a live market read rather than a daily snapshot.
+  const amazonWins = az != null && (bl == null || az.blEquivalent > bl);
+  return {
+    price: amazonWins ? az!.blEquivalent : bl,
+    channel: amazonWins ? 'amazon' : 'bricklink',
+    bricklink: bl,
+    amazon: az,
+  };
+}
+
+/** "the BrickLink ask" / "the Amazon Buy Box (fee-equivalent)" — used in verdict copy. */
+function channelLabel(basis: PartoutSetPriceBasis): string {
+  if (basis.channel === 'amazon') return 'Amazon Buy Box (fee-equivalent)';
+  if (basis.channel === 'bricklink') return 'BrickLink ask';
+  return 'set price';
+}
+
+const gbp = (v: number): string => `£${v.toFixed(2)}`;
+const pct0 = (v: number): string => `${Math.round(v * 100)}%`;
+
+/**
+ * The "yes, but" layer.
+ *
+ * Two failure modes the verdict alone cannot express:
+ *
+ *  1. A great multiple over parts nobody buys. The gate is a value comparison; it has no
+ *     opinion on time. 40756 cleared it at 2.96× on lots with a median STR of 0.083.
+ *  2. "Sell it whole" pointed at a set that does not sell whole. Being the better of two
+ *     routes is not the same as being a good one.
+ *
+ * Warnings never alter `verdict` — the routes really are ranked the way the gate says.
+ */
+function buildWarnings(input: {
+  verdict: PartoutAssessment['verdict'];
+  strSummary: PartoutAssessment['strSummary'];
+  strBands: PartoutStrBand[];
+  basis: PartoutSetPriceBasis;
+  options: AssessPartoutOptions;
+  condition: PartoutCondition;
+}): PartoutWarning[] {
+  const { verdict, strSummary, strBands, options } = input;
+  const out: PartoutWarning[] = [];
+
+  if (verdict === 'PART-OUT' || verdict === 'PART-OUT-BELOW') {
+    const liquidBand = strBands.find((b) => b.gate === LIQUID_STR_GATE);
+    const share = liquidBand?.shareOfPov ?? null;
+    const median = strSummary.median;
+
+    const thinShare = share != null && share < PARTOUT_WARN.minLiquidShareOfPov;
+    const thinMedian = median != null && median < PARTOUT_WARN.minMedianStr;
+
+    if (thinShare || thinMedian) {
+      const evidence: string[] = [];
+      if (thinShare) {
+        evidence.push(
+          `only ${pct0(share!)} of the part-out value sits in lots selling at STR ${LIQUID_STR_GATE} or better ` +
+            `(${liquidBand!.lots} of ${strSummary.lotsWithStr} priced lots, ${gbp(liquidBand!.grossValue)})`
+        );
+      }
+      if (thinMedian) {
+        evidence.push(`the median lot's sell-through is ${median!.toFixed(3)}`);
+      }
+      out.push({
+        code: 'THIN-LIQUIDITY',
+        title: 'Slow part-out',
+        detail:
+          `The multiple is real but the demand behind it is thin — ${evidence.join(', and ')}. ` +
+          `Expect this one to sit on the shelf: the value is there, the turnover is not.`,
+      });
+    }
+  }
+
+  if (verdict === 'SELL-COMPLETE') {
+    const rank = options.amazon?.salesRank ?? null;
+    const setStr = options.setStr ?? null;
+    const slowRank = rank != null && rank >= PARTOUT_WARN.slowBsr;
+    const slowStr = setStr != null && setStr < LIQUID_STR_GATE;
+
+    if (slowRank || slowStr) {
+      const evidence: string[] = [];
+      if (slowRank) evidence.push(`Amazon BSR is ${rank!.toLocaleString()}`);
+      if (slowStr) evidence.push(`the complete set's own sell-through is ${setStr!.toFixed(2)}`);
+      // Say so when the BSR leg simply had nothing to test, rather than implying it passed.
+      const bsrGap = rank == null && options.amazon != null ? ' (no BSR on record for this ASIN)' : '';
+      out.push({
+        code: 'SLOW-COMPLETE-SALE',
+        title: 'Slow complete sale',
+        detail:
+          `Selling whole beats parting out, but the whole set is a slow mover — ${evidence.join(', and ')}${bsrGap}. ` +
+          `It is the better of two routes, not a quick one.`,
+      });
+    }
+  }
+
+  return out;
 }
 
 /**
@@ -312,15 +460,17 @@ export interface AssessPartoutOptions {
  *
  * @param parts   The set's lots, already enriched with price, qty-basis STR,
  *                worldwide supply and overlap tags.
- * @param setPrice Complete-set price for this condition — the gate's ask basis.
+ * @param basis   Where the complete-set ask came from — BrickLink, or Amazon on a
+ *                fee-equivalent basis for the new lens.
  * @param condition Which condition lens to apply.
  */
 export function assessPartout(
   parts: PartValue[],
-  setPrice: number | null,
+  basis: PartoutSetPriceBasis,
   condition: PartoutCondition,
   options: AssessPartoutOptions = {}
 ): PartoutAssessment {
+  const setPrice = basis.price;
   const lens = LENSES[condition];
   const targetMargin = options.targetMargin ?? DEFAULT_MIN_MARGIN;
   const postageGbp = options.inboundPostageGbp ?? DEFAULT_INBOUND_POSTAGE_GBP;
@@ -381,12 +531,12 @@ export function assessPartout(
     // that second message in red.
     if (gatePasses) {
       verdict = 'PART-OUT';
-      verdictReason = `POV is ${povMultiple!.toFixed(2)}× the set price (gate ${POV_MULTIPLE_MIN}×) with a £${gapGbp!.toFixed(2)} gap (gate £${POV_MIN_GAP_GBP}).`;
+      verdictReason = `POV is ${povMultiple!.toFixed(2)}× the ${channelLabel(basis)} (gate ${POV_MULTIPLE_MIN}×) with a £${gapGbp!.toFixed(2)} gap (gate £${POV_MIN_GAP_GBP}).`;
     } else {
       verdict = 'SELL-COMPLETE';
       const failedMultiple = povMultiple! < POV_MULTIPLE_MIN;
       verdictReason = failedMultiple
-        ? `POV is only ${povMultiple!.toFixed(2)}× the set price — below the ${POV_MULTIPLE_MIN}× gate, so parting out isn’t worth the bench time.`
+        ? `POV is only ${povMultiple!.toFixed(2)}× the ${channelLabel(basis)} — below the ${POV_MULTIPLE_MIN}× gate, so parting out isn’t worth the bench time.`
         : `POV clears ${POV_MULTIPLE_MIN}× but the £${gapGbp!.toFixed(2)} gap is under the £${POV_MIN_GAP_GBP} labour floor.`;
     }
   } else if (viable) {
@@ -401,6 +551,10 @@ export function assessPartout(
     verdictReason = `Even at £0 the part-out doesn’t clear ${pctLabel(targetMargin)} after ${pctLabel(VAR_FEE_PCT)} fees and £${postageGbp.toFixed(2)} postage — not worth it at any purchase price.`;
   }
 
+  const strSummary = buildStrSummary(parts, lens);
+  const strBands = buildStrBands(parts, lens, gross);
+  const warnings = buildWarnings({ verdict, strSummary, strBands, basis, options, condition });
+
   const pricedLots = parts.filter((p) => {
     const price = lens.price(p);
     return price != null && Number.isFinite(price) && price > 0;
@@ -414,6 +568,8 @@ export function assessPartout(
     netPov: round(netPov),
     feePct: VAR_FEE_PCT,
     setPrice: setPrice == null ? null : round(setPrice),
+    setPriceBasis: basis,
+    warnings,
     povMultiple: povMultiple == null ? null : round(povMultiple, 2),
     gapGbp: gapGbp == null ? null : round(gapGbp),
     verdict,
@@ -425,8 +581,8 @@ export function assessPartout(
       beforePostage: beforePostage == null ? null : round(beforePostage),
       price: maxBuyPrice == null ? null : round(maxBuyPrice),
     },
-    strSummary: buildStrSummary(parts, lens),
-    strBands: buildStrBands(parts, lens, gross),
+    strSummary,
+    strBands,
     magnets: findMagnets(parts, lens),
     concentration: buildConcentration(parts, lens, gross),
     overlap: buildOverlap(parts, lens, options.overlapMeta ?? null),
@@ -442,14 +598,29 @@ export function assessPartout(
   };
 }
 
-/** Assess both conditions in one pass. */
+/**
+ * Assess both conditions in one pass.
+ *
+ * Amazon and the complete-set STR are passed as `{ new, used }` because only the new lens
+ * has an Amazon side — `options.amazon` is deliberately dropped for used rather than
+ * reused, so a used verdict can never be decided against a new-condition Buy Box.
+ */
 export function assessPartoutBoth(
   parts: PartValue[],
   setPrice: { new: number | null; used: number | null },
-  options: AssessPartoutOptions = {}
+  options: AssessPartoutOptions & { setStrByCondition?: { new: number | null; used: number | null } } = {}
 ): { new: PartoutAssessment; used: PartoutAssessment } {
+  const { amazon, setStrByCondition, ...shared } = options;
   return {
-    new: assessPartout(parts, setPrice.new, 'new', options),
-    used: assessPartout(parts, setPrice.used, 'used', options),
+    new: assessPartout(parts, buildSetPriceBasis(setPrice.new, amazon), 'new', {
+      ...shared,
+      amazon,
+      setStr: setStrByCondition?.new ?? null,
+    }),
+    used: assessPartout(parts, buildSetPriceBasis(setPrice.used, null), 'used', {
+      ...shared,
+      amazon: null,
+      setStr: setStrByCondition?.used ?? null,
+    }),
   };
 }

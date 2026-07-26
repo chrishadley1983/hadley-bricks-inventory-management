@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { assessPartout, assessPartoutBoth } from '../partout-assessment';
+import {
+  assessPartout as assessPartoutWithBasis,
+  assessPartoutBoth,
+  buildSetPriceBasis,
+} from '../partout-assessment';
 import {
   VAR_FEE_PCT,
   UK_MAGNET,
@@ -43,6 +47,20 @@ function part(overrides: Partial<PartValue> = {}): PartValue {
     fromCache: true,
     ...overrides,
   };
+}
+
+/**
+ * These tests predate the two-channel ask basis and read better with a bare price, so the
+ * BrickLink-only basis is built here. Amazon-specific behaviour is covered separately in
+ * partout-warnings.test.ts.
+ */
+function assessPartout(
+  parts: Parameters<typeof assessPartoutWithBasis>[0],
+  setPrice: number | null,
+  condition: Parameters<typeof assessPartoutWithBasis>[2],
+  options?: Parameters<typeof assessPartoutWithBasis>[3]
+) {
+  return assessPartoutWithBasis(parts, buildSetPriceBasis(setPrice, null), condition, options);
 }
 
 describe('assessPartout — honesty ladder', () => {

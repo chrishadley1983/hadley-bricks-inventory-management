@@ -37,6 +37,50 @@ export interface PartoutData {
   assessment: { new: PartoutAssessment; used: PartoutAssessment } | null;
 }
 
+/**
+ * Where the complete-set price came from, and what it would actually net.
+ *
+ * The gate used to take BrickLink's UK ask and nothing else, which quietly made
+ * "SELL-COMPLETE" mean "sell it whole ON BRICKLINK" — the channel we are least likely to
+ * use for a new set. Amazon now competes for the NEW lens only (Chris, 2026-07-26: "add
+ * amazon buy box as part of sell complete... new only - dont bother with used"); a used
+ * set is a BrickLink question.
+ *
+ * Amazon enters on a FEE-EQUIVALENT basis, not its raw Buy Box. Amazon keeps ~17% against
+ * BrickLink's 9.4%, so comparing the two asks head-on would hand Amazon a ~8% phantom
+ * edge and tip sets into SELL-COMPLETE that do not deserve it.
+ */
+export interface PartoutSetPriceBasis {
+  /** The ask the gate actually used, on a BL-equivalent basis. Null when neither channel has one. */
+  price: number | null;
+  /** Which channel won. Null when there is no price at all. */
+  channel: 'bricklink' | 'amazon' | null;
+  /** BrickLink UK ask (stock avg, falling back to sold avg). */
+  bricklink: number | null;
+  /** Amazon, when a trusted ASIN had a recent snapshot. Absent for the used lens by design. */
+  amazon: {
+    /** Raw Buy Box, as displayed on the details card. */
+    buyBox: number;
+    /** buyBox × (1 − Amazon fees) ÷ (1 − BL fees) — what the gate compares. */
+    blEquivalent: number;
+    asin: string;
+    snapshotDate: string;
+  } | null;
+}
+
+/**
+ * A "yes, but" on a verdict. Never changes the verdict — a route can be the right route
+ * and still be slow, and collapsing those two facts into one label is how 40756 came to
+ * read as a confident PART-OUT on parts that barely sell.
+ */
+export interface PartoutWarning {
+  code: 'THIN-LIQUIDITY' | 'SLOW-COMPLETE-SALE';
+  /** Short label for the badge. */
+  title: string;
+  /** The evidence, in full sentences with the numbers in them. */
+  detail: string;
+}
+
 /** One inclusive STR gate row — "lots at STR ≥ gate". Mirrors the store-report ladder. */
 export interface PartoutStrBand {
   /** Inclusive qty-basis STR floor (from STR_GATES). */
@@ -139,6 +183,13 @@ export interface PartoutAssessment {
   feePct: number;
   /** Complete-set price used as the gate's ask basis. */
   setPrice: number | null;
+  /** Where that price came from, and what the losing channel offered. */
+  setPriceBasis: PartoutSetPriceBasis;
+  /**
+   * Caveats on the verdict — thin part liquidity, or a slow-selling complete set. Empty
+   * when nothing qualifies. Advisory: no warning has ever moved a verdict.
+   */
+  warnings: PartoutWarning[];
   /** grossPov ÷ setPrice — the canonical gate basis (matches store-assessment SETS). */
   povMultiple: number | null;
   /** grossPov − setPrice. */
