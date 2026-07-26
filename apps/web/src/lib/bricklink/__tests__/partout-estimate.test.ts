@@ -9,6 +9,10 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { pgKey, type PriceGuideView, type SideView } from '../price-guide/read';
+// Static, not `await import`: tsconfig.scripts.json typechecks src/lib/bricklink/** as
+// CommonJS, where top-level await is an error. vi.mock is hoisted above imports anyway,
+// so the mocks below are registered before this module is evaluated.
+import { PartoutService } from '../partout.service';
 
 const readPriceGuide = vi.fn();
 const loadColourMap = vi.fn();
@@ -22,7 +26,6 @@ vi.mock('../colour-map', async (importOriginal) => {
   return { ...actual, loadColourMap: (...a: unknown[]) => loadColourMap(...a) };
 });
 
-const { PartoutService } = await import('../partout.service');
 
 const EMPTY: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
