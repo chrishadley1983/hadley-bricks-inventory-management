@@ -1,30 +1,28 @@
 'use client';
 
 import { useState } from 'react';
-import { Search, Loader2, RefreshCw } from 'lucide-react';
+import { Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
 
 interface SetLookupFormProps {
-  onLookup: (setNumber: string, forceRefresh: boolean) => void;
+  onLookup: (setNumber: string) => void;
   isLoading: boolean;
 }
 
 export function SetLookupForm({ onLookup, isLoading }: SetLookupFormProps) {
   const [setNumber, setSetNumber] = useState('');
-  const [forceRefresh, setForceRefresh] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (setNumber.trim()) {
-      onLookup(setNumber.trim(), forceRefresh);
+      onLookup(setNumber.trim());
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit}>
       <div className="flex gap-4">
         <div className="flex-1">
           <Label htmlFor="setNumber" className="sr-only">
@@ -56,21 +54,6 @@ export function SetLookupForm({ onLookup, isLoading }: SetLookupFormProps) {
             </>
           )}
         </Button>
-      </div>
-
-      <div className="flex items-center space-x-2">
-        <Checkbox
-          id="forceRefresh"
-          checked={forceRefresh}
-          onCheckedChange={(checked: boolean | 'indeterminate') =>
-            setForceRefresh(checked === true)
-          }
-          disabled={isLoading}
-        />
-        <Label htmlFor="forceRefresh" className="text-sm text-muted-foreground cursor-pointer">
-          Force refresh from Brickset API (ignores cache)
-        </Label>
-        {forceRefresh && <RefreshCw className="h-3 w-3 text-muted-foreground" />}
       </div>
     </form>
   );

@@ -69,7 +69,9 @@ export interface PartoutMagnet {
   price: number | null;
   /** Qty-basis STR fraction. */
   str: number | null;
-  /** Worldwide seller lots — the scarcity side of the magnet test. */
+  /** UK stock QUANTITY (pieces) — the scarcity side of the magnet test. */
+  ukStockQty: number | null;
+  /** Worldwide seller lots — context only; no longer gates. */
   worldSupplyLots: number | null;
   /** quantity × price. */
   lineValue: number;
@@ -82,8 +84,12 @@ export interface PartoutConcentration {
   /** Highest-value lots, descending. */
   topLots: Array<{
     partNumber: string;
+    /** Needed to build the right BrickLink catalogue URL (parts carry a colour, minifigs don't). */
+    partType: BrickLinkItemType;
     name: string;
+    colourId: number;
     colourName: string;
+    imageUrl: string;
     quantity: number;
     lineValue: number;
     shareOfPov: number;
@@ -118,11 +124,16 @@ export interface PartoutAssessment {
   condition: PartoutCondition;
   /** Σ qty × price. Assumes every lot clears at guide price. */
   grossPov: number;
-  /** Gross discounted by the STR capture curve — what we'd actually realise. */
+  /**
+   * Gross discounted by the STR capture curve. INFORMATIONAL ONLY — it does not move
+   * netPov or maxBuy. The capture curve is still uncalibrated (`TODO(calibration)` in
+   * liquidity-pov.ts), so it is shown as a liquidity sense-check rather than allowed to
+   * set the money figures.
+   */
   realisablePov: number;
   /** realisablePov ÷ grossPov (0 when gross is 0). */
   captureRate: number;
-  /** realisablePov after the 9.4% variable fee stack. */
+  /** grossPov after the 9.4% variable fee stack — the decision figure. */
   netPov: number;
   /** The fee stack applied (VAR_FEE_PCT), echoed so the card is self-describing. */
   feePct: number;
@@ -171,6 +182,12 @@ export interface PartoutAssessment {
      */
     price: number | null;
   };
+  /**
+   * Headline sell-through across the priced lots. Median leads and mean sits alongside
+   * (house standard) — a handful of bulk-dumped lots can drag the mean a long way from
+   * what a typical lot in the set actually does.
+   */
+  strSummary: { median: number | null; mean: number | null; lotsWithStr: number };
   strBands: PartoutStrBand[];
   magnets: PartoutMagnet[];
   concentration: PartoutConcentration;
@@ -231,10 +248,12 @@ export interface PartValue {
   /** Units of this part+colour we currently hold (Used) — null when no overlap index. */
   ourQtyUsed: number | null;
   /** Number of lots available for New condition */
+  /** UK stock QUANTITY (pieces), not lots — same basis as strQty. */
   stockAvailableNew: number | null;
   /** Number of lots available for Used condition */
   stockAvailableUsed: number | null;
   /** Number of times sold for New condition */
+  /** UK sold QUANTITY (pieces) over the guide window, not lots. */
   timesSoldNew: number | null;
   /** Number of times sold for Used condition */
   timesSoldUsed: number | null;

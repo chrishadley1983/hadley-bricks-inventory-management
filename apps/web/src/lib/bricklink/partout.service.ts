@@ -9,7 +9,11 @@
  * Semantics preserved from the legacy implementation:
  *  - prices are UK sold averages, falling back to UK stock (asking) averages
  *  - sell-through rate is LOTS-based ×100 (sold lots / stock lots)
- *  - stockAvailable and timesSold fields are lot counts
+ *  - stockAvailable and timesSold are QUANTITIES (pieces), matching the qty-basis STR
+ *    the whole screen gates on. They were lot counts, which put two different
+ *    denominators on one table row: njo0658 showed Stock 12 / Sold 6 next to STR 0.02,
+ *    because 12 listings held 333 pieces. Same basis everywhere now, so Sold ÷ Stock
+ *    visibly reconciles with the STR column.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -272,7 +276,18 @@ export class PartoutService {
    * Flatten subset entries into a list of part identifiers
    */
   private flattenSubsets(subsets: BrickLinkSubsetEntry[], colourMap: ColourMap): PartIdentifier[] {
-    const parts: PartIdentifier[] = [];
+    // MERGED BY part+colour, not appended.
+    //
+    // BrickLink returns subsets grouped, and the same part+colour can legitimately appear
+    // in more than one group (71741 lists 98138pb027 White twice, qty 2 and qty 1). Kept
+    // as separate rows that produced a duplicate lot for a single sellable lot: the parts
+    // table rendered two rows with the same React key — which is what made a sorted column
+    // put an out-of-place row at the top — and every lot COUNT was inflated (1,145 rows for
+    // 1,141 real lots), which feeds pricedLots, the STR bands and the concentration split.
+    //
+    // Quantities are summed, which is both the correct total and how we would actually
+    // list it: one lot of 3, not a lot of 2 and a lot of 1.
+    const merged = new Map<string, PartIdentifier>();
 
     for (const subset of subsets) {
       for (const entry of subset.entries) {
@@ -283,8 +298,15 @@ export class PartoutService {
 
         // Colour ids in subsets are BL-scheme; name from the canonical map
         const colourName = colourMap.name(entry.color_id) || entry.color_name || 'Unknown';
+        const key = `${entry.item.type}:${entry.item.no}:${entry.color_id}`;
 
-        parts.push({
+        const existing = merged.get(key);
+        if (existing) {
+          existing.quantity += entry.quantity;
+          continue;
+        }
+
+        merged.set(key, {
           partNumber: entry.item.no,
           partType: entry.item.type,
           colourId: entry.color_id,
@@ -295,7 +317,7 @@ export class PartoutService {
       }
     }
 
-    return parts;
+    return [...merged.values()];
   }
 
   /**
@@ -427,10 +449,10 @@ export class PartoutService {
       overlapUsed: overlapU.tag,
       ourQtyNew: overlapN.ourQty,
       ourQtyUsed: overlapU.ourQty,
-      stockAvailableNew: hasData ? view.new.stockLots : null,
-      stockAvailableUsed: hasData ? view.used.stockLots : null,
-      timesSoldNew: hasData ? view.new.soldLots : null,
-      timesSoldUsed: hasData ? view.used.soldLots : null,
+      stockAvailableNew: hasData ? view.new.stockQty : null,
+      stockAvailableUsed: hasData ? view.used.stockQty : null,
+      timesSoldNew: hasData ? view.new.soldQty : null,
+      timesSoldUsed: hasData ? view.used.soldQty : null,
       fromCache: hasData && fromCache,
     };
   }

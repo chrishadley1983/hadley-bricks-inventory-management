@@ -282,6 +282,7 @@ describe('EbayBrowseClient', () => {
       expect(apiCall[0]).toContain('conditions%3A%7BNEW%7D');
       expect(apiCall[0]).toContain('buyingOptions%3A%7BFIXED_PRICE%7D');
       expect(apiCall[0]).toContain('itemLocationCountry%3AGB');
+      // Default keeps the price sort for arbitrage/evaluator callers.
       expect(apiCall[0]).toContain('sort=price');
     });
 

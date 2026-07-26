@@ -221,13 +221,14 @@ export function SetDetailsCard({
       <CardHeader className="pb-3">
         <div className="flex items-start gap-4">
           {/* Set Image */}
-          <div className="relative h-[72px] w-[72px] flex-shrink-0 overflow-hidden rounded-lg bg-muted border">
+          {/* Brickset serves the full-size asset (~78KB); 72px threw nearly all of it away. */}
+          <div className="relative h-[160px] w-[160px] flex-shrink-0 overflow-hidden rounded-lg bg-muted border">
             {isValidImageUrl(set.imageUrl) ? (
               <Image
                 src={set.imageUrl!}
                 alt={set.setName}
                 fill
-                sizes="72px"
+                sizes="160px"
                 className="object-contain"
               />
             ) : (
@@ -500,31 +501,6 @@ export function SetDetailsCard({
             accent="text-teal-600"
             onClick={onBricklinkClick ? () => onBricklinkClick('used') : undefined}
           />
-        </div>
-
-        {/* Item Numbers & Barcodes - Inline compact layout */}
-        <div>
-          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-            Identifiers
-          </h4>
-          <div className="grid grid-cols-4 gap-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">US Item #:</span>
-              <span className="font-mono">{set.usItemNumber || '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EU Item #:</span>
-              <span className="font-mono">{set.euItemNumber || '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">EAN:</span>
-              <span className="font-mono">{set.ean || '—'}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">UPC:</span>
-              <span className="font-mono">{set.upc || '—'}</span>
-            </div>
-          </div>
         </div>
 
         {/* Community Stats - Compact */}

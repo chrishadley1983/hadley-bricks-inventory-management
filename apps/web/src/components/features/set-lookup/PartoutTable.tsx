@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { ColumnDef } from '@tanstack/react-table';
-import { ArrowUpDown, Database, ExternalLink } from 'lucide-react';
+import { ArrowUpDown, ArrowUp, ArrowDown, Database, ExternalLink } from 'lucide-react';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,11 +26,34 @@ interface PartoutTableProps {
 }
 
 /**
- * Format sell-through rate as percentage
+ * Sortable column header.
+ *
+ * The old header always rendered the same neutral up/down glyph, so nothing on screen
+ * said which column was driving the order or in which direction. Now the active column
+ * shows a solid arrow and is emphasised; everything else stays muted.
  */
-function formatPercentage(value: number | null): string {
-  if (value === null) return '-';
-  return `${value.toFixed(1)}%`;
+function SortableHeader({
+  column,
+  label,
+}: {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  column: any;
+  label: string;
+}) {
+  const sorted = column.getIsSorted() as 'asc' | 'desc' | false;
+  const Icon = sorted === 'asc' ? ArrowUp : sorted === 'desc' ? ArrowDown : ArrowUpDown;
+
+  return (
+    <Button
+      variant="ghost"
+      onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+      className={`-ml-4 ${sorted ? 'font-semibold text-foreground' : ''}`}
+      aria-sort={sorted === 'asc' ? 'ascending' : sorted === 'desc' ? 'descending' : 'none'}
+    >
+      {label}
+      <Icon className={`ml-2 h-4 w-4 ${sorted ? 'text-foreground' : 'text-muted-foreground/60'}`} />
+    </Button>
+  );
 }
 
 /**
@@ -74,16 +97,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     },
     {
       accessorKey: 'name',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Name
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Name'} />,
       cell: ({ row }) => (
         <div className="max-w-[250px]">
           <div className="font-medium truncate" title={row.original.name}>
@@ -116,47 +130,20 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     },
     {
       accessorKey: 'quantity',
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Qty
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Qty'} />,
       cell: ({ row }) => <span className="font-medium">{row.original.quantity}</span>,
     },
     {
       id: 'price',
       accessorFn: (row) => (condition === 'new' ? row.priceNew : row.priceUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Price
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Price'} />,
       cell: ({ row }) =>
         formatCurrency(condition === 'new' ? row.original.priceNew : row.original.priceUsed),
     },
     {
       id: 'total',
       accessorFn: (row) => (condition === 'new' ? row.totalNew : row.totalUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Total
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Total'} />,
       cell: ({ row }) => (
         <span className={`font-medium ${condition === 'new' ? 'text-green-700' : 'text-blue-700'}`}>
           {formatCurrency(condition === 'new' ? row.original.totalNew : row.original.totalUsed)}
@@ -164,36 +151,9 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
       ),
     },
     {
-      id: 'sellThroughRate',
-      accessorFn: (row) => (condition === 'new' ? row.sellThroughRateNew : row.sellThroughRateUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Sell-Through
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
-      cell: ({ row }) =>
-        formatPercentage(
-          condition === 'new' ? row.original.sellThroughRateNew : row.original.sellThroughRateUsed
-        ),
-    },
-    {
       id: 'stockAvailable',
       accessorFn: (row) => (condition === 'new' ? row.stockAvailableNew : row.stockAvailableUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Stock
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Stock qty'} />,
       cell: ({ row }) =>
         (condition === 'new' ? row.original.stockAvailableNew : row.original.stockAvailableUsed) ??
         '-',
@@ -201,35 +161,19 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     {
       id: 'timesSold',
       accessorFn: (row) => (condition === 'new' ? row.timesSoldNew : row.timesSoldUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          Sold
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'Sold qty'} />,
       cell: ({ row }) =>
         (condition === 'new' ? row.original.timesSoldNew : row.original.timesSoldUsed) ?? '-',
     },
     {
-      // Quantity-basis STR — the figure the gates, magnet test and capture curve all
-      // use. The "Sell-Through" column above is the legacy lots-basis percentage; they
-      // will not agree, which is why this one is labelled explicitly.
+      // Quantity-basis STR — the figure the gates, magnet test and capture curve all use,
+      // and now the same basis as the Stock qty / Sold qty columns beside it, so the row
+      // reconciles: Sold qty / Stock qty = this. (It previously sat next to LOT counts,
+      // which is how njo0658 read "Stock 12 / Sold 6" against an STR of 0.02 — 12 listings
+      // holding 333 pieces.) The legacy lots-basis percentage column has been removed.
       id: 'strQty',
       accessorFn: (row) => (condition === 'new' ? row.strQtyNew : row.strQtyUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          STR (qty)
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'STR (qty)'} />,
       cell: ({ row }) => {
         const str = condition === 'new' ? row.original.strQtyNew : row.original.strQtyUsed;
         return str == null ? '-' : str.toFixed(2);
@@ -238,16 +182,7 @@ function createColumns(condition: PartoutCondition): ColumnDef<PartValue>[] {
     {
       id: 'worldSupply',
       accessorFn: (row) => (condition === 'new' ? row.worldSupplyLotsNew : row.worldSupplyLotsUsed),
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          className="-ml-4"
-        >
-          World lots
-          <ArrowUpDown className="ml-2 h-4 w-4" />
-        </Button>
-      ),
+      header: ({ column }) => <SortableHeader column={column} label={'World lots'} />,
       cell: ({ row }) =>
         (condition === 'new'
           ? row.original.worldSupplyLotsNew
@@ -315,10 +250,9 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         quantity: 'Qty',
         price: 'Price',
         total: 'Total',
-        sellThroughRate: 'Sell-Through (lots)',
         strQty: 'STR (qty)',
-        stockAvailable: 'Stock',
-        timesSold: 'Sold',
+        stockAvailable: 'Stock qty',
+        timesSold: 'Sold qty',
         worldSupply: 'World lots',
         overlap: 'Overlap',
         cache: 'Cache',
@@ -327,7 +261,6 @@ export function PartoutTable({ parts, condition }: PartoutTableProps) {
         cache: false, // Hide cache indicator by default
         // The legacy lots-basis percentage is superseded by STR (qty) but kept
         // available behind the column picker rather than removed outright.
-        sellThroughRate: false,
       }}
       columnVisibilityStorageKey="partout-table-columns"
     />

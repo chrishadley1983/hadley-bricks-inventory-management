@@ -6,12 +6,9 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useToast } from '@/hooks/use-toast';
 import { usePartout } from '@/hooks/usePartout';
-import { PartoutSummary } from './PartoutSummary';
 import { PartoutTable, type PartoutCondition } from './PartoutTable';
 import { PartoutProgress } from './PartoutProgress';
-import { OfficialPovCard } from './OfficialPovCard';
 import { PartoutAssessmentPanel } from './PartoutAssessmentPanel';
 
 interface PartoutTabProps {
@@ -96,15 +93,14 @@ function NoPartsState() {
 export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
   const [condition, setCondition] = useState<PartoutCondition>('new');
   const [hasTriggeredInitialLoad, setHasTriggeredInitialLoad] = useState(false);
-  const { toast } = useToast();
+  // NOTE: usePartout still exposes forceRefresh / isForceRefreshing and the API route
+  // still honours forceRefresh — the UI control was removed, not the capability.
   const {
     data,
     isLoading,
     isFetching,
     error,
     refetch,
-    forceRefresh,
-    isForceRefreshing,
     isStreaming,
     streamProgress,
     streamError,
@@ -143,22 +139,6 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     setHasTriggeredInitialLoad(false);
   }, [setNumber]);
 
-  const handleForceRefresh = async () => {
-    const result = await forceRefresh();
-    if (result.success) {
-      toast({
-        title: 'Prices refreshed',
-        description: 'All part prices have been updated from BrickLink.',
-      });
-    } else {
-      toast({
-        title: 'Refresh failed',
-        description: result.error || 'Failed to refresh prices. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
   const handleRetry = () => {
     fetchWithProgress(false);
   };
@@ -168,21 +148,13 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
     return <EmptyState />;
   }
 
-  // OUR view leads: the computed assessment renders first, through its own state machine.
-  // BrickLink's published POV follows as a cross-check — it sits OUTSIDE that state machine
-  // so it still shows when the computed partout is loading or has failed, but it never
-  // occupies the headline. The reconciliation between the two lives on that card.
-  const computed = renderComputedPartout();
-
+  // BrickLink's own published POV used to render underneath as a cross-check. Removed at
+  // Chris's request — our assessment IS the answer, and a second POV figure alongside it
+  // invited exactly the reconciliation confusion it was meant to resolve. The scrape,
+  // its cache and /api/bricklink/part-out-value remain for the bl-part-out-value skill.
   return (
     <div className="space-y-6" data-testid="partout-tab">
-      {computed}
-      <OfficialPovCard
-        setNumber={setNumber}
-        enabled={enabled}
-        condition={condition}
-        assessment={data?.assessment?.[condition] ?? null}
-      />
+      {renderComputedPartout()}
     </div>
   );
 
@@ -246,34 +218,41 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
       return <NoPartsState />;
     }
 
-    // Success - render assessment, summary and table
+    const missing = {
+      new: data.parts.filter((p) => p.priceNew === null).length,
+      used: data.parts.filter((p) => p.priceUsed === null).length,
+    };
+
+    // Success - render the assessment and the parts table
     return (
       <div className="space-y-6">
-        {/* Refresh indicator and force refresh button */}
-        <div className="flex items-center justify-between">
-          {isFetching || isForceRefreshing ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {/*
+          Data provenance. The old PartoutSummary block was removed as duplication — its
+          POV/ratio cards repeated the ladder and the verdict's multiple, and its set
+          prices now live in the max-buy tooltip. The two facts it carried that were NOT
+          on screen anywhere else were cache coverage and the per-condition missing-price
+          counts, so they land here. (The amber banner covers only the selected condition;
+          this shows both, which is what tells you a set is thin in Used but fine in New.)
+        */}
+        <div className="text-sm text-muted-foreground">
+          {isFetching ? (
+            <span className="flex items-center gap-2">
               <RefreshCw className="h-4 w-4 animate-spin" />
-              {isForceRefreshing ? 'Refreshing all prices from BrickLink...' : 'Refreshing...'}
-            </div>
+              Refreshing...
+            </span>
           ) : (
-            <div className="text-sm text-muted-foreground">
-              {data.cacheStats.fromCache > 0 && (
-                <span>
-                  {data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache
-                </span>
+            <span>
+              {data.cacheStats.fromCache} of {data.cacheStats.total} parts from cache
+              {missing.new + missing.used > 0 && (
+                <>
+                  {' · '}
+                  <span className="text-amber-700">
+                    no UK price: {missing.new} New / {missing.used} Used
+                  </span>
+                </>
               )}
-            </div>
+            </span>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleForceRefresh}
-            disabled={isFetching || isForceRefreshing}
-          >
-            <RefreshCw className={`h-4 w-4 mr-1 ${isForceRefreshing ? 'animate-spin' : ''}`} />
-            Force Refresh
-          </Button>
         </div>
 
         {/*
@@ -305,9 +284,6 @@ export function PartoutTab({ setNumber, enabled }: PartoutTabProps) {
             </AlertDescription>
           </Alert>
         )}
-
-        {/* Raw POV figures for both conditions, plus data-quality context */}
-        <PartoutSummary data={data} />
 
         {/* Parts table */}
         <h3 className="text-lg font-semibold">Parts Breakdown</h3>

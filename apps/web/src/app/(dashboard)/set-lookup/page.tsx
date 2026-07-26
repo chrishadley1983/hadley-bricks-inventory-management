@@ -36,11 +36,8 @@ interface LookupResult {
   source: 'api' | 'cache';
 }
 
-async function lookupSet(setNumber: string, forceRefresh: boolean): Promise<LookupResult> {
-  const params = new URLSearchParams({
-    setNumber,
-    forceRefresh: String(forceRefresh),
-  });
+async function lookupSet(setNumber: string): Promise<LookupResult> {
+  const params = new URLSearchParams({ setNumber });
 
   const response = await fetch(`/api/brickset/lookup?${params}`);
 
@@ -172,8 +169,7 @@ export default function SetLookupPage() {
 
   // Lookup mutation
   const lookupMutation = useMutation({
-    mutationFn: ({ setNumber, forceRefresh }: { setNumber: string; forceRefresh: boolean }) =>
-      lookupSet(setNumber, forceRefresh),
+    mutationFn: ({ setNumber }: { setNumber: string }) => lookupSet(setNumber),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brickset', 'recent'] });
     },
@@ -205,14 +201,14 @@ export default function SetLookupPage() {
     setStockModalOpen(true);
   };
 
-  const handleLookup = (setNumber: string, forceRefresh: boolean) => {
+  const handleLookup = (setNumber: string) => {
     setCurrentSetNumber(setNumber);
-    lookupMutation.mutate({ setNumber, forceRefresh });
+    lookupMutation.mutate({ setNumber });
   };
 
   const handleRecentClick = (set: BricksetSet) => {
     setCurrentSetNumber(set.setNumber);
-    lookupMutation.mutate({ setNumber: set.setNumber, forceRefresh: false });
+    lookupMutation.mutate({ setNumber: set.setNumber });
   };
 
   if (statusLoading) {

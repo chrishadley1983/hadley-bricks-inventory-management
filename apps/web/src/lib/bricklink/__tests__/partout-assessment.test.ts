@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { assessPartout, assessPartoutBoth } from '../partout-assessment';
 import {
   VAR_FEE_PCT,
-  MAGNET,
+  UK_MAGNET,
   POV_MULTIPLE_MIN,
   POV_MIN_GAP_GBP,
   DEFAULT_MIN_MARGIN,
@@ -46,24 +46,38 @@ function part(overrides: Partial<PartValue> = {}): PartValue {
 }
 
 describe('assessPartout — honesty ladder', () => {
-  it('discounts gross by the capture curve, then by the fee stack', () => {
+  it('takes fees off the FULL POV, not the liquidity-adjusted one', () => {
     // One lot: 10 × £2 at STR 1.0 → capture 0.85 per CAPTURE_CURVE.
     const parts = [part({ quantity: 10, priceNew: 2, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 5, 'new');
 
     expect(a.grossPov).toBe(20);
+    expect(a.netPov).toBeCloseTo(20 * (1 - VAR_FEE_PCT), 2);
+    // The liquidity view is still computed — it just doesn't drive the money.
     expect(a.realisablePov).toBeCloseTo(20 * captureFraction(1.0), 2);
-    expect(a.netPov).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT), 2);
     expect(a.captureRate).toBeCloseTo(captureFraction(1.0), 4);
   });
 
-  it('is monotonic — net never exceeds realisable, which never exceeds gross', () => {
+  it('leaves the liquidity view out of the decision path entirely', () => {
+    // Same gross, wildly different sell-through: net and max buy must not move.
+    const fast = assessPartout([part({ quantity: 10, priceNew: 2, strQtyNew: 1.6 })], 5, 'new');
+    const slow = assessPartout([part({ quantity: 10, priceNew: 2, strQtyNew: 0.01 })], 5, 'new');
+
+    expect(fast.grossPov).toBe(slow.grossPov);
+    expect(slow.netPov).toBeCloseTo(fast.netPov, 2);
+    expect(slow.maxBuy.price).toBeCloseTo(fast.maxBuy.price!, 2);
+    // ...but the FYI figure still reflects the difference.
+    expect(slow.realisablePov).toBeLessThan(fast.realisablePov);
+    expect(slow.captureRate).toBeLessThan(fast.captureRate);
+  });
+
+  it('is monotonic — net never exceeds gross, and the liquidity view never does either', () => {
     const parts = [
       part({ quantity: 4, priceNew: 3, strQtyNew: 0.3 }),
       part({ partNumber: '3002', quantity: 2, priceNew: 10, strQtyNew: 1.6 }),
     ];
     const a = assessPartout(parts, 12, 'new');
-    expect(a.netPov).toBeLessThanOrEqual(a.realisablePov);
+    expect(a.netPov).toBeLessThanOrEqual(a.grossPov);
     expect(a.realisablePov).toBeLessThanOrEqual(a.grossPov);
   });
 
@@ -135,10 +149,10 @@ describe('assessPartout — the canonical part-out gate', () => {
 });
 
 describe('assessPartout — max buy', () => {
-  it('back-solves from realisable POV net of fees, target margin and postage', () => {
+  it('back-solves from the full POV net of fees, target margin and postage', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new');
-    const beforePostage = a.realisablePov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
+    const beforePostage = a.grossPov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
     expect(a.maxBuy.beforePostage).toBeCloseTo(beforePostage, 2);
     expect(a.maxBuy.postageGbp).toBe(DEFAULT_INBOUND_POSTAGE_GBP);
     expect(a.maxBuy.price).toBeCloseTo(beforePostage - DEFAULT_INBOUND_POSTAGE_GBP, 2);
@@ -156,18 +170,18 @@ describe('assessPartout — max buy', () => {
     expect(collected.maxBuy.beforePostage).toBeCloseTo(paid.maxBuy.beforePostage!, 2);
   });
 
-  it('prices off realisable, not gross — so it cannot exceed the gross-based figure', () => {
+  it('differs from the raw gross-based ceiling by exactly the postage', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 0.1 })];
     const a = assessPartout(parts, 20, 'new');
     const grossBased = a.grossPov * (1 - VAR_FEE_PCT - DEFAULT_MIN_MARGIN);
-    expect(a.maxBuy.price!).toBeLessThan(grossBased);
+    expect(a.maxBuy.price!).toBeCloseTo(grossBased - DEFAULT_INBOUND_POSTAGE_GBP, 2);
   });
 
   it('honours an explicit target margin', () => {
     const parts = [part({ quantity: 100, priceNew: 1, strQtyNew: 1.0 })];
     const a = assessPartout(parts, 20, 'new', { targetMargin: 0.5 });
     expect(a.maxBuy.targetMargin).toBe(0.5);
-    expect(a.maxBuy.beforePostage).toBeCloseTo(a.realisablePov * (1 - VAR_FEE_PCT - 0.5), 2);
+    expect(a.maxBuy.beforePostage).toBeCloseTo(a.grossPov * (1 - VAR_FEE_PCT - 0.5), 2);
   });
 
   // Deliberately NOT clamped at zero any more: a negative ceiling is the finding, and
@@ -240,7 +254,11 @@ describe('assessPartout — STR bands', () => {
 
 describe('assessPartout — magnets', () => {
   const magnetPart = (o: Partial<PartValue> = {}) =>
-    part({ strQtyNew: MAGNET.minStr, worldSupplyLotsNew: MAGNET.maxSupplyLots, ...o });
+    part({
+      strQtyNew: UK_MAGNET.part.strAbove + 0.5,
+      stockAvailableNew: UK_MAGNET.part.ukStockQtyUnder - 1,
+      ...o,
+    });
 
   it('flags a lot that is both scarce and selling', () => {
     const a = assessPartout([magnetPart()], 1, 'new');
@@ -248,13 +266,13 @@ describe('assessPartout — magnets', () => {
   });
 
   it('rejects a scarce lot that does not sell', () => {
-    const a = assessPartout([magnetPart({ strQtyNew: MAGNET.minStr - 0.01 })], 1, 'new');
+    const a = assessPartout([magnetPart({ strQtyNew: UK_MAGNET.part.strAbove })], 1, 'new');
     expect(a.magnets).toHaveLength(0);
   });
 
   it('rejects a fast-selling lot that is widely stocked', () => {
     const a = assessPartout(
-      [magnetPart({ worldSupplyLotsNew: MAGNET.maxSupplyLots + 1 })],
+      [magnetPart({ stockAvailableNew: UK_MAGNET.part.ukStockQtyUnder })],
       1,
       'new'
     );
@@ -262,8 +280,46 @@ describe('assessPartout — magnets', () => {
   });
 
   it('treats zero world supply as no data, not infinite scarcity', () => {
-    const a = assessPartout([magnetPart({ worldSupplyLotsNew: 0 })], 1, 'new');
+    const a = assessPartout([magnetPart({ stockAvailableNew: 0 })], 1, 'new');
     expect(a.magnets).toHaveLength(0);
+  });
+
+  // Parts and minifigs are cut differently: UK supply distributions aren't comparable.
+  // Figures sit thinner on the shelf, so their bound is the TIGHTER of the two: a lot
+  // count that still counts as scarce for a part is mid-market for a minifig.
+  it('holds minifigs to the tighter bound and parts to the looser one', () => {
+    const qty = UK_MAGNET.minifig.ukStockQtyUnder; // inside the part gate, outside the fig gate
+    expect(qty).toBeLessThan(UK_MAGNET.part.ukStockQtyUnder);
+    const asPart = assessPartout([magnetPart({ stockAvailableNew: qty })], 1, 'new');
+    const asFig = assessPartout(
+      [magnetPart({ partType: 'MINIFIG', stockAvailableNew: qty })],
+      1,
+      'new'
+    );
+    expect(asPart.magnets).toHaveLength(1);
+    expect(asFig.magnets).toHaveLength(0);
+  });
+
+  it('requires STR strictly above the gate — exactly at it does not qualify', () => {
+    const at = assessPartout([magnetPart({ strQtyNew: UK_MAGNET.part.strAbove })], 1, 'new');
+    const above = assessPartout(
+      [magnetPart({ strQtyNew: UK_MAGNET.part.strAbove + 0.01 })],
+      1,
+      'new'
+    );
+    expect(at.magnets).toHaveLength(0);
+    expect(above.magnets).toHaveLength(1);
+  });
+
+  it('gates on UK lots, not worldwide — plentiful abroad but thin here still counts', () => {
+    const a = assessPartout(
+      [magnetPart({ stockAvailableNew: 1, worldSupplyLotsNew: 500 })],
+      1,
+      'new'
+    );
+    expect(a.magnets).toHaveLength(1);
+    expect(a.magnets[0].ukStockQty).toBe(1);
+    expect(a.magnets[0].worldSupplyLots).toBe(500);
   });
 
   it('fires independently of the verdict — a failing set can still hold magnets', () => {
@@ -278,7 +334,7 @@ describe('assessPartout — magnets', () => {
   // built on absent evidence — magnetCoverage is what lets the UI tell the two apart.
   it('reports zero supply coverage when no lot has world-supply data', () => {
     const a = assessPartout(
-      [part({ worldSupplyLotsNew: null }), part({ worldSupplyLotsNew: null })],
+      [part({ stockAvailableNew: null }), part({ stockAvailableNew: null })],
       1,
       'new'
     );
@@ -288,7 +344,7 @@ describe('assessPartout — magnets', () => {
 
   it('counts partial supply coverage so a thin cache is distinguishable from absence', () => {
     const a = assessPartout(
-      [magnetPart(), part({ worldSupplyLotsNew: null }), part({ worldSupplyLotsNew: 50 })],
+      [magnetPart(), part({ stockAvailableNew: null }), part({ stockAvailableNew: 50 })],
       1,
       'new'
     );
@@ -299,7 +355,7 @@ describe('assessPartout — magnets', () => {
   it('counts a zero supply count as data present but failing the scarcity leg', () => {
     // 0 is "no data" for the MAGNET test, but the field IS populated — coverage should
     // not claim the read failed.
-    const a = assessPartout([magnetPart({ worldSupplyLotsNew: 0 })], 1, 'new');
+    const a = assessPartout([magnetPart({ stockAvailableNew: 0 })], 1, 'new');
     expect(a.magnets).toHaveLength(0);
     expect(a.magnetCoverage).toEqual({ withSupplyData: 1, total: 1 });
   });
@@ -307,9 +363,9 @@ describe('assessPartout — magnets', () => {
   it('orders scarcest first, then by sell-through', () => {
     const a = assessPartout(
       [
-        magnetPart({ partNumber: 'a', worldSupplyLotsNew: 3, strQtyNew: 0.9 }),
-        magnetPart({ partNumber: 'b', worldSupplyLotsNew: 1, strQtyNew: 0.6 }),
-        magnetPart({ partNumber: 'c', worldSupplyLotsNew: 3, strQtyNew: 2.0 }),
+        magnetPart({ partNumber: 'a', stockAvailableNew: 3, strQtyNew: 1.5 }),
+        magnetPart({ partNumber: 'b', stockAvailableNew: 1, strQtyNew: 1.1 }),
+        magnetPart({ partNumber: 'c', stockAvailableNew: 3, strQtyNew: 2.0 }),
       ],
       1,
       'new'

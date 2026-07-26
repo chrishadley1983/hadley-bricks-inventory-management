@@ -170,27 +170,43 @@ export class EbayBrowseClient {
 
   /**
    * Search for LEGO sets with default filters for arbitrage tracking.
-   * Searches category 19006 (LEGO Complete Sets & Packs), New condition,
-   * Buy It Now only, UK sellers, sorted by price ascending.
+   * Category 19006 (LEGO Complete Sets & Packs), New, Buy It Now, UK sellers.
+   *
+   * `sortByPrice` DEFAULTS TO TRUE, preserving behaviour for arbitrage and the purchase
+   * evaluator, which are hunting the cheapest listings and genuinely want the bottom of
+   * the market.
+   *
+   * Pass false for price AGGREGATION. Sorting ascending and taking `limit` returns the
+   * CHEAPEST n, which is the worst possible sample for an average — 71741 produced a
+   * £3.99 minimum and a £107 "average" on a set whose market is £250-400. Unsorted gives
+   * eBay's Best Match ranking instead.
    */
-  async searchLegoSet(setNumber: string, limit: number = 50): Promise<EbaySearchResponse> {
+  async searchLegoSet(
+    setNumber: string,
+    limit: number = 50,
+    sortByPrice: boolean = true
+  ): Promise<EbaySearchResponse> {
     // Strip -1 suffix if present (e.g., 40585-1 -> 40585)
     const cleanSetNumber = setNumber.replace(/-\d+$/, '');
 
     return this.searchItems(`LEGO ${cleanSetNumber}`, {
       categoryId: '19006',
       filter: 'conditions:{NEW},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB',
-      sort: 'price',
+      ...(sortByPrice ? { sort: 'price' } : {}),
       limit,
     });
   }
 
   /**
    * Search for USED LEGO sets.
-   * Searches category 19006 (LEGO Complete Sets & Packs), Used condition,
-   * Buy It Now only, UK sellers, sorted by price ascending.
+   * Category 19006 (LEGO Complete Sets & Packs), Used, Buy It Now, UK sellers.
+   * `sortByPrice` defaults to true — see searchLegoSet.
    */
-  async searchLegoSetUsed(setNumber: string, limit: number = 50): Promise<EbaySearchResponse> {
+  async searchLegoSetUsed(
+    setNumber: string,
+    limit: number = 50,
+    sortByPrice: boolean = true
+  ): Promise<EbaySearchResponse> {
     // Strip -1 suffix if present (e.g., 40585-1 -> 40585)
     const cleanSetNumber = setNumber.replace(/-\d+$/, '');
 
@@ -199,7 +215,7 @@ export class EbayBrowseClient {
     return this.searchItems(`LEGO ${cleanSetNumber}`, {
       categoryId: '19006',
       filter: 'conditions:{USED},buyingOptions:{FIXED_PRICE},itemLocationCountry:GB',
-      sort: 'price',
+      ...(sortByPrice ? { sort: 'price' } : {}),
       limit,
     });
   }

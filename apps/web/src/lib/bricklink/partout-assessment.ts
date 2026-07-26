@@ -19,7 +19,7 @@
 import {
   VAR_FEE_PCT,
   STR_GATES,
-  MAGNET,
+  UK_MAGNET,
   POV_MULTIPLE_MIN,
   POV_MIN_GAP_GBP,
   DEFAULT_MIN_MARGIN,
@@ -53,6 +53,7 @@ interface Lens {
   price: (p: PartValue) => number | null;
   /** QUANTITY-basis STR fraction — the house standard. Never the lots-basis ×100. */
   str: (p: PartValue) => number | null;
+  ukStockQty: (p: PartValue) => number | null;
   worldSupplyLots: (p: PartValue) => number | null;
   overlap: (p: PartValue) => OverlapTag | null;
 }
@@ -61,12 +62,14 @@ const LENSES: Record<PartoutCondition, Lens> = {
   new: {
     price: (p) => p.priceNew,
     str: (p) => p.strQtyNew,
+    ukStockQty: (p) => p.stockAvailableNew,
     worldSupplyLots: (p) => p.worldSupplyLotsNew,
     overlap: (p) => p.overlapNew,
   },
   used: {
     price: (p) => p.priceUsed,
     str: (p) => p.strQtyUsed,
+    ukStockQty: (p) => p.stockAvailableUsed,
     worldSupplyLots: (p) => p.worldSupplyLotsUsed,
     overlap: (p) => p.overlapUsed,
   },
@@ -117,25 +120,36 @@ function buildStrBands(parts: PartValue[], lens: Lens, grossPov: number): Partou
 }
 
 /**
- * Magnets: worldwide supply ≤ MAGNET.maxSupplyLots AND STR ≥ MAGNET.minStr.
+ * Magnets: thinly supplied IN THE UK and actually selling.
  *
- * Mirrors `scoreLot` in bl-store-assessment/engine.ts, including its `> 0` guard —
- * a zero supply count means "no data", not "infinitely scarce". These are surfaced
- * independently of the set-level verdict: a set that fails the part-out gate can
+ * Scarcity is UK stock QUANTITY (pieces), cut separately for parts and minifigs (see UK_MAGNET) —
+ * their supply distributions aren't comparable, so one gate across both is really two
+ * different levels of strictness wearing the same number. The minifig bound is the
+ * TIGHTER one because figures sit thinner on the shelf to begin with.
+ *
+ * The `> 0` guard is kept: a zero UK stock count is ambiguous (nothing listed, or nothing
+ * captured), and treating it as infinite scarcity would flag every gap in the cache. That
+ * does cost us the genuinely-strongest case — zero listed with sales on record — which is
+ * a known limitation rather than an oversight.
+ *
+ * Surfaced independently of the set-level verdict: a set that fails the part-out gate can
  * still be worth buying for its magnet content.
  */
 function findMagnets(parts: PartValue[], lens: Lens): PartoutMagnet[] {
   const out: PartoutMagnet[] = [];
 
   for (const p of parts) {
+    const gate = p.partType === 'MINIFIG' ? UK_MAGNET.minifig : UK_MAGNET.part;
     const str = lens.str(p);
-    const supply = lens.worldSupplyLots(p);
+    const ukQty = lens.ukStockQty(p);
+    // Both bounds exclusive, per the spec: "figs < 5 or parts < 10 and STR > 1",
+    // measured in PIECES.
     const isMagnet =
       str != null &&
-      str >= MAGNET.minStr &&
-      supply != null &&
-      supply > 0 &&
-      supply <= MAGNET.maxSupplyLots;
+      str > gate.strAbove &&
+      ukQty != null &&
+      ukQty > 0 &&
+      ukQty < gate.ukStockQtyUnder;
     if (!isMagnet) continue;
 
     const price = lens.price(p);
@@ -149,16 +163,16 @@ function findMagnets(parts: PartValue[], lens: Lens): PartoutMagnet[] {
       quantity: p.quantity,
       price,
       str,
-      worldSupplyLots: supply,
+      ukStockQty: ukQty,
+      worldSupplyLots: lens.worldSupplyLots(p),
       lineValue: round(lineGross(p, lens)),
       overlap: lens.overlap(p),
     });
   }
 
-  // Scarcest first, then best sell-through — same ordering as the assessment's
-  // magnet table so the two are directly comparable.
+  // Scarcest in the UK first, then best sell-through.
   return out.sort(
-    (a, b) => (a.worldSupplyLots ?? 99) - (b.worldSupplyLots ?? 99) || (b.str ?? 0) - (a.str ?? 0)
+    (a, b) => (a.ukStockQty ?? 99) - (b.ukStockQty ?? 99) || (b.str ?? 0) - (a.str ?? 0)
   );
 }
 
@@ -175,8 +189,11 @@ function buildConcentration(
 
   const topLots = valued.slice(0, TOP_LOTS).map(({ part, value }) => ({
     partNumber: part.partNumber,
+    partType: part.partType,
     name: part.name,
+    colourId: part.colourId,
     colourName: part.colourName,
+    imageUrl: part.imageUrl,
     quantity: part.quantity,
     lineValue: round(value),
     shareOfPov: grossPov > 0 ? round(value / grossPov, 4) : 0,
@@ -213,6 +230,37 @@ function buildConcentration(
       other: round(byType.other),
     },
   };
+}
+
+/**
+ * Headline sell-through across priced lots.
+ *
+ * Median first: STR is skewed by design — one seller sitting on a 500-piece lot, or one
+ * bulk clear-out, moves the mean a long way from what a typical lot does. Both are
+ * reported so the gap between them is visible, because that gap IS the signal.
+ * Lots with no STR data are excluded rather than counted as zero.
+ */
+function buildStrSummary(
+  parts: PartValue[],
+  lens: Lens
+): { median: number | null; mean: number | null; lotsWithStr: number } {
+  const values = parts
+    .filter((p) => {
+      const price = lens.price(p);
+      return price != null && Number.isFinite(price);
+    })
+    .map((p) => lens.str(p))
+    .filter((v): v is number => v != null && Number.isFinite(v))
+    .sort((a, b) => a - b);
+
+  if (values.length === 0) return { median: null, mean: null, lotsWithStr: 0 };
+
+  const mid = Math.floor(values.length / 2);
+  const median =
+    values.length % 2 === 0 ? (values[mid - 1] + values[mid]) / 2 : values[mid];
+  const mean = values.reduce((s, v) => s + v, 0) / values.length;
+
+  return { median: round(median, 3), mean: round(mean, 3), lotsWithStr: values.length };
 }
 
 /** Roll the per-lot overlap tags into a set-level summary. Null when no index ran. */
@@ -284,9 +332,13 @@ export function assessPartout(
   }));
   const { gross, realisable, captureRate } = liquidityAdjustedPov(lots);
 
-  // The honesty ladder: gross flatters, realisable discounts for liquidity, net
-  // takes the 9.4% off. Only net is money we'd see.
-  const netPov = realisable * (1 - VAR_FEE_PCT);
+  // Net is taken off the FULL part-out value, not the liquidity-adjusted one (Chris,
+  // 2026-07-25: "I want the decision based on the full part out value and this calc just
+  // an FYI"). Rationale: the capture curve is still uncalibrated, so letting an unfitted
+  // model move the money figures imports its error into every decision — and the gate
+  // already runs on gross, so this makes the two consistent. The liquidity view stays on
+  // the assessment as `realisablePov` / `captureRate`, surfaced as an explained FYI.
+  const netPov = gross * (1 - VAR_FEE_PCT);
 
   const povMultiple = setPrice && setPrice > 0 ? gross / setPrice : null;
   const gapGbp = setPrice != null ? gross - setPrice : null;
@@ -302,14 +354,14 @@ export function assessPartout(
 
   // Max buy, in the same reverse-calc form as purchase-evaluator:
   //   revenue − fees − target profit, where target profit = revenue × margin.
-  // Revenue is the REALISABLE POV, not gross — paying against a figure we can't
-  // actually clear is how you overpay. Inbound postage then comes off as a flat cash
-  // cost, because you pay it on top of the purchase price.
+  // Revenue is the FULL part-out value. The target margin is what absorbs the risk that
+  // not every lot clears — see the note on netPov above.
   //
   // Teardown labour is NOT deducted here. It is already expressed in the 2× POV gate and
   // the target margin (Chris, 2026-07-25: "labour is baked into the POV ×, that is the
   // margin where the time input makes sense"), so a separate line would double-count it.
-  const beforePostage = realisable > 0 ? realisable * (1 - VAR_FEE_PCT - targetMargin) : null;
+  // Inbound postage then comes off as a flat cash cost, paid on top of the purchase price.
+  const beforePostage = gross > 0 ? gross * (1 - VAR_FEE_PCT - targetMargin) : null;
   const maxBuyPrice = beforePostage == null ? null : beforePostage - postageGbp;
   // Not clamped at zero: a negative ceiling IS the answer for a thin set.
   const viable = maxBuyPrice != null && maxBuyPrice > 0;
@@ -373,6 +425,7 @@ export function assessPartout(
       beforePostage: beforePostage == null ? null : round(beforePostage),
       price: maxBuyPrice == null ? null : round(maxBuyPrice),
     },
+    strSummary: buildStrSummary(parts, lens),
     strBands: buildStrBands(parts, lens, gross),
     magnets: findMagnets(parts, lens),
     concentration: buildConcentration(parts, lens, gross),
@@ -383,7 +436,7 @@ export function assessPartout(
     // empty map, so without this an outage reads on screen as "no magnets" — a positive
     // claim built on absent evidence.
     magnetCoverage: {
-      withSupplyData: parts.filter((p) => lens.worldSupplyLots(p) != null).length,
+      withSupplyData: parts.filter((p) => lens.ukStockQty(p) != null).length,
       total: parts.length,
     },
   };
