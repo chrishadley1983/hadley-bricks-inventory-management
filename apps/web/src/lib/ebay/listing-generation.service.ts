@@ -16,8 +16,8 @@ import {
 } from '@/lib/ai/prompts/generate-listing';
 import type { DescriptionStyle, AIGeneratedListing } from './listing-creation.types';
 
-// Claude Opus 4.5 model ID
-const CLAUDE_OPUS_MODEL = 'claude-opus-4-5-20251101';
+// Claude Opus 5 model ID (thinking on by default; sampling params not supported)
+const CLAUDE_OPUS_MODEL = 'claude-opus-5';
 
 /**
  * Options for listing generation
@@ -60,14 +60,15 @@ export class ListingGenerationService {
       research
     );
 
-    // Call Claude Opus 4.5 for generation
+    // Call Claude Opus 5 for generation. No temperature (rejected with a 400 on
+    // Opus 5); maxTokens raised for headroom — thinking is on by default and
+    // max_tokens caps thinking + response text together.
     const response = await sendMessageForJSON<GeneratedListingResponse>(
       GENERATE_LISTING_SYSTEM_PROMPT,
       userMessage,
       {
         model: CLAUDE_OPUS_MODEL,
-        maxTokens: 4096,
-        temperature: 0.4, // Slightly creative but mostly consistent
+        maxTokens: 8192,
       }
     );
 
