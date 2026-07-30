@@ -1520,7 +1520,7 @@ Return JSON with these fields (omit any you're not confident about):
         generated_description: listing?.description,
         item_specifics: listing?.itemSpecifics,
         category_id: listing?.categoryId,
-        ai_model_used: 'claude-opus-4-5-20251101',
+        ai_model_used: 'claude-opus-5',
         ai_confidence_score: listing?.confidence,
         ai_recommendations: listing?.recommendations,
         // Quality review data (pre-publish review)

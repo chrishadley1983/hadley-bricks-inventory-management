@@ -3,6 +3,15 @@ import Anthropic from '@anthropic-ai/sdk';
 let client: Anthropic | null = null;
 
 /**
+ * Models that reject sampling parameters (temperature/top_p/top_k return a 400):
+ * Opus 4.7+, Opus 5, Sonnet 5, Fable/Mythos 5. For these we omit temperature
+ * entirely and steer with prompting instead.
+ */
+function supportsSamplingParams(model: string): boolean {
+  return !/opus-5|opus-4-7|opus-4-8|sonnet-5|fable-5|mythos/.test(model);
+}
+
+/**
  * Get the Anthropic client instance (singleton)
  */
 export function getClaudeClient(): Anthropic {
@@ -35,7 +44,8 @@ export async function sendMessage(
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    // Opus 4.7+/5-family models reject sampling params with a 400
+    ...(supportsSamplingParams(model) ? { temperature } : {}),
     system: systemPrompt,
     messages: [
       {
@@ -81,7 +91,7 @@ export async function sendMessageWithImage(
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...(supportsSamplingParams(model) ? { temperature } : {}),
     system: systemPrompt,
     messages: [
       {
@@ -141,7 +151,7 @@ export async function sendMessageWithImages(
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...(supportsSamplingParams(model) ? { temperature } : {}),
     system: systemPrompt,
     messages: [
       {
@@ -252,7 +262,7 @@ export async function sendConversation(
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
-    temperature,
+    ...(supportsSamplingParams(model) ? { temperature } : {}),
     system: systemPrompt,
     messages: messages.map((msg) => ({
       role: msg.role,
