@@ -674,6 +674,30 @@ async function flush(sb: SupabaseClient, batches: Batches): Promise<void> {
   batches.queueUpdates = [];
 }
 
+// Every flush step is idempotent (keyed upserts + per-row UPDATEs on already-claimed
+// rows), so a transient network failure is safe to retry with the same batches. Without
+// this, one "TypeError: fetch failed" on a queue update kills the whole run (2026-07-30:
+// 8 sessions lost mid-day).
+const FLUSH_ATTEMPTS = 3;
+const FLUSH_RETRY_DELAYS_MS = [10_000, 60_000];
+
+async function flushWithRetry(sb: SupabaseClient, batches: Batches): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await flush(sb, batches);
+      return;
+    } catch (err) {
+      if (attempt >= FLUSH_ATTEMPTS) throw err;
+      const delayMs = FLUSH_RETRY_DELAYS_MS[attempt - 1] ?? 60_000;
+      console.error(
+        `[pg-refresh-cycle] flush failed (attempt ${attempt}/${FLUSH_ATTEMPTS}): ` +
+          `${err instanceof Error ? err.message : String(err)} — retrying in ${Math.round(delayMs / 1000)}s`,
+      );
+      await sleep(delayMs);
+    }
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -800,7 +824,7 @@ async function main(): Promise<void> {
       }
 
       if (action === 'breather' || action === 'backoff') {
-        await flush(supabase, batches);
+        await flushWithRetry(supabase, batches);
         const endedAt = new Date().toISOString();
         await insertTelemetry(supabase, {
           sessionNo: state.sessionsCompleted + 1,
@@ -978,11 +1002,11 @@ async function main(): Promise<void> {
         }
       }
 
-      if (batches.queueUpdates.length >= FLUSH_AT) await flush(supabase, batches);
+      if (batches.queueUpdates.length >= FLUSH_AT) await flushWithRetry(supabase, batches);
     }
   } finally {
     try {
-      await flush(supabase, batches);
+      await flushWithRetry(supabase, batches);
     } catch (e) {
       console.error(`[pg-refresh-cycle] final flush failed: ${e instanceof Error ? e.message : e}`);
     }
