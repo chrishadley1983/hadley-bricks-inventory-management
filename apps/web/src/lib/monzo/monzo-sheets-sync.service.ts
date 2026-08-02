@@ -16,6 +16,7 @@ import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { getSheetsClient } from '@/lib/google/sheets-client';
+import { buildMerchantPrecedentMap, resolveLocalCategory } from './monzo-category-rules';
 
 // ============================================================================
 // Types
@@ -152,16 +153,18 @@ export class MonzoSheetsSyncService {
       // Use pagination to handle >1000 transactions (Supabase row limit)
       let existingTransactions: Array<{
         monzo_transaction_id: string;
+        merchant_name: string | null;
         local_category: string | null;
         user_notes: string | null;
       }> = [];
 
       try {
         existingTransactions = (await fetchAllRecords(supabase, 'monzo_transactions', {
-          select: 'monzo_transaction_id, local_category, user_notes',
+          select: 'monzo_transaction_id, merchant_name, local_category, user_notes',
           eq: { user_id: userId },
         })) as unknown as Array<{
           monzo_transaction_id: string;
+          merchant_name: string | null;
           local_category: string | null;
           user_notes: string | null;
         }>;
@@ -181,6 +184,10 @@ export class MonzoSheetsSyncService {
         ])
       );
 
+      // Merchant → dominant trusted category, from our own history. Applied to
+      // NEW rows whose sheet category is untrusted (a Monzo auto-guess).
+      const merchantPrecedents = buildMerchantPrecedentMap(existingTransactions);
+
       // Transform and filter transactions.
       // A row is skipped only if it is BOTH already in the DB AND older than the
       // incremental cursor. The Monzo→Sheets export can stall and write rows late;
@@ -194,7 +201,7 @@ export class MonzoSheetsSyncService {
           const txDate = this.parseSheetDate(row.Date, row.Time);
           return txDate && txDate > lastSyncDate;
         })
-        .map((row) => this.transformSheetRow(row, userId, existingMap));
+        .map((row) => this.transformSheetRow(row, userId, existingMap, merchantPrecedents));
 
       console.log(
         `[MonzoSheetsSyncService] Processing ${transactionsToProcess.length} transactions`
@@ -279,7 +286,8 @@ export class MonzoSheetsSyncService {
   private transformSheetRow(
     row: SheetMonzoTransaction,
     userId: string,
-    existingMap: Map<string, { local_category: string | null; user_notes: string | null }>
+    existingMap: Map<string, { local_category: string | null; user_notes: string | null }>,
+    merchantPrecedents: Map<string, string>
   ) {
     const existing = existingMap.get(row['Transaction ID']);
     const txDate = this.parseSheetDate(row.Date, row.Time);
@@ -302,8 +310,17 @@ export class MonzoSheetsSyncService {
       merchant: null, // Not available from sheets
       merchant_name: row.Name || null,
       category: null, // Monzo's original category not in export
-      // Use existing local_category if user edited it, otherwise use sheets category
-      local_category: existing?.local_category || row.Category || null,
+      // Existing rows keep their stored category verbatim (NULL means awaiting
+      // review — do not let the sheet's Monzo auto-guess refill it). New rows
+      // go through the trust/precedent/BL-seller rules; unresolved ones land
+      // NULL and surface in the "Categorise Monzo transactions" workflow task.
+      local_category: resolveLocalCategory({
+        existing,
+        sheetCategory: row.Category || null,
+        merchantName: row.Name || null,
+        description: row.Description || null,
+        precedents: merchantPrecedents,
+      }),
       // Preserve user's notes if they edited, otherwise use sheets notes
       user_notes: existing?.user_notes || row['Notes and #tags'] || null,
       tags: [],
