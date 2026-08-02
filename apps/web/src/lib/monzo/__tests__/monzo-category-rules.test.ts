@@ -236,6 +236,48 @@ describe('buildMerchantPrecedentMap', () => {
     ]);
     expect(map.size).toBe(0);
   });
+
+  it('ignores history older than the recency window when now is given', () => {
+    // The eBay case: 1,771 'Postage' rows up to Feb 2025 must not set the
+    // precedent for 2026 stock purchases.
+    const now = new Date('2026-08-02T00:00:00Z');
+    const rows = [
+      ...Array.from({ length: 100 }, () => ({
+        merchant_name: 'eBay',
+        local_category: 'Postage',
+        created: '2024-11-01T00:00:00Z',
+      })),
+      ...Array.from({ length: 10 }, () => ({
+        merchant_name: 'eBay',
+        local_category: 'Lego Stock',
+        created: '2026-06-01T00:00:00Z',
+      })),
+    ];
+    expect(buildMerchantPrecedentMap(rows, now).get('eBay')).toEqual({
+      category: 'Lego Stock',
+      strong: true,
+    });
+  });
+
+  it('treats rows with missing created as outside the window when now is given', () => {
+    const now = new Date('2026-08-02T00:00:00Z');
+    const map = buildMerchantPrecedentMap(
+      [
+        { merchant_name: 'Ghost Ltd', local_category: 'Software', created: null },
+        { merchant_name: 'Ghost Ltd', local_category: 'Software', created: null },
+      ],
+      now
+    );
+    expect(map.has('Ghost Ltd')).toBe(false);
+  });
+
+  it('uses all rows when now is omitted', () => {
+    const map = buildMerchantPrecedentMap([
+      { merchant_name: 'Old Faithful', local_category: 'Software', created: '2024-01-01T00:00:00Z' },
+      { merchant_name: 'Old Faithful', local_category: 'Software', created: '2024-01-02T00:00:00Z' },
+    ]);
+    expect(map.get('Old Faithful')).toEqual({ category: 'Software', strong: false });
+  });
 });
 
 describe('isPayPalDescriptor', () => {

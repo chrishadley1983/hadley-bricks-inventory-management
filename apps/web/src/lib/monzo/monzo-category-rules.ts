@@ -50,6 +50,14 @@ export const TRUSTED_LOCAL_CATEGORIES = new Set([
 /** Minimum categorised rows a merchant needs before its history sets precedent. */
 const PRECEDENT_MIN_OCCURRENCES = 2;
 
+/**
+ * Only history from the last year sets precedent. The business changes what a
+ * merchant means over time: eBay was 1,771× 'Postage' (label purchases) up to
+ * Feb 2025 and pure 'Lego Stock' since — all-time counts would categorise
+ * every new eBay stock purchase as Postage forever.
+ */
+export const PRECEDENT_WINDOW_DAYS = 365;
+
 /** A precedent this consistent overrides even a trusted sheet category. */
 const STRONG_PRECEDENT_MIN_OCCURRENCES = 3;
 const STRONG_PRECEDENT_MIN_SHARE = 0.9;
@@ -69,15 +77,25 @@ export interface MerchantPrecedent {
  * qualifies when its most common trusted category has at least
  * PRECEDENT_MIN_OCCURRENCES rows and a strict majority of the merchant's
  * trusted-categorised rows (ties or mixed history set no precedent).
+ *
+ * Pass `now` to enforce the PRECEDENT_WINDOW_DAYS recency window — rows with
+ * a `created` older than the window (or missing) are ignored. Omitting `now`
+ * uses all rows (for callers that pre-filter).
  */
 export function buildMerchantPrecedentMap(
-  rows: Array<{ merchant_name: string | null; local_category: string | null }>
+  rows: Array<{ merchant_name: string | null; local_category: string | null; created?: string | null }>,
+  now?: Date
 ): Map<string, MerchantPrecedent> {
+  const cutoffMs = now ? now.getTime() - PRECEDENT_WINDOW_DAYS * 24 * 60 * 60 * 1000 : null;
   const counts = new Map<string, Map<string, number>>();
 
   for (const row of rows) {
     if (!row.merchant_name || !row.local_category) continue;
     if (!TRUSTED_LOCAL_CATEGORIES.has(row.local_category)) continue;
+    if (cutoffMs !== null) {
+      const createdMs = row.created ? Date.parse(row.created) : NaN;
+      if (Number.isNaN(createdMs) || createdMs < cutoffMs) continue;
+    }
     let perMerchant = counts.get(row.merchant_name);
     if (!perMerchant) {
       perMerchant = new Map();
