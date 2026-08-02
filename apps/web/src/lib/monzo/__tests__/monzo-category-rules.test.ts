@@ -4,9 +4,12 @@ import {
   isPayPalDescriptor,
   resolveLocalCategory,
   TRUSTED_LOCAL_CATEGORIES,
+  type MerchantPrecedent,
 } from '../monzo-category-rules';
 
-const noPrecedents = new Map<string, string>();
+const noPrecedents = new Map<string, MerchantPrecedent>();
+const strong = (category: string): MerchantPrecedent => ({ category, strong: true });
+const weak = (category: string): MerchantPrecedent => ({ category, strong: false });
 
 describe('resolveLocalCategory', () => {
   it('keeps an existing row category verbatim', () => {
@@ -28,12 +31,54 @@ describe('resolveLocalCategory', () => {
         sheetCategory: 'Bills',
         merchantName: 'Keepa Price Tracker',
         description: 'KEEPA PRICE TRACKER KEMNATH DEU',
-        precedents: new Map([['Keepa Price Tracker', 'Software']]),
+        precedents: new Map([['Keepa Price Tracker', strong('Software')]]),
       })
     ).toBeNull();
   });
 
-  it('accepts a trusted sheet category on a new row', () => {
+  it('lets a strong precedent override even a trusted sheet category', () => {
+    // Keepa arriving mis-tagged as 'Services' (trusted!) must still be Software.
+    expect(
+      resolveLocalCategory({
+        existing: undefined,
+        sheetCategory: 'Services',
+        merchantName: 'Keepa Price Tracker',
+        description: 'KEEPA PRICE TRACKER KEMNATH DEU',
+        precedents: new Map([['Keepa Price Tracker', strong('Software')]]),
+      })
+    ).toBe('Software');
+  });
+
+  it('does NOT let a weak precedent override a trusted sheet category', () => {
+    // eBay is majority Lego Stock but has genuine Packing Materials rows —
+    // a deliberate trusted tag must survive.
+    expect(
+      resolveLocalCategory({
+        existing: undefined,
+        sheetCategory: 'Packing Materials',
+        merchantName: 'eBay',
+        description: 'EBAY O*12-3456',
+        precedents: new Map([['eBay', weak('Lego Stock')]]),
+      })
+    ).toBe('Packing Materials');
+  });
+
+  it('never trusts the sheet on PayPal rows — trusted-but-wrong Services is rejected', () => {
+    // The July 2026 failure: BL sellers auto-tagged 'Services' (a valid P&L
+    // category) sailed past a pure whitelist. PayPal rows resolve from our
+    // own rules only.
+    expect(
+      resolveLocalCategory({
+        existing: undefined,
+        sheetCategory: 'Services',
+        merchantName: 'Bradnewton9 Br',
+        description: 'PAYPAL *BRADNEWTON9 BR 35314369001   GBR',
+        precedents: noPrecedents,
+      })
+    ).toBe('Lego Parts');
+  });
+
+  it('accepts a trusted sheet category on a new non-PayPal row', () => {
     expect(
       resolveLocalCategory({
         existing: undefined,
@@ -50,9 +95,9 @@ describe('resolveLocalCategory', () => {
       resolveLocalCategory({
         existing: undefined,
         sheetCategory: 'Bills',
-        merchantName: 'Keepa Price Tracker',
-        description: 'KEEPA PRICE TRACKER KEMNATH DEU',
-        precedents: new Map([['Keepa Price Tracker', 'Software']]),
+        merchantName: 'Proton',
+        description: 'Proton                 Geneva        CHE',
+        precedents: new Map([['Proton', weak('Software')]]),
       })
     ).toBe('Software');
   });
@@ -69,14 +114,14 @@ describe('resolveLocalCategory', () => {
     ).toBe('Lego Parts');
   });
 
-  it('prefers merchant precedent over the PayPal heuristic', () => {
+  it('prefers merchant precedent over the PayPal Lego Parts fallback', () => {
     expect(
       resolveLocalCategory({
         existing: undefined,
         sheetCategory: 'General',
         merchantName: 'Bricqer',
-        description: 'PAYPAL *BRICQER 0630196670 NLD',
-        precedents: new Map([['Bricqer', 'Selling Fees']]),
+        description: 'PAYPAL *BRICQER        0630196670    NLD',
+        precedents: new Map([['Bricqer', weak('Selling Fees')]]),
       })
     ).toBe('Selling Fees');
   });
@@ -107,13 +152,53 @@ describe('resolveLocalCategory', () => {
 });
 
 describe('buildMerchantPrecedentMap', () => {
-  it('sets precedent from a clear trusted majority', () => {
+  it('marks a unanimous history of 3+ as strong', () => {
     const map = buildMerchantPrecedentMap([
       { merchant_name: 'Keepa Price Tracker', local_category: 'Software' },
       { merchant_name: 'Keepa Price Tracker', local_category: 'Software' },
       { merchant_name: 'Keepa Price Tracker', local_category: 'Software' },
     ]);
-    expect(map.get('Keepa Price Tracker')).toBe('Software');
+    expect(map.get('Keepa Price Tracker')).toEqual({ category: 'Software', strong: true });
+  });
+
+  it('marks a 2-row unanimous history as weak (below strong threshold)', () => {
+    const map = buildMerchantPrecedentMap([
+      { merchant_name: 'Proton', local_category: 'Software' },
+      { merchant_name: 'Proton', local_category: 'Software' },
+    ]);
+    expect(map.get('Proton')).toEqual({ category: 'Software', strong: false });
+  });
+
+  it('marks a clear-but-mixed majority as weak', () => {
+    // 7 of 10 = 70% majority: precedent yes, strong no.
+    const rows = [
+      ...Array.from({ length: 7 }, () => ({
+        merchant_name: 'eBay',
+        local_category: 'Lego Stock',
+      })),
+      ...Array.from({ length: 3 }, () => ({
+        merchant_name: 'eBay',
+        local_category: 'Packing Materials',
+      })),
+    ];
+    expect(buildMerchantPrecedentMap(rows).get('eBay')).toEqual({
+      category: 'Lego Stock',
+      strong: false,
+    });
+  });
+
+  it('marks a 90%+ majority as strong', () => {
+    const rows = [
+      ...Array.from({ length: 19 }, () => ({
+        merchant_name: 'Vinted',
+        local_category: 'Lego Stock',
+      })),
+      { merchant_name: 'Vinted', local_category: 'Personal' },
+    ];
+    expect(buildMerchantPrecedentMap(rows).get('Vinted')).toEqual({
+      category: 'Lego Stock',
+      strong: true,
+    });
   });
 
   it('requires at least two occurrences', () => {
@@ -141,7 +226,7 @@ describe('buildMerchantPrecedentMap', () => {
       { merchant_name: 'Bricqer', local_category: 'Bills' },
       { merchant_name: 'Bricqer', local_category: 'Bills' },
     ]);
-    expect(map.get('Bricqer')).toBe('Selling Fees');
+    expect(map.get('Bricqer')).toEqual({ category: 'Selling Fees', strong: false });
   });
 
   it('skips rows without merchant or category', () => {

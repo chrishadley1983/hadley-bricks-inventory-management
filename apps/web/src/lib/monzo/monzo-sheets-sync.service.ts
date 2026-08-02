@@ -16,7 +16,11 @@ import type { Database } from '@hadley-bricks/database';
 import { createClient } from '@/lib/supabase/server';
 import { fetchAllRecords } from '@/lib/supabase/pagination';
 import { getSheetsClient } from '@/lib/google/sheets-client';
-import { buildMerchantPrecedentMap, resolveLocalCategory } from './monzo-category-rules';
+import {
+  buildMerchantPrecedentMap,
+  resolveLocalCategory,
+  type MerchantPrecedent,
+} from './monzo-category-rules';
 
 // ============================================================================
 // Types
@@ -287,7 +291,7 @@ export class MonzoSheetsSyncService {
     row: SheetMonzoTransaction,
     userId: string,
     existingMap: Map<string, { local_category: string | null; user_notes: string | null }>,
-    merchantPrecedents: Map<string, string>
+    merchantPrecedents: Map<string, MerchantPrecedent>
   ) {
     const existing = existingMap.get(row['Transaction ID']);
     const txDate = this.parseSheetDate(row.Date, row.Time);

@@ -31,15 +31,28 @@ sheet's history. July's data was corrected by hand on 2026-08-02.
 
 ### `apps/web/src/lib/monzo/monzo-category-rules.ts` (new)
 
+A sheet category being *trusted* is not *validation*: four of July's misfiled
+BL-seller payments arrived as 'Services' — a valid P&L category — and would
+have sailed through a plain whitelist. Our own evidence therefore outranks the
+sheet (per Chris, 2026-08-02: "we should have our own rules to validate").
+
 - `TRUSTED_LOCAL_CATEGORIES` — the P&L taxonomy (Lego Stock, Lego Parts,
   Postage, Packing Materials, Selling Fees, Services, Software, Office Space)
   plus deliberate buckets (Income, Salary, Personal, Transfers).
 - `buildMerchantPrecedentMap()` — merchant → dominant trusted category from our
-  own history (≥2 rows, strict majority).
+  own history (≥2 rows, strict majority). Precedents with ≥3 rows and ≥90%
+  consistency are **strong**.
 - `resolveLocalCategory()` — resolution order for new rows:
-  trusted sheet category → merchant precedent → PayPal-descriptor heuristic
-  (`PAYPAL *…` → Lego Parts; every historic Lego Parts row is a PayPal BL-store
-  payment) → NULL (queued for review).
+  1. Strong merchant precedent — overrides the sheet outright (Keepa is
+     Software 12/12 times, whatever Monzo guesses).
+  2. PayPal-descriptor rows (`PAYPAL *…`) never trust the sheet: any
+     precedent, else Lego Parts (every historic Lego Parts row is a PayPal
+     BL-store payment). This is the rule that catches BL sellers auto-tagged
+     'Services'.
+  3. Trusted sheet category accepted — deliberate tags on genuinely mixed
+     merchants (eBay → Packing Materials) survive.
+  4. Weak/majority precedent fills untrusted gaps.
+  5. NULL (queued for review).
 - Existing rows keep their stored value **verbatim, including NULL** — the old
   `||` fallback would have let the sheet's auto-guess refill a row that was
   deliberately awaiting review.
@@ -57,10 +70,11 @@ sheet's history. July's data was corrected by hand on 2026-08-02.
 ## Verification
 
 - `tsc --noEmit` clean.
-- `vitest run src/lib/monzo src/lib/services/__tests__/profit-loss-cash-basis.test.ts`
-  — 115 tests, 6 files, all passing (17 new tests for the rules module:
-  trusted pass-through, NULL preservation, precedent majority/tie/threshold,
-  PayPal heuristic, taxonomy membership).
+- `vitest run src/lib/monzo` — 101 tests, 5 files, all passing (23 new tests
+  for the rules module: strong-precedent-overrides-trusted-sheet, the exact
+  July 'Services' failure case, weak-precedent-does-not-override,
+  NULL preservation, strong/weak thresholds, tie handling, PayPal heuristic,
+  taxonomy membership). Cash-basis P&L suite also verified passing.
 - ESLint clean on all changed files.
 
 ## Notes / out of scope
