@@ -160,17 +160,19 @@ export class MonzoSheetsSyncService {
         merchant_name: string | null;
         local_category: string | null;
         user_notes: string | null;
+        created: string | null;
       }> = [];
 
       try {
         existingTransactions = (await fetchAllRecords(supabase, 'monzo_transactions', {
-          select: 'monzo_transaction_id, merchant_name, local_category, user_notes',
+          select: 'monzo_transaction_id, merchant_name, local_category, user_notes, created',
           eq: { user_id: userId },
         })) as unknown as Array<{
           monzo_transaction_id: string;
           merchant_name: string | null;
           local_category: string | null;
           user_notes: string | null;
+          created: string | null;
         }>;
       } catch (fetchError) {
         // NOT safe to swallow (the original sync did): with an empty
@@ -195,9 +197,10 @@ export class MonzoSheetsSyncService {
         ])
       );
 
-      // Merchant → dominant trusted category, from our own history. Applied to
-      // NEW rows whose sheet category is untrusted (a Monzo auto-guess).
-      const merchantPrecedents = buildMerchantPrecedentMap(existingTransactions);
+      // Merchant → dominant trusted category, from our own RECENT history
+      // (last PRECEDENT_WINDOW_DAYS). Applied to NEW rows whose sheet category
+      // is untrusted (a Monzo auto-guess).
+      const merchantPrecedents = buildMerchantPrecedentMap(existingTransactions, new Date());
 
       // Transform and filter transactions.
       // A row is skipped only if it is BOTH already in the DB AND older than the
