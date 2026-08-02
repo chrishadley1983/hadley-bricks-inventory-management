@@ -172,9 +172,16 @@ export class MonzoSheetsSyncService {
           local_category: string | null;
           user_notes: string | null;
         }>;
-      } catch {
-        // Original pagination loop ignored fetch errors (treated as no data) — preserve that.
-        existingTransactions = [];
+      } catch (fetchError) {
+        // NOT safe to swallow (the original sync did): with an empty
+        // existingMap every sheet row looks new, and the upsert would
+        // overwrite every user-reviewed local_category (and user_notes)
+        // with fresh rule output. Fail the sync; the next run retries.
+        throw new Error(
+          `Failed to fetch existing transactions - aborting sync to protect reviewed categories: ${
+            fetchError instanceof Error ? fetchError.message : 'unknown error'
+          }`
+        );
       }
 
       console.log(
