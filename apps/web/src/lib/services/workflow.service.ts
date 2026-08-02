@@ -258,11 +258,15 @@ export class WorkflowService {
       }
 
       case 'transactions.uncategorised': {
+        // local_category, not category: `category` is Monzo's original-category
+        // column, which the sheets sync always leaves NULL — counting it made
+        // this badge show every transaction (4,662) since the sheets migration.
         const { count } = await this.supabase
           .from('monzo_transactions')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .is('category', null);
+          .eq('is_archived', false)
+          .is('local_category', null);
         return count ?? 0;
       }
 
