@@ -1,17 +1,16 @@
 {
-  "commit": "2114674e",
-  "branch": "fix/listing-gen-opus5",
-  "prNumber": 656,
-  "mergedAt": "2026-07-30T11:20:00Z",
-  "previousCommit": "a1fb866a",
+  "commit": "0223bf12",
+  "branch": "fix/monzo-sync-category-guard (+ fix/monzo-precedent-recency)",
+  "prNumber": 660,
+  "mergedAt": "2026-08-02T20:36:00Z",
+  "previousCommit": "6e199117",
   "deploymentVerified": true,
-  "verifiedAt": "2026-07-30T11:30:00Z",
+  "verifiedAt": "2026-08-02T20:40:00Z",
   "testsRun": [
-    "site-health",
     "login-page-200",
-    "ebay-listing-route-401",
-    "ebay-listing-confirm-route-401",
-    "regression-inventory-orders-pages"
+    "api-transactions-401",
+    "api-monzo-status-401",
+    "api-workflow-tasks-route-present"
   ],
   "testsPassed": true
 }
