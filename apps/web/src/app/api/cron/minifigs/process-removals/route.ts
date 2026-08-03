@@ -252,6 +252,39 @@ export async function POST(request: NextRequest) {
             .eq('id', removal.minifig_sync_id as string)
             .eq('user_id', userId);
 
+          // A Bricqer sale has NO inventory writer of its own.
+          //
+          // eBay, Amazon and Shopify sales all reach order-fulfilment, which sets
+          // inventory_items.status='SOLD'. BrickLink/Brick Owl (which is what a
+          // "Bricqer" sale really is) have no inventory-linking service, so the
+          // fig's row stayed 'LISTED' forever. That is not cosmetic: LISTED is
+          // exactly what makes an item Shopify-eligible, so the adopt-by-sku path
+          // re-published sold figs on every full-sync — 11 archived products came
+          // back within 75 minutes on 2026-07-26. Writing the status here is what
+          // makes an archive stick, and lets reconcileArchiveDrift do the archiving.
+          //
+          // Matched on the sync item's ebay_sku (one row per physical unit), never
+          // on set_number, so a duplicate we still hold is not written off.
+          //
+          // sold_platform is deliberately left unset: chk_sold_platform allows
+          // bricklink/brickowl but not 'bricqer', and which of the two this was
+          // cannot be proven from the removal row alone. Better null than wrong.
+          if (removal.sold_on === 'BRICQER' && syncItem.ebay_sku) {
+            const { error: invErr } = await supabase
+              .from('inventory_items')
+              .update({ status: 'SOLD', sold_at: now, sold_date: (removal.sale_date as string) ?? now })
+              .eq('user_id', userId)
+              .eq('sku', syncItem.ebay_sku as string)
+              .eq('status', 'LISTED');
+            if (invErr) {
+              // Non-fatal: the de-list itself already succeeded.
+              console.error(
+                `[process-removals] Failed to mark inventory SOLD for ${itemName}:`,
+                invErr.message
+              );
+            }
+          }
+
           // Archive Shopify product (non-blocking).
           // Do not filter by inventory_items.status — that only flips to SOLD when the
           // eBay order reaches FULFILLED (i.e. after shipping), which can lag days behind
