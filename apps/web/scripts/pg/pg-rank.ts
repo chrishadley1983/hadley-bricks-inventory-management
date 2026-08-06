@@ -4,8 +4,11 @@
  * Recomputes `bl_pg_refresh_queue.rank_score` for every tuple from the worldwide L1
  * summary (`bricklink_pg_summary_cache`), then assigns `tier`:
  *   - 'active' for the top `--active-size` tuples by rank_score, PLUS any tuple whose
- *     floor overrides rank (grace_until > now — new-release rule; or an existing
- *     rank_floor value such as 'watchlist'/'own_inventory' set by other tooling).
+ *     floor overrides rank (grace_until > now — new-release rule; or a rank_floor
+ *     value such as 'store_discovered' set by other tooling on a tuple that has
+ *     NEVER been scraped — floors are a bootstrap, not a permanent pin: once a
+ *     tuple has a real answer (last_refreshed_at set), rank decides (Chris
+ *     2026-08-06)).
  *   - 'tail' for everything else.
  *
  * rank_score formula (spec §4.1, GBP):
@@ -70,6 +73,7 @@ interface QueueRow {
   grace_until: string | null;
   rank_floor: string | null;
   next_due_at: string;
+  last_refreshed_at: string | null;
 }
 
 function tupleKey(t: { item_type: string; item_no: string; colour_id: number }): string {
@@ -147,7 +151,7 @@ async function main(): Promise<void> {
   for (let page = 0; ; page++) {
     const { data, error } = await supabase
       .from('bl_pg_refresh_queue')
-      .select('item_type,item_no,colour_id,tier,grace_until,rank_floor,next_due_at')
+      .select('item_type,item_no,colour_id,tier,grace_until,rank_floor,next_due_at,last_refreshed_at')
       // Stable ordering by composite PK — same rationale as the L1 read above.
       .order('item_type', { ascending: true })
       .order('item_no', { ascending: true })
@@ -161,7 +165,10 @@ async function main(): Promise<void> {
       const key = tupleKey(row);
       const score = scores.get(key) ?? 0;
       const graceActive = !!row.grace_until && new Date(row.grace_until).getTime() > nowMs;
-      const floorActive = graceActive || !!row.rank_floor;
+      // A rank_floor is a bootstrap ("get this scraped at least once"), not a
+      // permanent pin: it only holds a tuple active until the first real answer
+      // lands (last_refreshed_at set). After that, rank decides (Chris 2026-08-06).
+      const floorActive = graceActive || (!!row.rank_floor && row.last_refreshed_at === null);
       const rankActive = topSet.has(key);
       const newTier: 'active' | 'tail' = floorActive || rankActive ? 'active' : 'tail';
       const oldTier = row.tier;
