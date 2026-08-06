@@ -485,8 +485,17 @@ function toNoDataQueueUpdate(t: QueueRow): Record<string, unknown> {
   // A confirmed no-data page IS a successful scrape whose answer is empty (audit
   // 2026-07-20): stamp it refreshed, clear the failure ladder, and re-check on the
   // no-data cycle. The evidence record is the zero L1 row written alongside this.
+  //
+  // A no-data answer also settles the tuple's tier (Chris 2026-08-06): demote to
+  // tail — the rank_floor's job was to get the tuple looked at, and the market said
+  // no. rank_floor itself is left intact as enqueue provenance (pg-digest's growth
+  // split reads it); pg-rank ignores floors on scraped tuples, so it cannot
+  // re-promote. Exception: tuples still inside the new-release grace window keep
+  // their tier; brand-new parts legitimately have no data yet, and the monthly rank
+  // recompute takes over once grace lapses.
   const nowIso = new Date().toISOString();
-  return {
+  const graceActive = !!t.grace_until && new Date(t.grace_until).getTime() > Date.now();
+  const update: Record<string, unknown> = {
     item_type: t.item_type,
     item_no: t.item_no,
     colour_id: t.colour_id,
@@ -498,6 +507,8 @@ function toNoDataQueueUpdate(t: QueueRow): Record<string, unknown> {
     locked_at: null,
     updated_at: nowIso,
   };
+  if (!graceActive) update.tier = 'tail';
+  return update;
 }
 
 function toNotFoundQueueUpdate(t: QueueRow, err: Error): Record<string, unknown> {
