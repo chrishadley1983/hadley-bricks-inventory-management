@@ -25,6 +25,7 @@ import { archiveShopifyOnSold } from './archive-on-sold';
 import { EbayDelistingService } from '@/lib/ebay/ebay-delisting.service';
 import { discordService } from '@/lib/notifications';
 import type {
+  ShopifyBalanceTransaction,
   ShopifyConfig,
   ShopifyOrder,
   ShopifyOrderLineItem,
@@ -90,6 +91,7 @@ export class ShopifyOrderSyncService {
       minifigRemovalsQueued: 0,
       unmatchedLineItems: 0,
       oversoldLineItems: 0,
+      transactionsRecorded: 0,
       errors: [],
       lastCursor: null,
       startedAt,
@@ -123,15 +125,27 @@ export class ShopifyOrderSyncService {
       updatedAtMin = new Date(now - FIRST_RUN_LOOKBACK_MS).toISOString();
     }
 
-    let orders: ShopifyOrder[];
+    let allOrders: ShopifyOrder[];
     try {
       const client = await this.getClient();
-      orders = await client.getOrders({ updatedAtMin, financialStatus: 'paid', status: 'any' });
+      // financialStatus 'any', NOT 'paid': an order that gets refunded moves to
+      // financial_status 'refunded'/'partially_refunded' and would drop out of
+      // a 'paid' fetch forever — its refund transaction would never be
+      // recorded and its stored status would stay stale. The paid-family
+      // filter below still keeps unpaid/pending orders from being acted on.
+      allOrders = await client.getOrders({ updatedAtMin, financialStatus: 'any', status: 'any' });
     } catch (err) {
       result.errors.push({ context: 'fetch', error: err instanceof Error ? err.message : String(err) });
       result.completedAt = new Date().toISOString();
       return result;
     }
+
+    // Only ever act on orders whose payment actually happened. Pending /
+    // unpaid orders must NOT mark stock sold or de-list anything.
+    const PAID_FAMILY = ['paid', 'partially_refunded', 'refunded', 'partially_paid'];
+    const orders = allOrders.filter((o) =>
+      PAID_FAMILY.includes((o.financial_status ?? '').toLowerCase())
+    );
 
     result.ordersFetched = orders.length;
 
@@ -148,6 +162,14 @@ export class ShopifyOrderSyncService {
         });
       }
     }
+
+    // Record payment transactions (revenue + Shopify Payments fees) for the
+    // fetched orders. Not fatal to the sync if it fails — errors are surfaced.
+    const txnResult = await this.syncTransactionsForOrders(
+      orders.filter((o) => !o.cancelled_at)
+    );
+    result.transactionsRecorded = txnResult.transactionsRecorded;
+    result.errors.push(...txnResult.errors);
 
     // Advance the cursor to now (we used an overlap window so a small gap is safe).
     const cursor = new Date(now).toISOString();
@@ -176,6 +198,128 @@ export class ShopifyOrderSyncService {
     }
 
     return result;
+  }
+
+  /**
+   * Record the payment transactions (revenue + processing fees) for a batch of
+   * orders into `shopify_transactions`, and stamp each order's fee total onto
+   * `platform_orders.fees`.
+   *
+   * Fees come from the Shopify Payments balance-transactions feed, matched by
+   * order-transaction id — the authoritative source, and the same figures that
+   * reconcile against payouts. PayPal-gateway orders never appear in that feed
+   * and record no fee here: PayPal is authoritative for those
+   * (`paypal_transactions`), which also prevents double-claiming.
+   *
+   * Public so the historical backfill can drive it directly. Idempotent:
+   * upserts on (user_id, shopify_transaction_id).
+   */
+  async syncTransactionsForOrders(
+    orders: ShopifyOrder[],
+    opts?: { balanceMaxPages?: number }
+  ): Promise<{ transactionsRecorded: number; errors: Array<{ context: string; error: string }> }> {
+    const out = {
+      transactionsRecorded: 0,
+      errors: [] as Array<{ context: string; error: string }>,
+    };
+    if (orders.length === 0) return out;
+
+    const client = await this.getClient();
+
+    // Fee + payout linkage for Shopify Payments charges (newest first; two
+    // pages = 500 balance rows, months of headroom at current volume).
+    let balanceByOrderTxnId = new Map<number, ShopifyBalanceTransaction>();
+    try {
+      const balance = await client.getBalanceTransactions({
+        maxPages: opts?.balanceMaxPages ?? 2,
+      });
+      balanceByOrderTxnId = new Map(
+        balance
+          .filter((b) => b.source_order_transaction_id != null)
+          .map((b) => [b.source_order_transaction_id as number, b])
+      );
+    } catch (err) {
+      // Not fatal: transactions still get recorded, fee enrichment just
+      // doesn't happen this run (upsert repairs them on the next).
+      out.errors.push({
+        context: 'balance transactions',
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    for (const order of orders) {
+      try {
+        const txns = await client.getOrderTransactions(order.id);
+        let orderFees = 0;
+        let recorded = 0;
+
+        for (const txn of txns) {
+          if (txn.status !== 'success') continue;
+          if (!['sale', 'capture', 'refund'].includes(txn.kind)) continue;
+
+          const amount = Math.abs(parseFloat(txn.amount) || 0);
+          const gross = txn.kind === 'refund' ? -amount : amount;
+          const balanceTxn = balanceByOrderTxnId.get(txn.id);
+          const fee = balanceTxn ? Math.abs(parseFloat(balanceTxn.fee) || 0) : 0;
+
+          // Gateway-side payment reference (PayPal captures expose their txn
+          // id in the receipt) — used to de-duplicate against
+          // paypal_transactions on the P&L.
+          const receipt = (txn.receipt ?? {}) as Record<string, unknown>;
+          const paymentRef =
+            [receipt['capture_id'], receipt['transaction_id'], receipt['id']].find(
+              (v): v is string => typeof v === 'string'
+            ) ?? null;
+
+          const { error } = await this.supabase.from('shopify_transactions').upsert(
+            {
+              user_id: this.userId,
+              shopify_transaction_id: String(txn.id),
+              shopify_order_id: String(order.id),
+              order_name: order.name,
+              kind: txn.kind,
+              gateway: txn.gateway,
+              status: txn.status,
+              transaction_date: txn.processed_at ?? txn.created_at,
+              currency: txn.currency,
+              gross_amount: Math.round(gross * 100) / 100,
+              fee_amount: Math.round(fee * 100) / 100,
+              net_amount: Math.round((gross - fee) * 100) / 100,
+              balance_transaction_id: balanceTxn ? String(balanceTxn.id) : null,
+              payout_id: balanceTxn?.payout_id != null ? String(balanceTxn.payout_id) : null,
+              payout_status: balanceTxn?.payout_status ?? null,
+              payment_ref: paymentRef,
+              raw_response: txn as unknown as Database['public']['Tables']['shopify_transactions']['Insert']['raw_response'],
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: 'user_id,shopify_transaction_id' }
+          );
+          if (error) throw new Error(`shopify_transactions upsert ${txn.id}: ${error.message}`);
+
+          orderFees += fee;
+          recorded++;
+        }
+
+        out.transactionsRecorded += recorded;
+
+        if (recorded > 0) {
+          const { error } = await this.supabase
+            .from('platform_orders')
+            .update({ fees: Math.round(orderFees * 100) / 100 })
+            .eq('user_id', this.userId)
+            .eq('platform', 'shopify')
+            .eq('platform_order_id', String(order.id));
+          if (error) throw new Error(`platform_orders fees update: ${error.message}`);
+        }
+      } catch (err) {
+        out.errors.push({
+          context: `transactions ${order.name}`,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    return out;
   }
 
   private async upsertOrder(order: ShopifyOrder): Promise<void> {

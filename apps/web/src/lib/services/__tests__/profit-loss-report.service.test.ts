@@ -337,16 +337,17 @@ describe('ProfitLossReportService', () => {
 
       // Expected row counts per category (accrual basis, the default)
       // Shopify was added 2026-07-25: real trading income once the store started
-      // selling, previously omitted from both bases.
-      expect(incomeRows.length).toBe(7); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Shopify, Amazon Sales, Amazon Refunds
-      expect(sellingFeesRows.length).toBe(12); // BL/BO/Bricqer, Amazon, PayPal, 9 eBay fee types (incl. Promoted Offsite)
+      // selling, previously omitted from both bases. Refunds + fees rows added
+      // 2026-08-07 with the shopify_transactions ingestion.
+      expect(incomeRows.length).toBe(8); // eBay Gross Sales, eBay Refunds, BrickLink, Brick Owl, Shopify Sales, Shopify Refunds, Amazon Sales, Amazon Refunds
+      expect(sellingFeesRows.length).toBe(13); // BL/BO/Bricqer, Amazon, PayPal, Shopify, 9 eBay fee types (incl. Promoted Offsite)
       expect(stockPurchaseRows.length).toBe(2); // Lego Stock, Lego Parts
       expect(packingRows.length).toBe(3); // Postage, eBay Postage Labels, Packing Materials
       expect(billsRows.length).toBe(5); // Amazon Sub, Banking, Website / Software, Office, Mileage
       expect(homeCostsRows.length).toBe(3); // Use of Home, Phone & Broadband, Insurance
 
-      // Total should be 32 rows (7 income + 12 selling fees + 2 stock + 3 packing + 5 bills + 3 home costs)
-      expect(result.rows.length).toBe(32);
+      // Total should be 34 rows (8 income + 13 selling fees + 2 stock + 3 packing + 5 bills + 3 home costs)
+      expect(result.rows.length).toBe(34);
     });
 
     it('should include expected Income row types', async () => {

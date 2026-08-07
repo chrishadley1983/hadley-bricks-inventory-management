@@ -231,6 +231,21 @@ export async function assertSourcesRepresented(
         return (data?.length ?? 0) > 0;
       },
     },
+    {
+      label: 'Shopify Payments processing fees',
+      rows: ['Shopify Fees'],
+      present: async () => {
+        const { data } = await supabase
+          .from('shopify_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .gt('fee_amount', 0)
+          .gte('transaction_date', startDate)
+          .lt('transaction_date', endDateExclusive)
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      },
+    },
   ];
 
   for (const check of checks) {
@@ -285,7 +300,7 @@ async function main() {
 
   // Completeness: prove every money-bearing source reached a row, not just that
   // the boxes add up to the rows we happened to query.
-  const sourceNotes = await assertSourcesRepresented(
+  await assertSourcesRepresented(
     supabase as unknown as SupabaseClient,
     USER_ID,
     startDate,

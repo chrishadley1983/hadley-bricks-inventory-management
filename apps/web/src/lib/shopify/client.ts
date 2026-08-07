@@ -1,6 +1,8 @@
 import type {
+  ShopifyBalanceTransaction,
   ShopifyConfig,
   ShopifyOrder,
+  ShopifyOrderTransaction,
   ShopifyProductPayload,
   ShopifyProductResponse,
 } from './types';
@@ -380,7 +382,7 @@ export class ShopifyClient {
       financial_status: opts.financialStatus ?? 'paid',
       limit: String(opts.limit ?? 250),
       fields:
-        'id,name,created_at,updated_at,cancelled_at,financial_status,fulfillment_status,currency,total_price,subtotal_price,total_tax,total_shipping_price_set,total_discounts,email,customer,line_items,refunds',
+        'id,name,created_at,updated_at,cancelled_at,financial_status,fulfillment_status,currency,total_price,subtotal_price,total_tax,total_shipping_price_set,total_discounts,email,customer,payment_gateway_names,line_items,refunds',
     });
     if (opts.updatedAtMin) params.set('updated_at_min', opts.updatedAtMin);
 
@@ -415,6 +417,68 @@ export class ShopifyClient {
 
       const json = (await response.json()) as { orders?: ShopifyOrder[] };
       if (json.orders?.length) all.push(...json.orders);
+
+      const link = response.headers.get('link') || '';
+      const next = link.match(/<([^>]+)>;\s*rel="next"/);
+      url = next ? next[1] : '';
+    }
+
+    return all;
+  }
+
+  /**
+   * Fetch the payment transactions for one order (sale/capture/refund/void).
+   * This is the authoritative per-order payment record: gateway, captured
+   * amount, refunds — and for PayPal orders, the gateway-side receipt.
+   */
+  async getOrderTransactions(orderId: number | string): Promise<ShopifyOrderTransaction[]> {
+    const json = await this.request<{ transactions?: ShopifyOrderTransaction[] }>(
+      'GET',
+      `/orders/${orderId}/transactions.json`
+    );
+    return json.transactions ?? [];
+  }
+
+  /**
+   * Fetch Shopify Payments balance transactions (newest first, Link-header
+   * pagination) — the authoritative processing-fee source, with payout
+   * linkage. Only Shopify Payments charges appear here; PayPal-gateway
+   * orders keep their fee data in PayPal.
+   */
+  async getBalanceTransactions(
+    opts: { maxPages?: number } = {}
+  ): Promise<ShopifyBalanceTransaction[]> {
+    const maxPages = opts.maxPages ?? 1;
+    let url = `https://${this.shopDomain}/admin/api/${this.apiVersion}/shopify_payments/balance/transactions.json?limit=250`;
+    const all: ShopifyBalanceTransaction[] = [];
+
+    for (let page = 0; url && page < maxPages; page++) {
+      const token = await this.getToken();
+      await this.waitForBucket();
+
+      const response = await fetch(url, {
+        headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+        signal: AbortSignal.timeout(30000),
+      });
+
+      const callLimit = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
+      if (callLimit) {
+        const [used, max] = callLimit.split('/').map(Number);
+        this.bucket = max - used;
+      }
+
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After') || '2';
+        await sleep(parseFloat(retryAfter) * 1000);
+        continue; // retry same url
+      }
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Shopify balance transactions fetch failed (${response.status}): ${text}`);
+      }
+
+      const json = (await response.json()) as { transactions?: ShopifyBalanceTransaction[] };
+      if (json.transactions?.length) all.push(...json.transactions);
 
       const link = response.headers.get('link') || '';
       const next = link.match(/<([^>]+)>;\s*rel="next"/);
