@@ -18,7 +18,7 @@
  *   21   rent, rates, power, insurance  Office (unit rent) + Use of Home + Insurance
  *   23   phone, stationery, office      Postage + Packing + Phone & Broadband + Website/Software
  *   24.1 advertising                    eBay Ad Fees
- *   26   bank/financial charges         PayPal Fees
+ *   26   bank/financial charges         PayPal Fees + Shopify Fees (payment processing)
  *   30   other business expenses        marketplace commissions + Amazon sub + banking fees/subs
  * Boxes 17–30 are used INSTEAD OF the consolidated box 31.
  */
@@ -51,6 +51,8 @@ const BOX_BY_ROW: Record<string, string> = {
   'eBay Ad Fees - Advanced': '24.1',
   'eBay Promoted Offsite': '24.1',
   'PayPal Fees': '26',
+  'Shopify Fees': '26', // Shopify Payments processing fee — financial charge like PayPal
+
   'Amazon Fees': '30',
   'eBay Fixed Fees': '30',
   'eBay Insertion Fees': '30', // listing fees are eBay non-ad selling fees, not advertising
@@ -231,6 +233,21 @@ export async function assertSourcesRepresented(
         return (data?.length ?? 0) > 0;
       },
     },
+    {
+      label: 'Shopify Payments processing fees',
+      rows: ['Shopify Fees'],
+      present: async () => {
+        const { data } = await supabase
+          .from('shopify_transactions')
+          .select('id')
+          .eq('user_id', userId)
+          .gt('fee_amount', 0)
+          .gte('transaction_date', startDate)
+          .lt('transaction_date', endDateExclusive)
+          .limit(1);
+        return (data?.length ?? 0) > 0;
+      },
+    },
   ];
 
   for (const check of checks) {
@@ -285,7 +302,7 @@ async function main() {
 
   // Completeness: prove every money-bearing source reached a row, not just that
   // the boxes add up to the rows we happened to query.
-  const sourceNotes = await assertSourcesRepresented(
+  await assertSourcesRepresented(
     supabase as unknown as SupabaseClient,
     USER_ID,
     startDate,

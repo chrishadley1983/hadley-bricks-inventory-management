@@ -13936,6 +13936,75 @@ export type Database = {
           },
         ]
       }
+      shopify_transactions: {
+        Row: {
+          balance_transaction_id: string | null
+          created_at: string
+          currency: string | null
+          fee_amount: number | null
+          gateway: string | null
+          gross_amount: number | null
+          id: string
+          kind: string | null
+          net_amount: number | null
+          order_name: string | null
+          payment_ref: string | null
+          payout_id: string | null
+          payout_status: string | null
+          raw_response: Json | null
+          shopify_order_id: string | null
+          shopify_transaction_id: string
+          status: string | null
+          transaction_date: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance_transaction_id?: string | null
+          created_at?: string
+          currency?: string | null
+          fee_amount?: number | null
+          gateway?: string | null
+          gross_amount?: number | null
+          id?: string
+          kind?: string | null
+          net_amount?: number | null
+          order_name?: string | null
+          payment_ref?: string | null
+          payout_id?: string | null
+          payout_status?: string | null
+          raw_response?: Json | null
+          shopify_order_id?: string | null
+          shopify_transaction_id: string
+          status?: string | null
+          transaction_date?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance_transaction_id?: string | null
+          created_at?: string
+          currency?: string | null
+          fee_amount?: number | null
+          gateway?: string | null
+          gross_amount?: number | null
+          id?: string
+          kind?: string | null
+          net_amount?: number | null
+          order_name?: string | null
+          payment_ref?: string | null
+          payout_id?: string | null
+          payout_status?: string | null
+          raw_response?: Json | null
+          shopify_order_id?: string | null
+          shopify_transaction_id?: string
+          status?: string | null
+          transaction_date?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       shopping_staples: {
         Row: {
           category: string

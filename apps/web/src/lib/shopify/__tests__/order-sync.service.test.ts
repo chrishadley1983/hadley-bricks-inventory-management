@@ -3,6 +3,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getOrders: vi.fn(),
+  getOrderTransactions: vi.fn(),
+  getBalanceTransactions: vi.fn(),
   archiveShopifyOnSold: vi.fn(),
   endListingForInventoryItem: vi.fn(),
   endListing: vi.fn(),
@@ -11,7 +13,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../client', () => ({
   ShopifyClient: vi.fn(function () {
-    return { getOrders: mocks.getOrders };
+    return {
+      getOrders: mocks.getOrders,
+      getOrderTransactions: mocks.getOrderTransactions,
+      getBalanceTransactions: mocks.getBalanceTransactions,
+    };
   }),
 }));
 vi.mock('../archive-on-sold', () => ({ archiveShopifyOnSold: mocks.archiveShopifyOnSold }));
@@ -102,6 +108,8 @@ function makeOrder(overrides: any = {}) {
 
 beforeEach(() => {
   mocks.getOrders.mockReset();
+  mocks.getOrderTransactions.mockReset().mockResolvedValue([]);
+  mocks.getBalanceTransactions.mockReset().mockResolvedValue([]);
   mocks.archiveShopifyOnSold.mockReset().mockResolvedValue(undefined);
   mocks.endListingForInventoryItem.mockReset().mockResolvedValue({ found: true, ended: true, ebayItemId: 'E1' });
   mocks.endListing.mockReset().mockResolvedValue({ success: true, ebayItemId: 'E1' });
@@ -190,6 +198,142 @@ describe('ShopifyOrderSyncService.syncOrders', () => {
     expect(supabase._captured.upserts.some((u: any) => u.table === 'platform_orders')).toBe(true);
   });
 
+  it('records payment transactions with Shopify Payments fees and stamps platform_orders.fees', async () => {
+    mocks.getOrders.mockResolvedValue([makeOrder()]);
+    mocks.getOrderTransactions.mockResolvedValue([
+      {
+        id: 9001,
+        order_id: 5001,
+        kind: 'sale',
+        gateway: 'shopify_payments',
+        status: 'success',
+        amount: '14.99',
+        currency: 'GBP',
+        created_at: '2026-06-10T10:00:00Z',
+        processed_at: '2026-06-10T10:00:01Z',
+      },
+      // Failed attempt must be ignored
+      {
+        id: 9000,
+        order_id: 5001,
+        kind: 'sale',
+        gateway: 'shopify_payments',
+        status: 'failure',
+        amount: '14.99',
+        currency: 'GBP',
+        created_at: '2026-06-10T09:59:00Z',
+        processed_at: null,
+      },
+    ]);
+    mocks.getBalanceTransactions.mockResolvedValue([
+      {
+        id: 7001,
+        type: 'charge',
+        currency: 'GBP',
+        amount: '14.99',
+        fee: '0.50',
+        net: '14.49',
+        source_id: 111,
+        source_type: 'charge',
+        source_order_id: 5001,
+        source_order_transaction_id: 9001,
+        payout_id: 42,
+        payout_status: 'paid',
+        processed_at: '2026-06-10T10:00:01Z',
+      },
+    ]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv1', sku: 'N1', created_at: '2026-01-01', storage_location: null }],
+        error: null,
+      },
+      'shopify_products:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    expect(res.success).toBe(true);
+    expect(res.transactionsRecorded).toBe(1);
+
+    const txnUpsert = supabase._captured.upserts.find(
+      (u: any) => u.table === 'shopify_transactions'
+    );
+    expect(txnUpsert).toBeDefined();
+    expect(txnUpsert.payload.shopify_transaction_id).toBe('9001');
+    expect(txnUpsert.payload.gateway).toBe('shopify_payments');
+    expect(txnUpsert.payload.gross_amount).toBe(14.99);
+    expect(txnUpsert.payload.fee_amount).toBe(0.5);
+    expect(txnUpsert.payload.net_amount).toBe(14.49);
+    expect(txnUpsert.payload.payout_id).toBe('42');
+    expect(txnUpsert.opts.onConflict).toBe('user_id,shopify_transaction_id');
+
+    // Only ONE upsert — the failed attempt was skipped
+    expect(
+      supabase._captured.upserts.filter((u: any) => u.table === 'shopify_transactions')
+    ).toHaveLength(1);
+
+    // Fee total stamped onto the order row
+    const feeUpdate = supabase._captured.updates.find(
+      (u: any) => u.table === 'platform_orders' && 'fees' in u.payload
+    );
+    expect(feeUpdate).toBeDefined();
+    expect(feeUpdate.payload.fees).toBe(0.5);
+  });
+
+  it('records a refund transaction as negative gross and no fee for PayPal-gateway orders', async () => {
+    mocks.getOrders.mockResolvedValue([makeOrder()]);
+    mocks.getOrderTransactions.mockResolvedValue([
+      {
+        id: 9002,
+        order_id: 5001,
+        kind: 'sale',
+        gateway: 'paypal',
+        status: 'success',
+        amount: '14.99',
+        currency: 'GBP',
+        created_at: '2026-06-10T10:00:00Z',
+        processed_at: '2026-06-10T10:00:01Z',
+        receipt: { capture_id: '4XP12345AB678901C' },
+      },
+      {
+        id: 9003,
+        order_id: 5001,
+        kind: 'refund',
+        gateway: 'paypal',
+        status: 'success',
+        amount: '5.00',
+        currency: 'GBP',
+        created_at: '2026-06-12T10:00:00Z',
+        processed_at: '2026-06-12T10:00:01Z',
+      },
+    ]);
+    // PayPal charges never appear in the Shopify Payments balance feed
+    mocks.getBalanceTransactions.mockResolvedValue([]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv1', sku: 'N1', created_at: '2026-01-01', storage_location: null }],
+        error: null,
+      },
+      'shopify_products:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    expect(res.transactionsRecorded).toBe(2);
+    const txns = supabase._captured.upserts.filter(
+      (u: any) => u.table === 'shopify_transactions'
+    );
+    const sale = txns.find((u: any) => u.payload.kind === 'sale');
+    const refund = txns.find((u: any) => u.payload.kind === 'refund');
+    expect(sale.payload.fee_amount).toBe(0); // fee is PayPal's to report
+    expect(sale.payload.payment_ref).toBe('4XP12345AB678901C');
+    expect(refund.payload.gross_amount).toBe(-5);
+  });
+
   it('skips cancelled orders', async () => {
     mocks.getOrders.mockResolvedValue([makeOrder({ cancelled_at: '2026-06-11T00:00:00Z' })]);
     const supabase = createSupabase({ 'shopify_config:select': { data: CONFIG_ROW, error: null } });
@@ -197,6 +341,38 @@ describe('ShopifyOrderSyncService.syncOrders', () => {
     const res = await svc.syncOrders();
     expect(res.ordersIngested).toBe(0);
     expect(res.itemsMarkedSold).toBe(0);
+  });
+
+  it('fetches all financial statuses but never acts on unpaid/pending orders', async () => {
+    mocks.getOrders.mockResolvedValue([
+      makeOrder({ id: 5001, financial_status: 'pending' }),
+      makeOrder({ id: 5002, financial_status: 'partially_refunded' }),
+    ]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv1', sku: 'N1', created_at: '2026-01-01', storage_location: null }],
+        error: null,
+      },
+      'shopify_products:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    // The fetch must be status-agnostic (refunded orders would vanish from a
+    // 'paid' fetch), with the paid-family filter applied in code.
+    expect(mocks.getOrders).toHaveBeenCalledWith(
+      expect.objectContaining({ financialStatus: 'any' })
+    );
+
+    // Only the partially_refunded order is ingested; the pending one is not.
+    const orderUpserts = supabase._captured.upserts.filter(
+      (u: any) => u.table === 'platform_orders'
+    );
+    expect(orderUpserts).toHaveLength(1);
+    expect(orderUpserts[0].payload.platform_order_id).toBe('5002');
+    expect(res.ordersFetched).toBe(1);
   });
 
   it('does nothing when sync is disabled', async () => {

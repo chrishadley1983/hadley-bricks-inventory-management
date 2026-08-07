@@ -927,7 +927,7 @@ async function fetchPayPalCustomerReceipts(
   // Read EVERY money-in row so the guard can see codes we don't yet handle,
   // then let each caller select the codes it is responsible for.
   const allReceipts = await fetchAllRecords(supabase, 'paypal_transactions', {
-    select: 'transaction_date, gross_amount, transaction_type, transaction_event_code',
+    select: 'transaction_date, gross_amount, transaction_type, transaction_event_code, paypal_transaction_id',
     eq: { user_id: userId },
     gt: { gross_amount: 0 },
     gte: { transaction_date: startDate },
@@ -936,8 +936,25 @@ async function fetchPayPalCustomerReceipts(
 
   assertNoUnclassifiedPayPalReceipts(allReceipts);
 
-  return allReceipts.filter((r) =>
-    (PAYPAL_CUSTOMER_PAYMENT_CODES as readonly string[]).includes(r.transaction_event_code ?? '')
+  // Shopify orders paid via the PayPal gateway land in the PayPal balance too,
+  // but their revenue is already counted by the Shopify Sales row (order date
+  // == receipt date on both bases). Drop them here — one choke point protects
+  // every consumer (BrickLink cash / Brick Owl cash / Other PayPal) from
+  // counting the same money twice or mis-bucketing it as marketplace income.
+  // Matched via the PayPal capture id Shopify exposes on the order transaction.
+  const shopifyPayPalRows = await fetchAllRecords(supabase, 'shopify_transactions', {
+    select: 'payment_ref',
+    eq: { user_id: userId, gateway: 'paypal' },
+  });
+  const shopifyPayPalRefs = new Set(
+    shopifyPayPalRows.map((r) => r.payment_ref).filter((ref): ref is string => !!ref)
+  );
+
+  return allReceipts.filter(
+    (r) =>
+      (PAYPAL_CUSTOMER_PAYMENT_CODES as readonly string[]).includes(
+        r.transaction_event_code ?? ''
+      ) && !shopifyPayPalRefs.has(r.paypal_transaction_id ?? '')
   );
 }
 
@@ -974,9 +991,9 @@ async function queryBrickLinkSalesCash(
  * 2026/27 and £79.92 in the first three weeks of July, so leaving it out would
  * understate turnover by a growing amount.
  *
- * NOTE: `platform_orders.fees` is null on every Shopify row, so no Shopify
- * payment-processing fee is claimed anywhere. That understates expenses
- * slightly — it needs a fee source before this grows further.
+ * Refunds are NOT netted here — the Shopify Refunds row deducts them once,
+ * from shopify_transactions. Processing fees are claimed by the Shopify Fees
+ * row (same source table).
  */
 async function queryShopifySales(
   supabase: SupabaseClient<Database>,
@@ -997,6 +1014,68 @@ async function queryShopifySales(
     if (String(row.status ?? '').toLowerCase() === 'cancelled') continue;
     const month = row.order_date.substring(0, 7);
     monthMap.set(month, (monthMap.get(month) || 0) + Number(row.total || 0));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Shopify refunds, by refund transaction date (when the money went back).
+ * Same query on both bases for the same agent-receipt reason as sales.
+ * Sourced from shopify_transactions (kind='refund', gross negative) — the
+ * per-order payment record — not from raw order JSON.
+ */
+async function queryShopifyRefunds(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'shopify_transactions', {
+    select: 'transaction_date, gross_amount',
+    eq: { user_id: userId, kind: 'refund', status: 'success' },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + Math.abs(Number(row.gross_amount || 0)));
+  }
+
+  return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
+}
+
+/**
+ * Shopify Payments processing fees (fee_amount on shopify_transactions by
+ * transaction_date). Like PayPal fees, these are netted off payouts and never
+ * reach Monzo, so without this row no Shopify processing fee is claimed
+ * anywhere. PayPal-gateway Shopify orders carry fee_amount = 0 here — their
+ * fee is claimed by the PayPal Fees row (paypal_transactions is authoritative)
+ * so nothing is double-counted.
+ */
+async function queryShopifyFees(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  startDate: string,
+  endDate: string
+): Promise<MonthlyAggregation[]> {
+  const allData = await fetchAllRecords(supabase, 'shopify_transactions', {
+    select: 'transaction_date, fee_amount',
+    eq: { user_id: userId },
+    gte: { transaction_date: startDate },
+    lt: { transaction_date: endDate },
+  });
+
+  const monthMap = new Map<string, number>();
+  for (const row of allData) {
+    if (!row.transaction_date) continue;
+    const fee = Math.abs(Number(row.fee_amount || 0));
+    if (fee === 0) continue;
+    const month = row.transaction_date.substring(0, 7);
+    monthMap.set(month, (monthMap.get(month) || 0) + fee);
   }
 
   return Array.from(monthMap.entries()).map(([month, total]) => ({ month, total }));
@@ -1957,6 +2036,12 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
       },
       {
         category: 'Income',
+        transactionType: 'Shopify Refunds',
+        queryFn: queryShopifyRefunds,
+        signMultiplier: -1,
+      },
+      {
+        category: 'Income',
         transactionType: 'BrickLink / Brick Owl Refunds (cash)',
         queryFn: queryPayPalRefundsIssuedCash,
         signMultiplier: -1,
@@ -2009,6 +2094,12 @@ function getIncomeRowDefinitions(basis: ReportBasis): RowDefinition[] {
     },
     {
       category: 'Income',
+      transactionType: 'Shopify Refunds',
+      queryFn: queryShopifyRefunds,
+      signMultiplier: -1,
+    },
+    {
+      category: 'Income',
       transactionType: 'Amazon Sales',
       queryFn: queryAmazonSales,
       signMultiplier: 1,
@@ -2046,6 +2137,12 @@ function getRowDefinitions(basis: ReportBasis = 'accrual'): RowDefinition[] {
       category: 'Selling Fees',
       transactionType: 'PayPal Fees',
       queryFn: queryPayPalFees,
+      signMultiplier: -1,
+    },
+    {
+      category: 'Selling Fees',
+      transactionType: 'Shopify Fees',
+      queryFn: queryShopifyFees,
       signMultiplier: -1,
     },
     {

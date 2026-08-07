@@ -174,11 +174,50 @@ export interface ShopifyOrder {
   total_discounts?: string | null;
   email: string | null;
   customer?: { first_name?: string | null; last_name?: string | null } | null;
+  /** Which gateway(s) took the payment, e.g. ["shopify_payments"] or ["paypal"]. */
+  payment_gateway_names?: string[];
   line_items: ShopifyOrderLineItem[];
   /** Refunds; refund_line_items tell us which units were returned. */
   refunds?: Array<{
     refund_line_items?: Array<{ line_item_id: number; quantity: number }>;
   }>;
+}
+
+/** A payment transaction on a Shopify order (Admin REST API shape, fields we use). */
+export interface ShopifyOrderTransaction {
+  id: number;
+  order_id: number;
+  kind: string; // 'sale' | 'capture' | 'refund' | 'void' | 'authorization'
+  gateway: string; // 'shopify_payments' | 'paypal' | ...
+  status: string; // 'success' | 'failure' | 'pending' | 'error'
+  amount: string;
+  currency: string | null;
+  created_at: string;
+  processed_at: string | null;
+  payment_id?: string | null;
+  /** Gateway-specific receipt blob; PayPal captures carry their txn id here. */
+  receipt?: Record<string, unknown> | null;
+}
+
+/**
+ * A Shopify Payments balance transaction — the authoritative processing-fee
+ * source. Only Shopify Payments charges appear; PayPal-gateway orders never
+ * show up here (their fee lives in paypal_transactions).
+ */
+export interface ShopifyBalanceTransaction {
+  id: number;
+  type: string; // 'charge' | 'refund' | 'payout' | 'adjustment' | ...
+  currency: string | null;
+  amount: string;
+  fee: string;
+  net: string;
+  source_id: number | null;
+  source_type: string | null;
+  source_order_id: number | null;
+  source_order_transaction_id: number | null;
+  payout_id: number | null;
+  payout_status: string | null;
+  processed_at: string | null;
 }
 
 /** Result of resolving + marking one Shopify line item as sold. */
@@ -206,6 +245,8 @@ export interface ShopifyOrderSyncResult {
   unmatchedLineItems: number;
   /** Lines where fewer LISTED units existed than were ordered (oversell). */
   oversoldLineItems: number;
+  /** Payment transactions recorded into shopify_transactions. */
+  transactionsRecorded: number;
   errors: Array<{ context: string; error: string }>;
   lastCursor: string | null;
   startedAt: string;
