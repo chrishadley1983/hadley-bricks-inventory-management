@@ -6,9 +6,13 @@ import {
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
   SOLD_UNAVAILABLE_MARKER,
+  WORK_AHEAD_BACKLOG_MAX_DAYS,
+  WORK_AHEAD_HORIZON_DAYS,
   isRepeatSoldUnavailable,
   cycleDaysForTier,
+  effectiveMinCycleDays,
   isThrottleShapedFailure,
+  pgClaimStages,
 } from '../pg-cycle-policy';
 
 describe('pg-cycle-policy', () => {
@@ -23,6 +27,37 @@ describe('pg-cycle-policy', () => {
   it('maps tier to cycle days', () => {
     expect(cycleDaysForTier('active')).toBe(ACTIVE_CYCLE_DAYS);
     expect(cycleDaysForTier('tail')).toBe(TAIL_CYCLE_DAYS);
+  });
+
+  // Work-ahead (Chris 2026-08-07). The point of these is that the horizon stays BOUNDED:
+  // capacity (~5,700/day) far exceeds steady-state demand (~2,450/day), so an unbounded
+  // pull-forward would compress the cycle until demand met capacity.
+  describe('work-ahead', () => {
+    it('carries a bounded horizon and a park-sentinel guard', () => {
+      expect(WORK_AHEAD_HORIZON_DAYS).toBe(3);
+      expect(WORK_AHEAD_BACKLOG_MAX_DAYS).toBe(365);
+      // the backlog guard must sit far below the +100y park sentinel it exists to exclude
+      expect(WORK_AHEAD_BACKLOG_MAX_DAYS).toBeLessThan(365 * 100);
+      // ...and the cadence-compressing horizon must stay a small fraction of the cycle
+      expect(WORK_AHEAD_HORIZON_DAYS).toBeLessThan(ACTIVE_CYCLE_DAYS / 10);
+    });
+
+    it('orders the claim ladder due -> backlog -> ahead, schedule first', () => {
+      expect(pgClaimStages({ workAhead: true })).toEqual(['due', 'backlog', 'ahead']);
+    });
+
+    it('collapses to due-only when work-ahead is off (--no-work-ahead)', () => {
+      expect(pgClaimStages({ workAhead: false })).toEqual(['due']);
+    });
+
+    it('states the real cadence floor the horizon implies', () => {
+      expect(effectiveMinCycleDays('active')).toBe(57);
+      expect(effectiveMinCycleDays('tail')).toBe(87);
+      expect(effectiveMinCycleDays('active', 0)).toBe(ACTIVE_CYCLE_DAYS);
+      // a horizon can never invert the cycle, however it is configured
+      expect(effectiveMinCycleDays('active', 9999)).toBeGreaterThan(0);
+      expect(effectiveMinCycleDays('active', -5)).toBe(ACTIVE_CYCLE_DAYS);
+    });
   });
 
   describe('isThrottleShapedFailure', () => {
