@@ -34,6 +34,7 @@ interface PickingListDialogProps {
 const platformLabels: Record<PickingListPlatform, string> = {
   amazon: 'Amazon',
   ebay: 'eBay',
+  shopify: 'Shopify',
 };
 
 export function PickingListDialog({ open, onOpenChange, platform }: PickingListDialogProps) {
@@ -139,6 +140,8 @@ export function PickingListDialog({ open, onOpenChange, platform }: PickingListD
                         inventory match found.
                         {platform === 'ebay' ? (
                           <> Go to Settings &gt; eBay SKU Matching to resolve.</>
+                        ) : platform === 'shopify' ? (
+                          <> Ensure the inventory SKU matches the Shopify variant SKU.</>
                         ) : (
                           <> Ensure ASIN is set in inventory.</>
                         )}

@@ -38,7 +38,7 @@ export interface PickingListResponse {
 /**
  * Supported platforms for picking list
  */
-export type PickingListPlatform = 'amazon' | 'ebay';
+export type PickingListPlatform = 'amazon' | 'ebay' | 'shopify';
 
 /**
  * Query keys for picking lists
@@ -71,6 +71,7 @@ async function fetchPickingList(platform: PickingListPlatform): Promise<PickingL
     platformOrderId:
       (item.amazonOrderId as string) ||
       (item.ebayOrderId as string) ||
+      (item.shopifyOrderId as string) ||
       (item.platformOrderId as string),
     quantity: item.quantity as number,
     buyerName: (item.buyerName as string | null) || (item.buyerUsername as string | null),

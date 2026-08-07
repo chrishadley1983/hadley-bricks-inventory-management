@@ -28,10 +28,13 @@ vi.mock('@/lib/notifications', () => ({ discordService: { sendSyncStatus: mocks.
 import { ShopifyOrderSyncService } from '../order-sync.service';
 
 /** A self-returning thenable that mimics the Supabase query builder. */
-function selfThenable(result: any) {
+function selfThenable(result: any, record?: (method: string, args: any[]) => void) {
   const t: any = {};
   for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'is', 'in', 'order', 'limit', 'not']) {
-    t[m] = vi.fn(() => t);
+    t[m] = vi.fn((...args: any[]) => {
+      record?.(m, args);
+      return t;
+    });
   }
   t.single = vi.fn(() => Promise.resolve(result));
   t.maybeSingle = vi.fn(() => Promise.resolve(result));
@@ -40,14 +43,18 @@ function selfThenable(result: any) {
 }
 
 function createSupabase(cfg: Record<string, any>) {
-  const captured: { updates: any[]; upserts: any[]; inserts: any[] } = {
+  const captured: { updates: any[]; upserts: any[]; inserts: any[]; calls: any[] } = {
     updates: [],
     upserts: [],
     inserts: [],
+    calls: [],
   };
   const sb: any = {
     from: (table: string) => ({
-      select: () => selfThenable(cfg[`${table}:select`] ?? { data: [], error: null }),
+      select: () =>
+        selfThenable(cfg[`${table}:select`] ?? { data: [], error: null }, (method, args) =>
+          captured.calls.push({ table, method, args })
+        ),
       update: (payload: any) => {
         captured.updates.push({ table, payload });
         return selfThenable(cfg[`${table}:update`] ?? { error: null });
@@ -251,6 +258,48 @@ describe('ShopifyOrderSyncService.syncOrders', () => {
     const res = await svc.syncOrders();
     expect(res.itemsMarkedSold).toBe(0);
     expect(mocks.archiveShopifyOnSold).not.toHaveBeenCalled();
+  });
+
+  it('matches a composite "SKU | location" variant on its base SKU', async () => {
+    // Shopify variant SKUs can carry a manually-added location suffix; inventory
+    // only knows the base SKU before the pipe.
+    mocks.getOrders.mockResolvedValue([
+      makeOrder({
+        line_items: [
+          {
+            id: 1,
+            sku: 'N3159 | Loft - S72 + Loft - S75',
+            quantity: 1,
+            price: '12.00',
+            title: 'LEGO Advent Calendar',
+          },
+        ],
+      }),
+    ]);
+    const supabase = createSupabase({
+      'shopify_config:select': { data: CONFIG_ROW, error: null },
+      'inventory_items:select': {
+        data: [{ id: 'inv1', sku: 'N3159', created_at: '2026-01-01', storage_location: 'Loft - S72' }],
+        error: null,
+      },
+      'shopify_products:select': { data: null, error: null },
+    });
+
+    const svc = new ShopifyOrderSyncService(supabase, 'u');
+    const res = await svc.syncOrders();
+
+    expect(res.itemsMarkedSold).toBe(1);
+    expect(res.unmatchedLineItems).toBe(0);
+    // The inventory lookup must use the BASE sku, not the composite string.
+    expect(
+      supabase._captured.calls.some(
+        (c: any) =>
+          c.table === 'inventory_items' &&
+          c.method === 'eq' &&
+          c.args[0] === 'sku' &&
+          c.args[1] === 'N3159'
+      )
+    ).toBe(true);
   });
 
   it('flags an oversell when fewer LISTED units exist than ordered', async () => {

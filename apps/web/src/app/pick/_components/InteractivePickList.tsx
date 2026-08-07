@@ -22,6 +22,10 @@ interface PickItem {
   amazonOrderId?: string;
   // eBay-specific
   ebayOrderId?: string;
+  // Shopify-specific
+  sku?: string | null;
+  shopifyOrderId?: string;
+  orderName?: string;
 }
 
 interface PickListData {
@@ -41,7 +45,7 @@ interface ItemState {
 type PickState = Record<string, ItemState>;
 
 interface InteractivePickListProps {
-  platform: 'amazon' | 'ebay';
+  platform: 'amazon' | 'ebay' | 'shopify';
   data: Record<string, unknown>;
   generatedAt: string;
 }
@@ -132,7 +136,8 @@ export function InteractivePickList({ platform, data, generatedAt }: Interactive
   const progressPct = totalItems > 0 ? (pickedCount / totalItems) * 100 : 0;
   const allDone = pickedCount === totalItems && totalItems > 0;
 
-  const platformLabel = platform === 'amazon' ? 'Amazon' : 'eBay';
+  const platformLabel =
+    platform === 'amazon' ? 'Amazon' : platform === 'shopify' ? 'Shopify' : 'eBay';
   const generatedDate = new Date(generatedAt).toLocaleString('en-GB', {
     day: '2-digit',
     month: 'short',
@@ -142,7 +147,7 @@ export function InteractivePickList({ platform, data, generatedAt }: Interactive
   });
 
   const getOrderId = (item: PickItem) =>
-    item.amazonOrderId || item.ebayOrderId || item.orderId;
+    item.orderName || item.amazonOrderId || item.ebayOrderId || item.shopifyOrderId || item.orderId;
 
   return (
     <div className="space-y-4 pb-24">
@@ -254,7 +259,7 @@ export function InteractivePickList({ platform, data, generatedAt }: Interactive
                             isPicked && 'line-through text-muted-foreground'
                           )}
                         >
-                          {item.setNo || item.asin || '-'}
+                          {item.setNo || item.asin || item.sku || '-'}
                         </span>
                         {item.matchStatus === 'unmatched' && (
                           <Badge

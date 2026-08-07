@@ -80,6 +80,7 @@ const platformLabels: Record<string, string> = {
   amazon: 'Amazon',
   bricklink: 'BrickLink',
   brickowl: 'Brick Owl',
+  shopify: 'Shopify',
   other: 'Other',
 };
 
@@ -88,7 +89,7 @@ interface OrdersDispatchPanelProps {
 }
 
 // Platforms that support picking list generation
-const pickingListPlatforms: PickingListPlatform[] = ['amazon', 'ebay'];
+const pickingListPlatforms: PickingListPlatform[] = ['amazon', 'ebay', 'shopify'];
 
 export function OrdersDispatchPanel({ className }: OrdersDispatchPanelProps) {
   const [pickingListPlatform, setPickingListPlatform] = useState<PickingListPlatform | null>(null);
