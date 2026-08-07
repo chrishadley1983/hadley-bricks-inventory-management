@@ -400,9 +400,14 @@ export class ShopifyOrderSyncService {
    * Resolve LISTED inventory items for a Shopify line item. Matches by SKU,
    * falling back to id-prefix for SKU-less items (whose Shopify SKU is
    * `id.substring(0,8)`). Returns at most `quantity` items, oldest first.
+   *
+   * Shopify variant SKUs can carry a manually-added location suffix, e.g.
+   * "N3159 | Loft - S72 + Loft - S75" — inventory only knows the base SKU
+   * before the pipe, so strip the suffix before matching.
    */
-  private async resolveListedItems(sku: string | null, quantity: number): Promise<ListedItem[]> {
+  private async resolveListedItems(rawSku: string | null, quantity: number): Promise<ListedItem[]> {
     const qty = Math.max(1, quantity || 1);
+    const sku = rawSku?.includes(' | ') ? rawSku.split(' | ')[0].trim() || null : rawSku;
 
     if (sku && HEX8.test(sku)) {
       // SKU-less inventory item — its Shopify SKU is the id prefix.

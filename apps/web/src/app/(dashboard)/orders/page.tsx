@@ -1239,7 +1239,20 @@ export default function OrdersPage() {
                 setStatus('all');
               }}
               onStatusSelect={(s) => selectPlatformStatus('shopify', s)}
-            />
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  window.open('/api/picking-list/shopify?format=pdf', '_blank');
+                }}
+              >
+                <ClipboardList className="mr-1 h-4 w-4" />
+                Pick List
+              </Button>
+            </PlatformCard>
           )}
         </div>
 
