@@ -54,6 +54,27 @@ export const WORK_AHEAD_HORIZON_DAYS = 3;
 export const WORK_AHEAD_BACKLOG_MAX_DAYS = 365;
 
 /**
+ * Minimum lead time (days) before a future-dated tuple may be claimed by a work-ahead
+ * stage. Nothing dated inside the next 24h is pulled forward.
+ *
+ * This is NOT pacing — it protects the two cool-offs that requeue at exactly +1d and rely
+ * on that day being unclaimable to mean anything:
+ *   - the sold-unavailable ladder (toSoldUnavailableQueueUpdate): it leaves `attempts` AND
+ *     `last_refreshed_at` untouched, so a never-scraped tuple lands straight back in the
+ *     'backlog' pool the moment its lock clears. Re-claiming it in the SAME run makes the
+ *     second hit fire `isRepeatSoldUnavailable` without a day boundary having passed —
+ *     which is the entire premise of accepting it as no-data — writing an all-zero L1 row,
+ *     stamping last_refreshed_at and demoting active -> tail on what may be a real outage.
+ *   - toErrorQueueUpdate's attempts>=3 cooldown, for the same reason.
+ * Those rows come back through the 'due' stage tomorrow, exactly as intended.
+ *
+ * Do NOT try to solve this by excluding the marker with a PostgREST `not.like` instead:
+ * that emits NOT (col LIKE ...), which is NULL-propagating, so every healthy row
+ * (last_error IS NULL) would be silently excluded too.
+ */
+export const WORK_AHEAD_MIN_LEAD_DAYS = 1;
+
+/**
  * Claim stages, in the order a run must exhaust them:
  *   'due'     — next_due_at has passed. The schedule always wins; unchanged semantics.
  *   'backlog' — never scraped, any future date. Pure first-touch work: no cadence to

@@ -80,17 +80,16 @@ import { PriceGuideCacheService } from '../../src/lib/bricklink/price-guide-cach
 import { planNight, nextAction, type PlannerState } from '../../src/lib/bricklink/pg-session-planner';
 import {
   ACTIVE_CYCLE_DAYS,
-  ERROR_PARK_ATTEMPTS,
   NEW_RELEASE_CYCLE_DAYS,
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
   SOLD_UNAVAILABLE_MARKER,
-  WORK_AHEAD_BACKLOG_MAX_DAYS,
   WORK_AHEAD_HORIZON_DAYS,
   isRepeatSoldUnavailable,
   pgClaimStages,
   type PgClaimStage,
 } from '../../src/lib/bricklink/pg-cycle-policy';
+import { PG_QUEUE_CLAIM_COLS, applyStageFilters } from '../../src/lib/bricklink/pg-claim';
 import { EMPTY_PG_SUMMARY_QUAD, toSummaryCacheRow as toPgSummaryRow } from '../../src/lib/bricklink/pg-summary';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
@@ -162,11 +161,15 @@ const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are
 // at 90d UK-grade — the whole queue universe is now UK-refreshed.
 // Constants live in pg-cycle-policy.ts — shared with every other queue writer.
 //
-// Steady-state demand, measured 2026-08-07: active 92,040/60d = 1,534/day + tail
-// 73,278/90d = 814/day + the new-for-year 28d subset ~95/day = ~2,450/day. Nightly
-// throughput alone measured 1,806-1,912/day over the preceding week, so the nightly run
-// does NOT cover it on its own (the earlier "~2,000 pages/day, nightly is enough" note
-// was optimistic on both sides) — the 13:00 run makes up the ~600/day shortfall.
+// Steady-state demand, measured 2026-08-07: active 91,995/60d = 1,533/day + tail
+// 73,323/90d = 815/day + the new-for-year 28d subset = ~2,360/day. That last term is
+// SMALL and easy to double-count: cycleDaysFor OVERRIDES the cycle for tuples already
+// counted in the two tier terms, so the incremental cost of the 523 new-for-year tuples
+// (247 active / 276 tail) is 247x(1/28-1/60) + 276x(1/28-1/90) = ~11.5/day, not ~95.
+// Nightly throughput alone measured 968-1,912/day, mean ~1,670, over 2026-08-01..08-06
+// (bl_pg_lane_telemetry, pre-noon) — one night in six delivered only 968. So the nightly
+// run does NOT cover demand on its own (the earlier "~2,000 pages/day, nightly is enough"
+// note was optimistic on both sides) — the 13:00 run makes up a ~700/day shortfall.
 
 /** Item keys (T:no) whose catalogue year is the current year — loaded at run start. */
 let newForYearKeys: Set<string> = new Set();
@@ -325,59 +328,21 @@ async function reclaimStaleLocks(sb: SupabaseClient): Promise<number> {
   return (data ?? []).length;
 }
 
-const QUEUE_COLS = 'item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error';
-
 /**
- * One stage x one tier of the claim ladder, as a PostgREST filter chain.
- *
- *   'due'     — next_due_at has passed. UNCHANGED pre-2026-08-07 semantics: due-ness
- *               ALWAYS requires next_due_at to have passed. Grace only widens the tier
- *               condition (a grace-listed tuple is claimable even if somehow demoted to
- *               tail) — it must never bypass the 28-day cadence, or every new release
- *               gets re-scraped nightly for 6 months (review finding #1). 2026-07-19
- *               policy: tail is lane D work too (90d UK cycle) — due-ness alone gates.
- *   'backlog' — never scraped, future-dated. First touch, so there is no cadence to
- *               compress; bounded only by the park guard.
- *   'ahead'   — already scraped, due inside the horizon. This is the one that compresses
- *               the cycle (60d -> 57d floor), hence bounded and claimed last.
- *
- * Both work-ahead stages exclude error-parked tuples (attempts >= 8): pulling a tuple
- * that has already failed 8 times FORWARD is spending requests on known-broken work. They
- * are still claimed normally by the 'due' stage when their date genuinely arrives.
+ * The claim ladder's stage rules live in src/lib/bricklink/pg-claim.ts — scripts/ is
+ * outside both tsconfig.json and vitest's include globs, so claim logic written here
+ * would be untestable and untypechecked by the normal gates.
  */
-interface StageFilterable<Q> {
-  is(column: string, value: null): Q;
-  not(column: string, operator: 'is', value: null): Q;
-  eq(column: string, value: string): Q;
-  gt(column: string, value: string): Q;
-  lt(column: string, value: string | number): Q;
-  lte(column: string, value: string): Q;
-}
-
-function applyStageFilters<Q extends StageFilterable<Q>>(
-  query: Q,
-  stage: PgClaimStage,
-  tier: 'active' | 'tail',
-  nowIso: string,
-): Q {
-  const q = query.is('locked_by', null).eq('tier', tier);
-  if (stage === 'due') return q.lte('next_due_at', nowIso);
-
-  const future = q.gt('next_due_at', nowIso).lt('attempts', ERROR_PARK_ATTEMPTS);
-  return stage === 'backlog'
-    ? future.is('last_refreshed_at', null).lt('next_due_at', addDaysIso(WORK_AHEAD_BACKLOG_MAX_DAYS))
-    : future.not('last_refreshed_at', 'is', null).lte('next_due_at', addDaysIso(WORK_AHEAD_DAYS));
-}
-
 async function countStage(sb: SupabaseClient, stage: PgClaimStage): Promise<number> {
-  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
   let total = 0;
   for (const tier of ['active', 'tail'] as const) {
     const { count, error } = await applyStageFilters(
       sb.from('bl_pg_refresh_queue').select('item_type', { count: 'exact', head: true }),
       stage,
       tier,
-      nowIso,
+      nowMs,
+      WORK_AHEAD_DAYS,
     );
     if (error) throw new Error(`countStage(${stage}/${tier}) failed: ${error.message}`);
     total += count ?? 0;
@@ -387,6 +352,7 @@ async function countStage(sb: SupabaseClient, stage: PgClaimStage): Promise<numb
 
 async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Promise<QueueRow[]> {
   const nowIso = new Date().toISOString();
+  const nowMs = Date.parse(nowIso);
   let rows: QueueRow[] = [];
 
   // Stage ladder, active tier before tail at every rung: a due active tuple outranks a
@@ -397,10 +363,11 @@ async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Pro
     for (const tier of ['active', 'tail'] as const) {
       if (rows.length >= limit) break outer;
       const { data, error } = await applyStageFilters(
-        sb.from('bl_pg_refresh_queue').select(QUEUE_COLS),
+        sb.from('bl_pg_refresh_queue').select(PG_QUEUE_CLAIM_COLS),
         stage,
         tier,
-        nowIso,
+        nowMs,
+        WORK_AHEAD_DAYS,
       )
         .order('next_due_at', { ascending: true })
         .limit(limit - rows.length);
