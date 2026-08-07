@@ -37,6 +37,15 @@
  *   --sold-unavailable-brake=<n>  Consecutive FIRST-time sold-unavailable hits treated as
  *                           a BROAD BL sold-data outage worth winding the session down for
  *                           (default 25). One isolated hit never ends a session.
+ *   --work-ahead-days=<n>   How far ahead already-scraped tuples may be pulled forward once
+ *                           nothing is due and the first-touch backlog is dry (default 3).
+ *                           0 = burn backlog but never compress the cadence.
+ *   --no-work-ahead         Stop the moment nothing is due (pre-2026-08-07 behaviour).
+ *
+ * Claim ladder (Chris 2026-08-07) — 'due' -> 'backlog' -> 'ahead', active tier before tail
+ * at each rung; see pg-cycle-policy.ts. Before this, a run stopped dead at "no due tuples
+ * remain" while holding hours of window and a queue full of work dated days out, which is
+ * what forced the manual next_due_at re-spreads of 2026-07-31 and 2026-08-07.
  *
  * Sold-unavailable escalation ladder (Chris 2026-07-25):
  *   1st hit on a tuple  -> requeue +1d, last_error='sold_unavailable ...' (could be an outage)
@@ -75,8 +84,12 @@ import {
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
   SOLD_UNAVAILABLE_MARKER,
+  WORK_AHEAD_HORIZON_DAYS,
   isRepeatSoldUnavailable,
+  pgClaimStages,
+  type PgClaimStage,
 } from '../../src/lib/bricklink/pg-cycle-policy';
+import { PG_QUEUE_CLAIM_COLS, applyStageFilters } from '../../src/lib/bricklink/pg-claim';
 import { EMPTY_PG_SUMMARY_QUAD, toSummaryCacheRow as toPgSummaryRow } from '../../src/lib/bricklink/pg-summary';
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env.local') });
@@ -114,6 +127,15 @@ const SOLD_UNAVAILABLE_BRAKE = Math.max(
 );
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
+/** Work-ahead (Chris 2026-08-07): keep working when nothing is due rather than parking a
+ *  half-used window. `--no-work-ahead` restores the old stop-when-nothing-is-due behaviour;
+ *  `--work-ahead-days=0` keeps first-touch backlog burn but disables the cadence-compressing
+ *  'ahead' stage. See pg-cycle-policy.ts for why the horizon is bounded. */
+const WORK_AHEAD = argv['no-work-ahead'] !== 'true';
+const WORK_AHEAD_DAYS = Math.max(
+  0,
+  parseFloat(argv['work-ahead-days'] ?? String(WORK_AHEAD_HORIZON_DAYS)),
+);
 
 // spec §4.4 default is 30; Chris 2026-07-13: trial 5-min backoff (set via the ps1
 // wrapper) — hypothesis: blocks are transient per-request throttles, so most of the
@@ -136,9 +158,18 @@ const WARMUP_WAITS_MS = [30_000, 60_000, 120_000, 300_000, 600_000];
 const STALE_LOCK_MS = 8 * 60 * 60 * 1000; // §-implied: locks older than 8h are reclaimable
 // Cycle policy (Chris 2026-07-19): active 60d, EXCEPT new-for-the-year items at 28d
 // (fast price movement + clean monthly deltas where they matter); tail joins lane D
-// at 90d UK-grade — the whole queue universe is now UK-refreshed, sustainable on the
-// nightly cadence alone once the backlog clears (~2,000 pages/day steady state).
+// at 90d UK-grade — the whole queue universe is now UK-refreshed.
 // Constants live in pg-cycle-policy.ts — shared with every other queue writer.
+//
+// Steady-state demand, measured 2026-08-07: active 91,995/60d = 1,533/day + tail
+// 73,323/90d = 815/day + the new-for-year 28d subset = ~2,360/day. That last term is
+// SMALL and easy to double-count: cycleDaysFor OVERRIDES the cycle for tuples already
+// counted in the two tier terms, so the incremental cost of the 523 new-for-year tuples
+// (247 active / 276 tail) is 247x(1/28-1/60) + 276x(1/28-1/90) = ~11.5/day, not ~95.
+// Nightly throughput alone measured 968-1,912/day, mean ~1,670, over 2026-08-01..08-06
+// (bl_pg_lane_telemetry, pre-noon) — one night in six delivered only 968. So the nightly
+// run does NOT cover demand on its own (the earlier "~2,000 pages/day, nightly is enough"
+// note was optimistic on both sides) — the 13:00 run makes up a ~700/day shortfall.
 
 /** Item keys (T:no) whose catalogue year is the current year — loaded at run start. */
 let newForYearKeys: Set<string> = new Set();
@@ -297,47 +328,59 @@ async function reclaimStaleLocks(sb: SupabaseClient): Promise<number> {
   return (data ?? []).length;
 }
 
-async function countDue(sb: SupabaseClient): Promise<number> {
-  const nowIso = new Date().toISOString();
-  const { count, error } = await sb
-    .from('bl_pg_refresh_queue')
-    .select('item_type', { count: 'exact', head: true })
-    .is('locked_by', null)
-    // Due-ness ALWAYS requires next_due_at to have passed. Grace only widens the
-    // tier condition (a grace-listed tuple is claimable even if somehow demoted to
-    // tail) — it must never bypass the 28-day cadence, or every new release gets
-    // re-scraped nightly for 6 months (review finding #1).
-    // 2026-07-19 policy: tail is lane D work too (90d UK cycle) — due-ness alone gates.
-    .lte('next_due_at', nowIso);
-  if (error) throw new Error(`countDue failed: ${error.message}`);
-  return count ?? 0;
+/**
+ * The claim ladder's stage rules live in src/lib/bricklink/pg-claim.ts — scripts/ is
+ * outside both tsconfig.json and vitest's include globs, so claim logic written here
+ * would be untestable and untypechecked by the normal gates.
+ */
+async function countStage(sb: SupabaseClient, stage: PgClaimStage): Promise<number> {
+  const nowMs = Date.now();
+  let total = 0;
+  for (const tier of ['active', 'tail'] as const) {
+    const { count, error } = await applyStageFilters(
+      sb.from('bl_pg_refresh_queue').select('item_type', { count: 'exact', head: true }),
+      stage,
+      tier,
+      nowMs,
+      WORK_AHEAD_DAYS,
+    );
+    if (error) throw new Error(`countStage(${stage}/${tier}) failed: ${error.message}`);
+    total += count ?? 0;
+  }
+  return total;
 }
 
 async function claimBatch(sb: SupabaseClient, runId: string, limit: number): Promise<QueueRow[]> {
   const nowIso = new Date().toISOString();
-  const { data, error } = await sb
-    .from('bl_pg_refresh_queue')
-    .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error')
-    .is('locked_by', null)
-    // Same due-ness semantics as countDue. Active tier drains before tail: a due
-    // active tuple always outranks a due tail tuple (tail is the 90d background fill).
-    .lte('next_due_at', nowIso)
-    .eq('tier', 'active')
-    .order('next_due_at', { ascending: true })
-    .limit(limit);
-  if (error) throw new Error(`claimBatch select failed: ${error.message}`);
-  let rows = (data ?? []) as QueueRow[];
-  if (rows.length < limit) {
-    const { data: tailData, error: tailErr } = await sb
-      .from('bl_pg_refresh_queue')
-      .select('item_type,item_no,colour_id,tier,grace_until,next_due_at,attempts,last_error')
-      .is('locked_by', null)
-      .lte('next_due_at', nowIso)
-      .eq('tier', 'tail')
-      .order('next_due_at', { ascending: true })
-      .limit(limit - rows.length);
-    if (tailErr) throw new Error(`claimBatch tail select failed: ${tailErr.message}`);
-    rows = rows.concat((tailData ?? []) as QueueRow[]);
+  const nowMs = Date.parse(nowIso);
+  let rows: QueueRow[] = [];
+
+  // Stage ladder, active tier before tail at every rung: a due active tuple outranks a
+  // due tail tuple (tail is the 90d background fill), and honouring the schedule outranks
+  // working ahead of it. Only when a whole stage is empty does the next one open.
+  outer: for (const stage of pgClaimStages({ workAhead: WORK_AHEAD })) {
+    if (stage === 'ahead' && WORK_AHEAD_DAYS <= 0) continue;
+    for (const tier of ['active', 'tail'] as const) {
+      if (rows.length >= limit) break outer;
+      const { data, error } = await applyStageFilters(
+        sb.from('bl_pg_refresh_queue').select(PG_QUEUE_CLAIM_COLS),
+        stage,
+        tier,
+        nowMs,
+        WORK_AHEAD_DAYS,
+      )
+        .order('next_due_at', { ascending: true })
+        .limit(limit - rows.length);
+      if (error) throw new Error(`claimBatch select (${stage}/${tier}) failed: ${error.message}`);
+      const batch = (data ?? []) as unknown as QueueRow[];
+      if (batch.length > 0 && stage !== 'due' && rows.length === 0) {
+        console.log(
+          `[pg-refresh-cycle] nothing due — working ahead from the '${stage}' stage ` +
+            `(${stage === 'backlog' ? 'never-scraped first-touch' : `already-scraped, due within ${WORK_AHEAD_DAYS}d`})`,
+        );
+      }
+      rows = rows.concat(batch);
+    }
   }
   if (rows.length === 0) return [];
 
@@ -716,7 +759,8 @@ async function flushWithRetry(sb: SupabaseClient, batches: Batches): Promise<voi
 async function main(): Promise<void> {
   console.log(
     `[pg-refresh-cycle] run=${RUN_ID} cdpPort=${CDP_PORT} sessionSize=${SESSION_SIZE} ` +
-      `breatherMins=${BREATHER_MINS} backoffMins=${BACKOFF_MINS} blockRetries=${BLOCK_RETRIES} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS}` +
+      `breatherMins=${BREATHER_MINS} backoffMins=${BACKOFF_MINS} blockRetries=${BLOCK_RETRIES} maxSessions=${MAX_SESSIONS} windowHours=${WINDOW_HOURS} navDelayMs=${NAV_DELAY_MS} ` +
+      `workAhead=${WORK_AHEAD ? `${WORK_AHEAD_DAYS}d` : 'off'}` +
       (LIMIT_TUPLES > 0 ? ` limitTuples=${LIMIT_TUPLES}` : ''),
   );
 
@@ -734,12 +778,19 @@ async function main(): Promise<void> {
   if (reclaimed > 0) console.log(`[pg-refresh-cycle] reclaimed ${reclaimed} stale lock(s) (>8h old)`);
 
   await loadNewForYearKeys(supabase);
-  const dueCount = await countDue(supabase);
+  const dueCount = await countStage(supabase, 'due');
+  // Report the whole ladder, not just what is due: a run that says "0 due" while quietly
+  // burning 4,000 tuples of first-touch backlog reads as broken in the log.
+  const backlogCount = WORK_AHEAD ? await countStage(supabase, 'backlog') : 0;
+  const aheadCount = WORK_AHEAD && WORK_AHEAD_DAYS > 0 ? await countStage(supabase, 'ahead') : 0;
   const designCadence = SESSION_SIZE * MAX_SESSIONS;
-  const eta = dueCount > 0 ? Math.ceil(dueCount / designCadence) : 0;
+  const claimable = dueCount + backlogCount + aheadCount;
+  const eta = claimable > 0 ? Math.ceil(claimable / designCadence) : 0;
   console.log(
-    `[pg-refresh-cycle] ${dueCount} tuple(s) due; design cadence ${designCadence}/night -> ` +
-      `~${eta} night(s) to clear the current backlog at this cadence`,
+    `[pg-refresh-cycle] ${dueCount} due + ${backlogCount} first-touch backlog + ${aheadCount} within ` +
+      `${WORK_AHEAD_DAYS}d work-ahead horizon = ${claimable} claimable; design cadence ` +
+      `${designCadence}/run -> ~${eta} run(s) to clear at this cadence` +
+      (WORK_AHEAD ? '' : ' (work-ahead DISABLED — run stops as soon as nothing is due)'),
   );
 
   const plan = planNight({
@@ -871,7 +922,9 @@ async function main(): Promise<void> {
       if (queue.length === 0) {
         queue = await claimBatch(supabase, RUN_ID, CLAIM_CHUNK);
         if (queue.length === 0) {
-          stopReason = 'no due tuples remain in the queue';
+          stopReason = WORK_AHEAD
+            ? `no claimable tuples remain (nothing due, no first-touch backlog, nothing within the ${WORK_AHEAD_DAYS}d work-ahead horizon)`
+            : 'no due tuples remain in the queue';
           break;
         }
       }
