@@ -1,16 +1,18 @@
 {
-  "commit": "0223bf12",
-  "branch": "fix/monzo-sync-category-guard (+ fix/monzo-precedent-recency)",
-  "prNumber": 660,
-  "mergedAt": "2026-08-02T20:36:00Z",
-  "previousCommit": "6e199117",
+  "commit": "f766f26b",
+  "branch": "feature/shopify-pick-list (+ feature/shopify-pnl-fees)",
+  "prNumber": 665,
+  "mergedAt": "2026-08-07T12:04:00Z",
+  "previousCommit": "0223bf12",
   "deploymentVerified": true,
-  "verifiedAt": "2026-08-02T20:40:00Z",
+  "verifiedAt": "2026-08-07T12:10:00Z",
   "testsRun": [
     "login-page-200",
-    "api-transactions-401",
-    "api-monzo-status-401",
-    "api-workflow-tasks-route-present"
+    "api-picking-list-shopify-401-route-present",
+    "pick-shopify-public-page-200",
+    "pick-amazon-regression-200",
+    "api-reports-profit-loss-401",
+    "shopify-transactions-schema-and-backfill-verified-via-sql"
   ],
   "testsPassed": true
 }
