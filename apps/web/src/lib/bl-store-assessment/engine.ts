@@ -78,8 +78,10 @@ export const DAMAGE_KEYWORDS = new Set([
 ]);
 const NEGATION_PREFIXES: string[][] = [['no'], ['without'], ['not'], ['free', 'of'], ['free', 'from'], ['zero']];
 
-/** Descriptions repeated on >=3% of stock are stock disclaimers, not per-item damage. */
-function computeBoilerplate(lots: StoreLot[], pct = 0.03): Set<string> {
+/** Descriptions repeated on >=3% of stock are stock disclaimers, not per-item damage.
+ * Exported (with hasDamageNote) so bl-part-arb scores lots with THIS filter rather
+ * than growing a third copy — same lockstep reason DAMAGE_KEYWORDS is exported. */
+export function computeBoilerplate(lots: Pick<StoreLot, 'description'>[], pct = 0.03): Set<string> {
   const out = new Set<string>();
   if (lots.length === 0) return out;
   const counts = new Map<string, number>();
@@ -92,7 +94,7 @@ function computeBoilerplate(lots: StoreLot[], pct = 0.03): Set<string> {
   return out;
 }
 
-function hasDamageNote(desc: string | null | undefined, boilerplate: Set<string>): boolean {
+export function hasDamageNote(desc: string | null | undefined, boilerplate: Set<string>): boolean {
   if (!desc) return false;
   // Boilerplate exemption is for repeated DISCLAIMER SENTENCES ("used parts may have
   // small marks..."), not short repeated damage notes: Agnes stamped a bare "minor wear"

@@ -371,7 +371,14 @@ async function run(cdp: Awaited<ReturnType<typeof connectCdp>>) {
       lots,
     }, { onConflict: 'store_slug' });
     if (scrapeErr) console.error(`[persist] bl_store_scrapes failed (non-fatal): ${scrapeErr.message}`);
-    else log(`[persist] raw scrape saved to bl_store_scrapes (${lots.length} lots)`);
+    else {
+      log(`[persist] raw scrape saved to bl_store_scrapes (${lots.length} lots)`);
+      // Keep the flattened part->store index (bl_store_lots, part-first arbitrage)
+      // in step with the scrape it mirrors. Non-fatal: the part-arb discover run
+      // re-flattens anything stale via bl_store_lots_freshness anyway.
+      const { error: flatErr } = await supabase.rpc('refresh_bl_store_lots', { p_slug: STORE_SLUG });
+      if (flatErr) console.error(`[persist] bl_store_lots refresh failed (non-fatal): ${flatErr.message}`);
+    }
 
     // Feed discoveries back to the nightly page lane: any tuple this store carries that
     // isn't in the refresh queue yet gets enqueued, so cache coverage self-heals

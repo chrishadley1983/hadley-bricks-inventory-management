@@ -37,6 +37,12 @@ export interface SideView {
   strQty: number | null; // sold_qty / stock_qty
   hist: Record<string, number> | undefined; // sold-side qty histogram (price 4dp -> qty)
   /**
+   * CURRENT-STOCK qty histogram (price 4dp -> qty), from the stock detail blob (null
+   * pre-v3 rows). This is the market's ask-side depth: how many units are listed at each
+   * price right now. Same "other" rolled-up-tail semantics as the sold-side hist.
+   */
+  stockHist: Record<string, number> | undefined;
+  /**
    * Sold-side months on record, keyed "March 2026" as BL renders them.
    *
    * This is whatever months BL's UK sold table happened to list at fetch time — NOT a
@@ -79,6 +85,7 @@ export function pgKey(itemType: string, itemNo: string, blColourId: number): str
 const EMPTY_SIDE: SideView = {
   soldAvg: null, soldMedian: null, soldQtyAvg: null, soldLots: 0, soldQty: 0, soldLast2moQty: 0,
   stockLots: 0, stockQty: 0, stockMin: null, stockMax: null, stockAvg: null, strLots: null, strQty: null, hist: undefined,
+  stockHist: undefined,
   byMonth: undefined,
 };
 
@@ -125,8 +132,19 @@ function ukSide(row: Row, cond: 'new' | 'used'): SideView {
     strLots: str(soldLots, stockLots),
     strQty: str(soldQty, stockQty),
     hist: detail?.[histKey]?.hist,
+    stockHist: detail?.[stockHistKey]?.hist,
     byMonth: detail?.[histKey]?.byMonth,
   };
+}
+
+/**
+ * Parse one bricklink_price_guide_cache row into a SideView — THE row parser,
+ * exported for full-table screens (bl-part-arb anchor scan) that page the cache
+ * directly instead of asking readPriceGuide for a known item list. Same parsing,
+ * no second implementation.
+ */
+export function ukSideFromCacheRow(row: Record<string, unknown>, cond: 'new' | 'used'): SideView {
+  return ukSide(row, cond);
 }
 
 function worldSide(row: Row, cond: 'new' | 'used'): SideView {
