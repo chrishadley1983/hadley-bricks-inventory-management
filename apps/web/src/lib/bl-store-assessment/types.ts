@@ -9,7 +9,7 @@
  * scraped inventory + store profile and reads the Supabase caches.
  */
 
-import { FEE_MODEL, MAGNET } from '../bricklink/fees';
+import { DEFAULT_MIN_MARGIN, FEE_MODEL, MAGNET } from '../bricklink/fees';
 
 export type ItemTypeCode = 'P' | 'S' | 'M';
 export type Condition = 'N' | 'U';
@@ -48,7 +48,7 @@ export interface StoreProfile {
 
 export interface AssessmentInputs {
   minAsk: number; // ignore lots priced below this (default 0.10)
-  minMargin: number; // net margin threshold for "within margin" (default 0.20)
+  minMargin: number; // net margin threshold for "within margin" (default DEFAULT_MIN_MARGIN)
   minStr: number; // "decent" STR (qty basis) for the HIGH-STR section (default 0.5)
   /**
    * @deprecated Magnets now gate on UK stock QUANTITY via UK_MAGNET (parts < 10,
@@ -380,7 +380,7 @@ export interface StoreAssessment {
 
 export const DEFAULT_INPUTS: AssessmentInputs = {
   minAsk: 0.10,
-  minMargin: 0.20,
+  minMargin: DEFAULT_MIN_MARGIN,
   minStr: MAGNET.minStr,
   magnetMaxSupplyLots: MAGNET.maxSupplyLots,
   inboundPerUnit: 0,

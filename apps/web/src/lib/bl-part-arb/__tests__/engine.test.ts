@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_INBOUND_POSTAGE_GBP, PART_ARB_MIN_MARGIN, VAR_FEE_PCT } from '../../bricklink/fees';
+import { DEFAULT_INBOUND_POSTAGE_GBP, DEFAULT_MIN_MARGIN, VAR_FEE_PCT } from '../../bricklink/fees';
 import type { PriceGuideView, SideView } from '../../bricklink/price-guide/read';
 import { pgKey } from '../../bricklink/price-guide/read';
 import type { StoreLot } from '../../bl-store-assessment/types';
@@ -42,9 +42,9 @@ describe('DEFAULT_PART_ARB_INPUTS', () => {
   it('shipping default stays in sync with the canonical inbound postage', () => {
     expect(DEFAULT_PART_ARB_INPUTS.shipping).toBe(DEFAULT_INBOUND_POSTAGE_GBP);
   });
-  it('margin floor is the part-arb 30% constant (tighter than bl-basket, Chris 2026-08-08)', () => {
-    expect(DEFAULT_PART_ARB_INPUTS.minMargin).toBe(PART_ARB_MIN_MARGIN);
-    expect(PART_ARB_MIN_MARGIN).toBe(0.3);
+  it('margin floor is the global 30% constant (Chris 2026-08-08: "30% global")', () => {
+    expect(DEFAULT_PART_ARB_INPUTS.minMargin).toBe(DEFAULT_MIN_MARGIN);
+    expect(DEFAULT_MIN_MARGIN).toBe(0.3);
   });
 });
 
