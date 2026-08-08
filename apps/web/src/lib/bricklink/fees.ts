@@ -97,6 +97,17 @@ export const PRICE_BANDS = { under: 0.7, keen: 0.95, atMarket: 1.15, premium: 1.
 export const DEFAULT_MIN_MARGIN = 0.2;
 
 /**
+ * Part-first arbitrage margin floor — deliberately TIGHTER than DEFAULT_MIN_MARGIN.
+ *
+ * Chris, 2026-08-08 (JangoFett sensitivity): at the 20% floor the blended basket
+ * margin read 27% — "a bit low". Part-first discovery is choosier by design: it
+ * hunts anchor-led raids, so the marginal 20-30% tail is dropped at discovery
+ * time (30% floor ≈ 70% ROI, half the picking labour). bl-basket and the
+ * assessment engine keep DEFAULT_MIN_MARGIN so nightly grades stay comparable.
+ */
+export const PART_ARB_MIN_MARGIN = 0.3;
+
+/**
  * Part-out gate (moved here from bl-store-assessment/engine.ts so the set-lookup
  * Partout tab and the store-assessment SETS section apply ONE gate).
  *

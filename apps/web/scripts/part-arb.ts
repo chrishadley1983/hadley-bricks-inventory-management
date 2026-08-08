@@ -19,7 +19,10 @@
  *   --min-sold-qty=<n>     Anchor demand gate: UK sold units/6mo. Default 10.
  *                          Deliberately NO sold-value floor — a 50p part sold 10x counts.
  *   --min-ask=<gbp>        Ignore asks below this. Default 0.10.
- *   --min-margin=<pct>     Net margin threshold. Default 0.20.
+ *   --min-margin=<pct>     Net margin threshold (net after 9.4% fees / list, ex-postage;
+ *                          inbound postage is charged once to the basket, outbound is
+ *                          buyer-paid). Default 0.30 (PART_ARB_MIN_MARGIN — tighter than
+ *                          the 20% bl-basket floor by design, Chris 2026-08-08).
  *   --min-basket-str=<x>   Basket lot STR (qty) gate. Default 0 (ladder shows bands).
  *   --shipping=<gbp>       Inbound postage estimate. Default 3.00.
  *   --min-units=<n>        Anchor units buyable below ceiling. Default 1.
@@ -47,7 +50,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
-import { LIQUID_STR_GATE, DEFAULT_INBOUND_POSTAGE_GBP, DEFAULT_MIN_MARGIN } from '../src/lib/bricklink/fees';
+import { LIQUID_STR_GATE, DEFAULT_INBOUND_POSTAGE_GBP, PART_ARB_MIN_MARGIN } from '../src/lib/bricklink/fees';
 import { generateWantedXml } from '../src/lib/bricklink/wanted-list';
 import {
   buildBasketDecisionReport, renderDecisionCli, renderDecisionMd,
@@ -85,7 +88,7 @@ const INPUTS: PartArbInputs = {
   minStrLots: parseFloat(argv['min-str-lots'] ?? '1.0'),
   minSoldQty: parseInt(argv['min-sold-qty'] ?? '10', 10),
   minAsk: parseFloat(argv['min-ask'] ?? '0.10'),
-  minMargin: parseFloat(argv['min-margin'] ?? String(DEFAULT_MIN_MARGIN)),
+  minMargin: parseFloat(argv['min-margin'] ?? String(PART_ARB_MIN_MARGIN)),
   minStr: parseFloat(argv['min-basket-str'] ?? '0'),
   shipping: parseFloat(argv['shipping'] ?? String(DEFAULT_INBOUND_POSTAGE_GBP)),
   minUnitsBuyable: parseInt(argv['min-units'] ?? '1', 10),
