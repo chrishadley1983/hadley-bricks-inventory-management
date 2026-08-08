@@ -83,8 +83,10 @@ import {
   NEW_RELEASE_CYCLE_DAYS,
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
+  COOL_OFF_DAYS,
   SOLD_UNAVAILABLE_MARKER,
   WORK_AHEAD_HORIZON_DAYS,
+  WORK_AHEAD_MIN_LEAD_DAYS,
   isRepeatSoldUnavailable,
   pgClaimStages,
   type PgClaimStage,
@@ -132,10 +134,31 @@ const CLAIM_CHUNK = Math.max(1, parseInt(argv['claim-chunk'] ?? '50', 10));
  *  `--work-ahead-days=0` keeps first-touch backlog burn but disables the cadence-compressing
  *  'ahead' stage. See pg-cycle-policy.ts for why the horizon is bounded. */
 const WORK_AHEAD = argv['no-work-ahead'] !== 'true';
-const WORK_AHEAD_DAYS = Math.max(
-  0,
-  parseFloat(argv['work-ahead-days'] ?? String(WORK_AHEAD_HORIZON_DAYS)),
+// A bare `--work-ahead-days` (no =n) parses to the string 'true' -> NaN. Left unguarded
+// the two call sites disagreed on it: the startup guard (`> 0`) skipped the count while
+// the claim guard (`<= 0`) did NOT skip, so leadIso() reached new Date(NaN).toISOString()
+// and threw RangeError mid-claim. Fall back to the policy default instead.
+const workAheadDaysArg = Number.parseFloat(
+  argv['work-ahead-days'] ?? String(WORK_AHEAD_HORIZON_DAYS),
 );
+if (argv['work-ahead-days'] !== undefined && !Number.isFinite(workAheadDaysArg)) {
+  console.warn(
+    `[pg-refresh-cycle] --work-ahead-days=${argv['work-ahead-days']} is not a number — ` +
+      `falling back to the policy default of ${WORK_AHEAD_HORIZON_DAYS}d`,
+  );
+}
+const WORK_AHEAD_DAYS = Number.isFinite(workAheadDaysArg)
+  ? Math.max(0, workAheadDaysArg)
+  : WORK_AHEAD_HORIZON_DAYS;
+// A horizon at or below the lead floor makes the 'ahead' window empty by construction
+// (gt now+1d AND lte now+0.5d matches nothing). Legal, but say so rather than leaving an
+// operator to wonder why work-ahead never engages. 0 is the documented "off" value.
+if (WORK_AHEAD && WORK_AHEAD_DAYS > 0 && WORK_AHEAD_DAYS <= WORK_AHEAD_MIN_LEAD_DAYS) {
+  console.warn(
+    `[pg-refresh-cycle] --work-ahead-days=${WORK_AHEAD_DAYS} is <= the ${WORK_AHEAD_MIN_LEAD_DAYS}d ` +
+      `cool-off lead floor, so the 'ahead' stage can never match. Use 0 to disable it explicitly.`,
+  );
+}
 
 // spec §4.4 default is 30; Chris 2026-07-13: trial 5-min backoff (set via the ps1
 // wrapper) — hypothesis: blocks are transient per-request throttles, so most of the
@@ -594,7 +617,7 @@ function toSoldUnavailableQueueUpdate(t: QueueRow): Record<string, unknown> {
     item_no: t.item_no,
     colour_id: t.colour_id,
     last_error: `${SOLD_UNAVAILABLE_MARKER} (both sold quadrants unavailable)`,
-    next_due_at: addDaysIso(1),
+    next_due_at: addDaysIso(COOL_OFF_DAYS),
     locked_by: null,
     locked_at: null,
     updated_at: new Date().toISOString(),
@@ -618,7 +641,7 @@ function toErrorQueueUpdate(t: QueueRow, err: unknown): Record<string, unknown> 
   // Repeated non-block errors on the same tuple (parse/CDP hiccups) get a short
   // cooldown so a bad tuple can't hot-loop through claim -> fail -> reclaim -> fail
   // within the same run; genuine blocks/no-data have their own handling above.
-  if (attempts >= 3) update.next_due_at = addDaysIso(1);
+  if (attempts >= 3) update.next_due_at = addDaysIso(COOL_OFF_DAYS);
   return update;
 }
 
@@ -785,11 +808,16 @@ async function main(): Promise<void> {
   const aheadCount = WORK_AHEAD && WORK_AHEAD_DAYS > 0 ? await countStage(supabase, 'ahead') : 0;
   const designCadence = SESSION_SIZE * MAX_SESSIONS;
   const claimable = dueCount + backlogCount + aheadCount;
-  const eta = claimable > 0 ? Math.ceil(claimable / designCadence) : 0;
+  // The ETA counts owed work only — due + first-touch backlog. The 'ahead' pool is
+  // OPTIONAL pull-forward that exists to fill a window, not a debt to be cleared, and
+  // folding it in made the first live run read "~11 run(s) to clear" off 21,140 claimable
+  // when the real owed figure was 13,188 (~7 runs). Overstated backlog reads as an alarm.
+  const owed = dueCount + backlogCount;
+  const eta = owed > 0 ? Math.ceil(owed / designCadence) : 0;
   console.log(
     `[pg-refresh-cycle] ${dueCount} due + ${backlogCount} first-touch backlog + ${aheadCount} within ` +
       `${WORK_AHEAD_DAYS}d work-ahead horizon = ${claimable} claimable; design cadence ` +
-      `${designCadence}/run -> ~${eta} run(s) to clear at this cadence` +
+      `${designCadence}/run -> ~${eta} run(s) to clear the ${owed} owed at this cadence` +
       (WORK_AHEAD ? '' : ' (work-ahead DISABLED — run stops as soon as nothing is due)'),
   );
 

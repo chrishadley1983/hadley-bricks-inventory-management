@@ -63,17 +63,36 @@ describe('applyStageFilters — the filters actually sent to PostgREST', () => {
     expect(chainFor('due').some((c) => c.startsWith('lt(attempts'))).toBe(false);
   });
 
-  it("'backlog' selects NEVER-scraped rows (is null), not already-scraped ones", () => {
-    const chain = chainFor('backlog');
-    expect(chain).toContain('is(last_refreshed_at,null)');
-    // the inversion that a constants-only test cannot see
-    expect(chain).not.toContain('not(last_refreshed_at,is,null)');
+  // EXACT chains, not toContain. A toContain-only suite passes when a SPURIOUS filter is
+  // appended as well as when one is inverted — e.g. adding .eq('item_type','P') inside the
+  // backlog branch would silently shrink the pool with every assertion still green (found
+  // by the PR #667 validation pass, which replayed all 11 assertions against a chain with
+  // an extra filter and got 11 passes).
+  it("'backlog' emits exactly the first-touch chain and nothing more", () => {
+    expect(chainFor('backlog')).toEqual([
+      'is(locked_by,null)',
+      'eq(tier,active)',
+      `gt(next_due_at,${at(WORK_AHEAD_MIN_LEAD_DAYS)})`,
+      `lte(next_due_at,${at(365)})`,
+      `lt(attempts,${ERROR_PARK_ATTEMPTS})`,
+      'is(last_refreshed_at,null)',
+    ]);
   });
 
-  it("'ahead' selects ALREADY-scraped rows (not null), not first-touch ones", () => {
-    const chain = chainFor('ahead');
-    expect(chain).toContain('not(last_refreshed_at,is,null)');
-    expect(chain).not.toContain('is(last_refreshed_at,null)');
+  it("'ahead' emits exactly the already-scraped chain and nothing more", () => {
+    expect(chainFor('ahead')).toEqual([
+      'is(locked_by,null)',
+      'eq(tier,active)',
+      `gt(next_due_at,${at(WORK_AHEAD_MIN_LEAD_DAYS)})`,
+      `lte(next_due_at,${at(WORK_AHEAD_HORIZON_DAYS)})`,
+      `lt(attempts,${ERROR_PARK_ATTEMPTS})`,
+      'not(last_refreshed_at,is,null)',
+    ]);
+  });
+
+  it('the two work-ahead stages have opposite first-touch polarity', () => {
+    expect(chainFor('backlog')).not.toContain('not(last_refreshed_at,is,null)');
+    expect(chainFor('ahead')).not.toContain('is(last_refreshed_at,null)');
   });
 
   it('both work-ahead stages hold off anything due inside the +1d cool-off window', () => {
