@@ -1,18 +1,18 @@
 {
-  "commit": "f766f26b",
-  "branch": "feature/shopify-pick-list (+ feature/shopify-pnl-fees)",
-  "prNumber": 665,
-  "mergedAt": "2026-08-07T12:04:00Z",
-  "previousCommit": "0223bf12",
+  "commit": "0d03eb5c",
+  "branch": "feature/part-first-arbitrage",
+  "prNumber": 669,
+  "mergedAt": "2026-08-08T07:35:00Z",
+  "previousCommit": "f766f26b",
   "deploymentVerified": true,
-  "verifiedAt": "2026-08-07T12:10:00Z",
+  "verifiedAt": "2026-08-08T07:42:00Z",
   "testsRun": [
+    "root-307-auth-redirect",
     "login-page-200",
-    "api-picking-list-shopify-401-route-present",
-    "pick-shopify-public-page-200",
-    "pick-amazon-regression-200",
-    "api-reports-profit-loss-401",
-    "shopify-transactions-schema-and-backfill-verified-via-sql"
+    "arbitrage-store-assessment-200",
+    "bl_store_lots-backfill-2473421-rows-matches-scrape-totals-sql",
+    "part_arb_candidates-top10-persisted-and-spot-checked-sql",
+    "live-discover-run-4793-anchors-477-stores"
   ],
   "testsPassed": true
 }
