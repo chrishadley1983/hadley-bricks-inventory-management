@@ -12,7 +12,7 @@
  * All constants come from fees.ts / bricqer-pricing; nothing is re-declared.
  */
 
-import { DEFAULT_MIN_MARGIN, VAR_FEE_PCT } from '../bricklink/fees';
+import { DEFAULT_INBOUND_POSTAGE_GBP, DEFAULT_MIN_MARGIN, VAR_FEE_PCT } from '../bricklink/fees';
 import { bricqerListPrice } from '../bricklink/bricqer-pricing';
 import { computeBoilerplate, hasDamageNote } from '../bl-store-assessment/engine';
 import { pgKey, ukSideFromCacheRow, type PriceGuideView, type SideView } from '../bricklink/price-guide/read';
@@ -27,7 +27,7 @@ export const DEFAULT_PART_ARB_INPUTS: PartArbInputs = {
   minAsk: 0.10,
   minMargin: DEFAULT_MIN_MARGIN,
   minStr: 0,
-  shipping: 3.0, // DEFAULT_INBOUND_POSTAGE_GBP — kept in sync via test
+  shipping: DEFAULT_INBOUND_POSTAGE_GBP,
   minUnitsBuyable: 1,
 };
 

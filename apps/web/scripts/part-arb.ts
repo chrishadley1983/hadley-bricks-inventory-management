@@ -210,6 +210,8 @@ async function fetchAnchorStoreLots(anchors: AnchorTuple[]): Promise<FlatStoreLo
         .in('item_no', chunk)
         .gte('unit_price_gbp', INPUTS.minAsk)
         .lte('unit_price_gbp', maxCeil)
+        // Stable page order: inv_id alone is not schema-unique (PK is slug+inv_id).
+        .order('store_slug')
         .order('inv_id')
         .range(from, from + 999);
       if (error) throw new Error(`bl_store_lots read failed: ${error.message}`);
@@ -273,22 +275,30 @@ async function loadCachedScrape(slug: string): Promise<{ lots: StoreLot[]; scann
   return { lots: data.lots as StoreLot[], scannedAt: data.scanned_at as string | null, truncated: Boolean(data.truncated) };
 }
 
-/** Latest known store display name/country per slug (from the nightly assessments). */
+/** Latest known store display name/country per slug (from the nightly assessments).
+ * store_assessments is append-per-run, so a busy slug could crowd others out of any
+ * single page — paginate each chunk until every slug has meta or rows run out. */
 async function loadStoreMeta(slugs: string[]): Promise<Map<string, { storeName: string | null; country: string | null }>> {
   const out = new Map<string, { storeName: string | null; country: string | null }>();
   for (let i = 0; i < slugs.length; i += 200) {
     const chunk = slugs.slice(i, i + 200);
-    const { data, error } = await supabase
-      .from('store_assessments')
-      .select('store_slug, store_name, store_country, scanned_at')
-      .in('store_slug', chunk)
-      .order('scanned_at', { ascending: false })
-      .limit(1000);
-    if (error) throw new Error(`store_assessments read failed: ${error.message}`);
-    for (const r of data ?? []) {
-      if (!out.has(r.store_slug as string)) {
-        out.set(r.store_slug as string, { storeName: (r.store_name as string) ?? null, country: (r.store_country as string) ?? null });
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supabase
+        .from('store_assessments')
+        .select('store_slug, store_name, store_country, scanned_at')
+        .in('store_slug', chunk)
+        .order('scanned_at', { ascending: false })
+        .range(from, from + 999);
+      if (error) throw new Error(`store_assessments read failed: ${error.message}`);
+      for (const r of data ?? []) {
+        if (!out.has(r.store_slug as string)) {
+          out.set(r.store_slug as string, { storeName: (r.store_name as string) ?? null, country: (r.store_country as string) ?? null });
+        }
       }
+      const allFound = chunk.every((s) => out.has(s));
+      if (allFound || !data || data.length < 1000) break;
+      from += 1000;
     }
   }
   return out;
@@ -381,8 +391,12 @@ async function discover(): Promise<void> {
   log('\n=== PART-FIRST ARBITRAGE — nominated stores (headline = LIQUID net: STR>=' +
     `${LIQUID_STR_GATE}, demand-capped, full standalone postage £${INPUTS.shipping.toFixed(2)}) ===`);
   if (kept.length === 0) {
+    const best = baskets.reduce<StoreBasket | null>(
+      (b, cur) => (b == null || cur.basket.report.summary.liquidNet > b.report.summary.liquidNet ? cur.basket : b),
+      null,
+    );
     log(`No store cleared --min-liquid-net £${MIN_LIQUID_NET.toFixed(2)}. ` +
-      `Best was ${baskets[0] ? `${baskets[0].basket.slug} at £${baskets[0].basket.report.summary.liquidNet.toFixed(2)}` : 'n/a'}.`);
+      `Best was ${best ? `${best.slug} at £${best.report.summary.liquidNet.toFixed(2)}` : 'n/a'}.`);
     return;
   }
   for (let i = 0; i < kept.length; i++) {
@@ -474,7 +488,11 @@ async function ground(slug: string): Promise<void> {
       .limit(1)
       .maybeSingle();
     if (cand) {
-      const { error } = await supabase.from('part_arb_candidates').update({ status: 'grounded' }).eq('id', cand.id);
+      // Only advance candidate -> grounded; never regress a bought/dismissed row.
+      const { error } = await supabase.from('part_arb_candidates')
+        .update({ status: 'grounded' })
+        .eq('id', cand.id)
+        .eq('status', 'candidate');
       if (error) console.error(`[ground] candidate status update failed (non-fatal): ${error.message}`);
     }
   }
@@ -500,8 +518,11 @@ async function ground(slug: string): Promise<void> {
     log(`[cart] handing off to bl-basket (fresh inventory.json will be reused — no re-scrape)...`);
     const res = spawnSync(
       process.platform === 'win32' ? 'npx.cmd' : 'npx',
+      // Forward the CDP port: part-arb grounds on :9222 while bl-basket defaults to
+      // :9225 — without this the cart build would target a different Chrome.
       ['tsx', 'scripts/bl-basket.ts', `--store-slug=${slug}`, `--shipping=${INPUTS.shipping}`,
-        `--min-margin=${INPUTS.minMargin}`, `--min-str=${INPUTS.minStr}`],
+        `--min-margin=${INPUTS.minMargin}`, `--min-str=${INPUTS.minStr}`,
+        `--min-ask=${INPUTS.minAsk}`, `--cdp-port=${CDP_PORT}`],
       { cwd: path.resolve(__dirname, '..'), stdio: 'inherit', shell: process.platform === 'win32' },
     );
     if (res.status !== 0) log(`[cart] bl-basket exited with status ${res.status}`);
@@ -523,6 +544,11 @@ async function main(): Promise<void> {
   if (GROUND) {
     if (!STORE_SLUG) {
       console.error('--ground requires --store-slug=<slug>');
+      process.exit(1);
+    }
+    // Slug feeds file paths and a shell-spawned handoff — keep it to BL-legal chars.
+    if (!/^[A-Za-z0-9._-]+$/.test(STORE_SLUG)) {
+      console.error(`--store-slug "${STORE_SLUG}" contains characters outside [A-Za-z0-9._-]`);
       process.exit(1);
     }
     if (XML_ONLY && CART) {
