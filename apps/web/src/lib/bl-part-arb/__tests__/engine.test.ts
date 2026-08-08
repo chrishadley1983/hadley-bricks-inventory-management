@@ -211,4 +211,24 @@ describe('wantedLotsFromScored', () => {
     expect(wanted[0].marginPct).toBeGreaterThan(1); // percentage convention, not fraction
     expect(wantedLotsFromScored(items, 5)).toHaveLength(0); // STR floor filters
   });
+
+  it('caps quantities to demand-capped units by default; full mode keeps the stack', () => {
+    // 100-unit stack, market sold 20/6mo at STR 2 -> capture 0.95 -> cap ceil(19) = 19
+    const bigStack = scoreStoreLots(
+      [
+        { invID: 1, itemType: 'P', itemNo: '3001', colourId: 5, colourName: 'Red', itemName: 'Brick', invNew: 'Used', invComplete: null, invQty: 100, unitPriceGBP: 0.5, description: null },
+      ],
+      new Map([[pgKey('P', '3001', 5), {
+        item: { itemType: 'P' as const, itemNo: '3001', blColourId: 5 }, itemName: 'Brick',
+        used: passingSide(), new: mkSide({}), freshnessDays: 1, coverage: 'uk' as const,
+        qtyShareAtOrAbove: () => null,
+      }]]),
+      INPUTS
+    );
+    const capped = wantedLotsFromScored(bigStack, 0.25);
+    expect(capped[0].invQty).toBe(19);
+    expect(capped[0].lotProfit).toBeCloseTo((bigStack[0].netPerUnit as number) * 19, 8);
+    const full = wantedLotsFromScored(bigStack, 0.25, 'full');
+    expect(full[0].invQty).toBe(100);
+  });
 });

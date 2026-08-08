@@ -18,7 +18,7 @@ import { computeBoilerplate, hasDamageNote } from '../bl-store-assessment/engine
 import { pgKey, ukSideFromCacheRow, type PriceGuideView, type SideView } from '../bricklink/price-guide/read';
 import type { StoreLot } from '../bl-store-assessment/types';
 import type { WantedSourceLot } from '../bricklink/wanted-list';
-import type { BasketLensItem } from '../bl-store-report/compute';
+import { cappedUnits, type BasketLensItem } from '../bl-store-report/compute';
 import type { AnchorHit, AnchorTuple, FlatStoreLot, PartArbInputs, StoreNomination } from './types';
 
 export const DEFAULT_PART_ARB_INPUTS: PartArbInputs = {
@@ -222,22 +222,41 @@ export function scoreStoreLots(
  * Map passed scored lots to wanted-list source rows (for --xml-only). The caller
  * filters by its wanted-min-STR first; mos is null (the personal-velocity model
  * lives in bl-basket and is not replicated here).
+ *
+ * qtyMode 'capped' (the default — Chris 2026-08-08: "wanted quantity set to the
+ * max demand volume") sets each entry's quantity to the demand-capped units
+ * (min(lot qty, 6-mo sold x capture(STR)) — the same cappedUnits the decision
+ * report credits), so the order buys only what the market absorbs in the
+ * horizon. 'full' buys the whole stacks. BL allows partial-lot purchases, so a
+ * capped quantity is fulfillable from a bigger seller lot.
  */
-export function wantedLotsFromScored(items: PartArbScoredLot[], minStr: number): WantedSourceLot[] {
+export function wantedLotsFromScored(
+  items: PartArbScoredLot[],
+  minStr: number,
+  qtyMode: 'capped' | 'full' = 'capped'
+): WantedSourceLot[] {
   return items
     .filter((i) => i.passed && i.sellThru >= minStr)
-    .map((i) => ({
-      itemType: i.itemType,
-      itemNo: i.itemNo,
-      colourId: i.colourId,
-      condition: i.condition,
-      invQty: i.invQty,
-      unitPriceGBP: i.unitPriceGBP,
-      listPrice: i.listPrice,
-      lotProfit: i.netPerUnit != null ? i.netPerUnit * i.invQty : null,
-      sellThru: i.sellThru,
-      marginPct: i.marginPct,
-      ukSoldAvg: i.ukSoldAvg,
-      mos: null,
-    }));
+    .map((i) => {
+      const sold = i.ukSoldAvg == null ? null : i.ukSoldQty;
+      const qty =
+        qtyMode === 'capped'
+          ? Math.min(i.invQty, cappedUnits(i.invQty, sold, i.sellThru) ?? i.invQty)
+          : i.invQty;
+      return {
+        itemType: i.itemType,
+        itemNo: i.itemNo,
+        colourId: i.colourId,
+        condition: i.condition,
+        invQty: qty,
+        unitPriceGBP: i.unitPriceGBP,
+        listPrice: i.listPrice,
+        lotProfit: i.netPerUnit != null ? i.netPerUnit * qty : null,
+        sellThru: i.sellThru,
+        marginPct: i.marginPct,
+        ukSoldAvg: i.ukSoldAvg,
+        mos: null,
+      };
+    })
+    .filter((l) => l.invQty > 0);
 }

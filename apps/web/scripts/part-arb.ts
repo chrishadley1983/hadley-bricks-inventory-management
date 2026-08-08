@@ -41,7 +41,11 @@
  *   --cart                 After live re-scrape, hand off to bl-basket (which reuses
  *                          the fresh inventory.json) for wanted upload + cart build.
  *   --wanted-min-str=<x>   STR floor for XML entries. Default 0.25 (LIQUID_STR_GATE).
- *   --cdp-port=<n>         Chrome CDP port. Default 9222.
+ *   --wanted-qty=<mode>    'capped' (default): entry quantities = demand-capped units
+ *                          (6-mo sold x capture(STR)) so the order buys only what the
+ *                          market absorbs; 'full': whole seller stacks.
+ *   --cdp-port=<n>         Chrome CDP port. Default 9225 — the dedicated BL CDP Chrome
+ *                          (port split 2026-07-14: 9222 is the Vinted Chrome).
  *   --max-pages=<n>        Scrape page cap per item type. Default 500.
  *   --page-delay-ms=<n>    Scrape page delay. Default 3000 (floor).
  *   --user-id=<uuid>       Supabase user for persisted rows (or STORE_ASSESSMENT_USER_ID).
@@ -107,7 +111,12 @@ if (!ANCHOR_TYPES.length || ANCHOR_TYPES.some((t) => t !== 'P' && t !== 'M')) {
 const MAX_STORES = parseInt(argv['max-stores'] ?? '10', 10);
 const CACHE_TTL_DAYS = parseInt(argv['cache-ttl-days'] ?? '90', 10);
 const WANTED_MIN_STR = parseFloat(argv['wanted-min-str'] ?? String(LIQUID_STR_GATE));
-const CDP_PORT = parseInt(argv['cdp-port'] ?? '9222', 10);
+const WANTED_QTY = (argv['wanted-qty'] ?? 'capped') as 'capped' | 'full';
+if (WANTED_QTY !== 'capped' && WANTED_QTY !== 'full') {
+  console.error(`--wanted-qty must be 'capped' or 'full' (got "${argv['wanted-qty']}")`);
+  process.exit(1);
+}
+const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const MAX_PAGES = parseInt(argv['max-pages'] ?? '500', 10);
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));
 const USER_ID = (argv['user-id'] && argv['user-id'] !== 'true' ? argv['user-id'] : null)
@@ -511,7 +520,22 @@ async function ground(slug: string): Promise<void> {
   }
 
   if (XML_ONLY) {
-    const wantedLots = wantedLotsFromScored(basket.items, WANTED_MIN_STR);
+    // Always present BOTH qty cuts in the final analysis (Chris 2026-08-08: capped
+    // quantities "optionally, and presented in the final analysis") — the XML itself
+    // is generated for the selected --wanted-qty mode.
+    const cappedLots = wantedLotsFromScored(basket.items, WANTED_MIN_STR, 'capped');
+    const fullLots = wantedLotsFromScored(basket.items, WANTED_MIN_STR, 'full');
+    const sums = (ls: typeof cappedLots) => ({
+      units: ls.reduce((s, l) => s + l.invQty, 0),
+      outlay: ls.reduce((s, l) => s + l.unitPriceGBP * l.invQty, 0),
+      net: ls.reduce((s, l) => s + (l.lotProfit ?? 0), 0),
+    });
+    const c = sums(cappedLots);
+    const f = sums(fullLots);
+    log(`\n[xml] Quantity cut comparison (STR >= ${WANTED_MIN_STR}, ex-postage):`);
+    log(`  CAPPED (demand volume): ${cappedLots.length} lots · ${c.units} units · outlay £${c.outlay.toFixed(2)} · projected net £${c.net.toFixed(2)}`);
+    log(`  FULL (whole stacks):    ${fullLots.length} lots · ${f.units} units · outlay £${f.outlay.toFixed(2)} · projected net £${c.net.toFixed(2)} within horizon (+£${(f.net - c.net).toFixed(2)} beyond it)`);
+    const wantedLots = WANTED_QTY === 'capped' ? cappedLots : fullLots;
     if (wantedLots.length === 0) {
       log(`[xml] no lots passed at STR >= ${WANTED_MIN_STR} — nothing to upload`);
       return;
@@ -519,6 +543,7 @@ async function ground(slug: string): Promise<void> {
     const result = generateWantedXml(wantedLots);
     const xmlFile = path.join(OUT_DIR, `${slug}-wanted.xml`);
     fs.writeFileSync(xmlFile, result.xml);
+    log(`[xml] XML generated with ${WANTED_QTY.toUpperCase()} quantities (switch with --wanted-qty=${WANTED_QTY === 'capped' ? 'full' : 'capped'})`);
     log(`[xml] ${result.entries} entries (${wantedLots.length} lots, STR >= ${WANTED_MIN_STR}` +
       `${result.mergedTuples ? `, ${result.mergedTuples} merged tuple(s)` : ''}` +
       `${result.skipped.length ? `, skipped un-uploadable: ${result.skipped.join(', ')}` : ''})`);
