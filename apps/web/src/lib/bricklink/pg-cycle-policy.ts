@@ -75,6 +75,29 @@ export const WORK_AHEAD_BACKLOG_MAX_DAYS = 365;
 export const WORK_AHEAD_MIN_LEAD_DAYS = 1;
 
 /**
+ * The cool-off requeue delay (days) used by BOTH transient requeue paths in the driver:
+ * toSoldUnavailableQueueUpdate (1st sold-unavailable hit) and toErrorQueueUpdate's
+ * attempts>=3 hot-loop brake. Import it — never write addDaysIso(1) at those call sites.
+ *
+ * INVARIANT: COOL_OFF_DAYS <= WORK_AHEAD_MIN_LEAD_DAYS, asserted at module load below and
+ * in pg-cycle-policy.test.ts. The whole point of a cool-off is that the row is unclaimable
+ * for its duration; a work-ahead stage that reaches past it re-claims the row in the SAME
+ * run, and for the sold-unavailable path that means firing isRepeatSoldUnavailable with no
+ * day boundary having passed — writing an all-zero L1 row and demoting active -> tail on
+ * what may be a live BL outage. Lengthening this constant alone silently reintroduces that
+ * bug, which is why it fails loudly instead (found by the PR #667 validation pass).
+ */
+export const COOL_OFF_DAYS = 1;
+
+if (COOL_OFF_DAYS > WORK_AHEAD_MIN_LEAD_DAYS) {
+  throw new Error(
+    `pg-cycle-policy invariant violated: COOL_OFF_DAYS (${COOL_OFF_DAYS}) must be <= ` +
+      `WORK_AHEAD_MIN_LEAD_DAYS (${WORK_AHEAD_MIN_LEAD_DAYS}), or work-ahead re-claims ` +
+      `cooling-off tuples within the same run. Raise the lead floor alongside the cool-off.`,
+  );
+}
+
+/**
  * Claim stages, in the order a run must exhaust them:
  *   'due'     — next_due_at has passed. The schedule always wins; unchanged semantics.
  *   'backlog' — never scraped, any future date. Pure first-touch work: no cadence to

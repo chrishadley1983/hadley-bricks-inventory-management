@@ -5,9 +5,11 @@ import {
   NEW_RELEASE_CYCLE_DAYS,
   NO_DATA_REQUEUE_DAYS,
   TAIL_CYCLE_DAYS,
+  COOL_OFF_DAYS,
   SOLD_UNAVAILABLE_MARKER,
   WORK_AHEAD_BACKLOG_MAX_DAYS,
   WORK_AHEAD_HORIZON_DAYS,
+  WORK_AHEAD_MIN_LEAD_DAYS,
   isRepeatSoldUnavailable,
   cycleDaysForTier,
   effectiveMinCycleDays,
@@ -35,11 +37,21 @@ describe('pg-cycle-policy', () => {
   describe('work-ahead', () => {
     it('carries a bounded horizon and a park-sentinel guard', () => {
       expect(WORK_AHEAD_HORIZON_DAYS).toBe(3);
+      expect(WORK_AHEAD_MIN_LEAD_DAYS).toBe(1);
       expect(WORK_AHEAD_BACKLOG_MAX_DAYS).toBe(365);
       // the backlog guard must sit far below the +100y park sentinel it exists to exclude
       expect(WORK_AHEAD_BACKLOG_MAX_DAYS).toBeLessThan(365 * 100);
       // ...and the cadence-compressing horizon must stay a small fraction of the cycle
       expect(WORK_AHEAD_HORIZON_DAYS).toBeLessThan(ACTIVE_CYCLE_DAYS / 10);
+    });
+
+    // The coupling that makes the sold-unavailable fix work. If someone lengthens the
+    // cool-off to +2d without raising the lead floor, work-ahead re-claims the cooling row
+    // in the SAME run and isRepeatSoldUnavailable fires with no day boundary passed —
+    // all-zero L1 row, active -> tail demotion, on what may be a live BL outage. Verified
+    // during PR #667 validation: at +2d the row is backlog-claimable and the fix is dead.
+    it('keeps the cool-off inside the work-ahead lead floor', () => {
+      expect(COOL_OFF_DAYS).toBeLessThanOrEqual(WORK_AHEAD_MIN_LEAD_DAYS);
     });
 
     it('orders the claim ladder due -> backlog -> ahead, schedule first', () => {
