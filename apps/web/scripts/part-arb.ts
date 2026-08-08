@@ -161,23 +161,24 @@ async function screenAnchors(): Promise<AnchorTuple[]> {
     ]).join(',');
   const anchors: AnchorTuple[] = [];
   let scanned = 0;
-  let lastId = -1;
+  let lastId: string | null = null; // id is a uuid — keyset cursor is a string
   for (;;) {
     // Keyset pagination on id (offset pagination over ~100k rows degrades).
-    const { data, error } = await supabase
+    let q = supabase
       .from('bricklink_price_guide_cache')
       .select(COLS)
       .in('item_type', ['P', 'M'])
       .or(`uk_sold_qty_new.gte.${INPUTS.minSoldQty},uk_sold_qty_used.gte.${INPUTS.minSoldQty}`)
-      .gt('id', lastId)
       .order('id')
       .limit(1000);
+    if (lastId != null) q = q.gt('id', lastId);
+    const { data, error } = await q;
     if (error) throw new Error(`anchor screen read failed: ${error.message}`);
     const rows = (data ?? []) as unknown as Record<string, unknown>[];
     if (rows.length === 0) break;
     for (const row of rows) anchors.push(...anchorsFromCacheRow(row, INPUTS));
     scanned += rows.length;
-    lastId = Number(rows[rows.length - 1].id);
+    lastId = String(rows[rows.length - 1].id);
     if (scanned % 10000 === 0) log(`[anchors] scanned ${scanned} cache rows, ${anchors.length} anchors so far`);
     if (rows.length < 1000) break;
   }
