@@ -15,7 +15,7 @@
  *
  * Usage:
  *   npx tsx scripts/store-assessment.ts --store-slug=<name> [--mode=full] [--json]
- *     [--min-margin=0.20] [--min-str=0.5] [--magnet-max-supply=3] [--inbound-per-unit=0]
+ *     [--min-margin=0.30] [--min-str=0.5] [--magnet-max-supply=3] [--inbound-per-unit=0]
  *     [--cache-ttl-days=90] [--gapfill-budget=120] [--force-rescrape] [--no-persist]
  *     [--allow-non-uk] [--cdp-port=9225] [--user-id=<uuid>]
  *     [--wanted-min-str=0.5] [--wanted-keep-dups] [--wanted-magnets-only]
@@ -30,6 +30,7 @@ import { readPriceGuide, pgKey } from '../src/lib/bricklink/price-guide/read';
 import { computeStoreAssessmentWithLots, ENGINE_VERSION } from '../src/lib/bl-store-assessment/engine';
 import type { StoreLot, AssessMode, ScoredLot } from '../src/lib/bl-store-assessment/types';
 import { generateWantedXml } from '../src/lib/bricklink/wanted-list';
+import { DEFAULT_MIN_MARGIN } from '../src/lib/bricklink/fees';
 import { buildDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 import { connectCdp, preflight, scrapeStoreInventory, scrapeStoreProfile } from './lib/store-scrape';
 
@@ -66,7 +67,7 @@ const inputs = {
   // assessment uses UK prices; world is an explicit opt-in, never the silent default).
   // `estimate` = world fills gaps; `auto` = old "grounded once ≥95% checked" behaviour.
   ukGroundedOnly: argv['pricing-lens'] === 'estimate' ? false : argv['pricing-lens'] === 'auto' ? undefined : true,
-  minMargin: parseFloat(argv['min-margin'] ?? '0.20'),
+  minMargin: parseFloat(argv['min-margin'] ?? String(DEFAULT_MIN_MARGIN)),
   minStr: parseFloat(argv['min-str'] ?? '0.5'),
   magnetMaxSupplyLots: parseInt(argv['magnet-max-supply'] ?? '3', 10),
   inboundPerUnit: parseFloat(argv['inbound-per-unit'] ?? '0'),

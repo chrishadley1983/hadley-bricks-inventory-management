@@ -23,7 +23,7 @@
  *   --shipping=<gbp>        Inbound postage estimate. If omitted, prompt (default £3.00).
  *   --min-ask=<gbp>         Skip items where seller's ask is below this. Default £0.10.
  *   --min-str=<ratio>       Skip items where UK sell-through is below this. Default 0.
- *   --min-margin=<pct>      Skip items where net/list margin is below this. Default 0.20.
+ *   --min-margin=<pct>      Skip items where net/list margin is below this. Default 0.30 (DEFAULT_MIN_MARGIN).
  *   --cache-ttl-days=<n>    Price cache freshness. Default 90.
  *   --max-pages=<n>         Max AJAX pages per item-type. Default 50, hard-capped at 200.
  *   --page-delay-ms=<n>     Delay between AJAX pages. Default 3000 (floor).
@@ -61,7 +61,7 @@ import { isIncompleteSetListing } from '../src/lib/bricklink/listing-completenes
 import { ensurePriceGuide } from '../src/lib/bricklink/price-guide/capture';
 import { readPriceGuide, pgKey, type ItemRef, type SideView } from '../src/lib/bricklink/price-guide/read';
 import { DAMAGE_KEYWORDS } from '../src/lib/bl-store-assessment/engine';
-import { BL_FEE, BRICQER_FEE, PAYPAL_PCT, VAR_FEE_PCT } from '../src/lib/bricklink/fees';
+import { BL_FEE, BRICQER_FEE, DEFAULT_MIN_MARGIN, PAYPAL_PCT, VAR_FEE_PCT } from '../src/lib/bricklink/fees';
 import { buildBasketDecisionReport, renderDecisionCli, renderDecisionMd } from '../src/lib/bl-store-report';
 
 dotenv.config({ path: path.resolve(__dirname, '../.env.local') });
@@ -86,7 +86,7 @@ if (!STORE_SLUG && !CLOSE_ARB_ID && require.main === module) {
 const SHIPPING_CLI = argv['shipping'] ? parseFloat(argv['shipping']) : null;
 const MIN_ASK = parseFloat(argv['min-ask'] ?? '0.10');
 const MIN_STR = parseFloat(argv['min-str'] ?? '0');
-const MIN_MARGIN = parseFloat(argv['min-margin'] ?? '0.20');
+const MIN_MARGIN = parseFloat(argv['min-margin'] ?? String(DEFAULT_MIN_MARGIN));
 const CACHE_TTL_DAYS = parseInt(argv['cache-ttl-days'] ?? '90', 10);
 const MAX_PAGES = Math.min(200, parseInt(argv['max-pages'] ?? '50', 10));
 const PAGE_DELAY_MS = Math.max(3000, parseInt(argv['page-delay-ms'] ?? '3000', 10));

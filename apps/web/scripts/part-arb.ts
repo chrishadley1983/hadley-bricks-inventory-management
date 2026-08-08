@@ -21,8 +21,11 @@
  *   --min-ask=<gbp>        Ignore asks below this. Default 0.10.
  *   --min-margin=<pct>     Net margin threshold (net after 9.4% fees / list, ex-postage;
  *                          inbound postage is charged once to the basket, outbound is
- *                          buyer-paid). Default 0.30 (PART_ARB_MIN_MARGIN — tighter than
- *                          the 20% bl-basket floor by design, Chris 2026-08-08).
+ *                          buyer-paid). Default 0.30 (DEFAULT_MIN_MARGIN — global floor,
+ *                          Chris 2026-08-08 "lets do 30% global").
+ *   --anchor-types=<list>  Which item types may DRIVE a nomination (comma list of P,M).
+ *                          Default P,M. `--anchor-types=P` = parts-led hunting; nominated
+ *                          stores' baskets still score ALL P+M lots (figs included).
  *   --min-basket-str=<x>   Basket lot STR (qty) gate. Default 0 (ladder shows bands).
  *   --shipping=<gbp>       Inbound postage estimate. Default 3.00.
  *   --min-units=<n>        Anchor units buyable below ceiling. Default 1.
@@ -50,7 +53,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
 import { readPriceGuide, pgKey, type ItemRef } from '../src/lib/bricklink/price-guide/read';
-import { LIQUID_STR_GATE, DEFAULT_INBOUND_POSTAGE_GBP, PART_ARB_MIN_MARGIN } from '../src/lib/bricklink/fees';
+import { LIQUID_STR_GATE, DEFAULT_INBOUND_POSTAGE_GBP, DEFAULT_MIN_MARGIN } from '../src/lib/bricklink/fees';
 import { generateWantedXml } from '../src/lib/bricklink/wanted-list';
 import {
   buildBasketDecisionReport, renderDecisionCli, renderDecisionMd,
@@ -88,12 +91,19 @@ const INPUTS: PartArbInputs = {
   minStrLots: parseFloat(argv['min-str-lots'] ?? '1.0'),
   minSoldQty: parseInt(argv['min-sold-qty'] ?? '10', 10),
   minAsk: parseFloat(argv['min-ask'] ?? '0.10'),
-  minMargin: parseFloat(argv['min-margin'] ?? String(PART_ARB_MIN_MARGIN)),
+  minMargin: parseFloat(argv['min-margin'] ?? String(DEFAULT_MIN_MARGIN)),
   minStr: parseFloat(argv['min-basket-str'] ?? '0'),
   shipping: parseFloat(argv['shipping'] ?? String(DEFAULT_INBOUND_POSTAGE_GBP)),
   minUnitsBuyable: parseInt(argv['min-units'] ?? '1', 10),
 };
 const MIN_LIQUID_NET = parseFloat(argv['min-liquid-net'] ?? '15');
+// Which item types may DRIVE a nomination. Baskets always score all P+M lots —
+// this only scopes the anchor screen (e.g. =P for parts-led hunting).
+const ANCHOR_TYPES = (argv['anchor-types'] ?? 'P,M').split(',').map((t) => t.trim().toUpperCase());
+if (!ANCHOR_TYPES.length || ANCHOR_TYPES.some((t) => t !== 'P' && t !== 'M')) {
+  console.error(`--anchor-types must be a comma list of P,M (got "${argv['anchor-types']}")`);
+  process.exit(1);
+}
 const MAX_STORES = parseInt(argv['max-stores'] ?? '10', 10);
 const CACHE_TTL_DAYS = parseInt(argv['cache-ttl-days'] ?? '90', 10);
 const WANTED_MIN_STR = parseFloat(argv['wanted-min-str'] ?? String(LIQUID_STR_GATE));
@@ -170,7 +180,7 @@ async function screenAnchors(): Promise<AnchorTuple[]> {
     let q = supabase
       .from('bricklink_price_guide_cache')
       .select(COLS)
-      .in('item_type', ['P', 'M'])
+      .in('item_type', ANCHOR_TYPES)
       .or(`uk_sold_qty_new.gte.${INPUTS.minSoldQty},uk_sold_qty_used.gte.${INPUTS.minSoldQty}`)
       .order('id')
       .limit(1000);
@@ -209,7 +219,7 @@ async function fetchAnchorStoreLots(anchors: AnchorTuple[]): Promise<FlatStoreLo
       const { data, error } = await supabase
         .from('bl_store_lots')
         .select('store_slug, inv_id, item_type, item_no, colour_id, condition, inv_qty, unit_price_gbp, scanned_at')
-        .in('item_type', ['P', 'M'])
+        .in('item_type', ANCHOR_TYPES)
         .in('item_no', chunk)
         .gte('unit_price_gbp', INPUTS.minAsk)
         .lte('unit_price_gbp', maxCeil)

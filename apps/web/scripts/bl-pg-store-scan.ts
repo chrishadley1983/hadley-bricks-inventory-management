@@ -28,7 +28,7 @@
  *   --enrich-min-ask=<gbp>   BROWSER-SCRAPE gate (default 0.10): a tuple only gets a live PgScraper
  *                            navigation if ≥1 of its lots asks at/above this. Cache reads (getFresh)
  *                            are unaffected — cache hits stay free for every tuple regardless of ask.
- *   --min-margin=<pct>       Buy-list gate on net/list margin (default 0.20)
+ *   --min-margin=<pct>       Buy-list gate on net/list margin (default 0.30, DEFAULT_MIN_MARGIN)
  *   --min-str=<ratio>        Buy-list gate on UK sell-through (default 0)
  *   --cache-ttl-days=<n>     UK-detail (L3) read window (default 45 — Chris 2026-07-08:
  *                            "use the best type available"; stale-but-UK beats fresh-worldwide
@@ -104,7 +104,7 @@ const CDP_PORT = parseInt(argv['cdp-port'] ?? '9225', 10);
 const SHIPPING = parseFloat(argv['shipping'] ?? '3.00');
 const MIN_ASK = parseFloat(argv['min-ask'] ?? '0');
 const ENRICH_MIN_ASK = parseFloat(argv['enrich-min-ask'] ?? '0.10');
-const MIN_MARGIN = parseFloat(argv['min-margin'] ?? '0.20');
+const MIN_MARGIN = parseFloat(argv['min-margin'] ?? String(DEFAULT_MIN_MARGIN));
 const MIN_STR = parseFloat(argv['min-str'] ?? '0');
 const CACHE_TTL_DAYS = parseFloat(argv['cache-ttl-days'] ?? '45');
 const INVENTORY_TTL_HOURS = parseFloat(argv['inventory-ttl-hours'] ?? '24');
@@ -119,7 +119,7 @@ const NAV_DELAY_MS = Math.max(2500, parseInt(argv['nav-delay-ms'] ?? '4000', 10)
 const LIMIT_TUPLES = parseInt(argv['limit-tuples'] ?? '0', 10);
 
 // Fee model — canonical home is src/lib/bricklink/fees.ts (BL 3% + Bricqer 3.5% + PayPal 2.9%).
-import { VAR_FEE_PCT } from '../src/lib/bricklink/fees';
+import { DEFAULT_MIN_MARGIN, VAR_FEE_PCT } from '../src/lib/bricklink/fees';
 // Personal velocity baseline (see bl-basket): 10% lot turnover per month.
 const PERSONAL_MONTHLY_LOT_RATE = 0.10;
 

@@ -91,21 +91,19 @@ export const UK_MAGNET = {
 export const PRICE_BANDS = { under: 0.7, keen: 0.95, atMarket: 1.15, premium: 1.5 } as const;
 
 /**
- * Default net-margin threshold for "within margin" / max-buy back-solving
- * (AssessmentInputs.minMargin default; bl-basket `--min-margin` default).
- */
-export const DEFAULT_MIN_MARGIN = 0.2;
-
-/**
- * Part-first arbitrage margin floor — deliberately TIGHTER than DEFAULT_MIN_MARGIN.
+ * THE net-margin floor — "within margin" gates and max-buy back-solving across
+ * every surface (assessment engine, bl-basket, bl-pg-store-scan, part-arb).
  *
- * Chris, 2026-08-08 (JangoFett sensitivity): at the 20% floor the blended basket
- * margin read 27% — "a bit low". Part-first discovery is choosier by design: it
- * hunts anchor-led raids, so the marginal 20-30% tail is dropped at discovery
- * time (30% floor ≈ 70% ROI, half the picking labour). bl-basket and the
- * assessment engine keep DEFAULT_MIN_MARGIN so nightly grades stay comparable.
+ * 0.30 since 2026-08-08 (Chris, JangoFett sensitivity: the old 20% floor read
+ * 27% blended — "a bit low"; then "lets do 30% global"). At 30% the reference
+ * basket kept ~40% of the net at half the picking labour, ~70% ROI. Margin is
+ * net after VAR_FEE_PCT ÷ list, ex-postage both ways (inbound charged once to
+ * the basket; outbound is buyer-paid on BL/Bricqer).
+ *
+ * NOTE: nightly store-assessment grades and withinMargin counts stepped down on
+ * the 0.20 → 0.30 change — runs across that date are not comparable.
  */
-export const PART_ARB_MIN_MARGIN = 0.3;
+export const DEFAULT_MIN_MARGIN = 0.3;
 
 /**
  * Part-out gate (moved here from bl-store-assessment/engine.ts so the set-lookup
